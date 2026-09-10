@@ -136,10 +136,13 @@ src/
   App.tsx             # shell (drag/drop, settings, results)
   lib/
     codecs/           # Codec interface + lazy format registry
-    convert.ts        # decode -> encode orchestration
-    image.ts          # blob -> ImageData
+    convert.ts        # decode -> encode orchestration (worker-side)
+    image.ts          # decode / downscale (worker-safe: OffscreenCanvas)
+    estimate.ts       # thumbnail quality-curve size estimate
+    workerClient.ts   # main-thread worker RPC client
+    protocol.ts       # shared worker message types
     format.ts         # size/name helpers
-  workers/            # worker scripts (added in Sprint 3)
+  workers/            # worker scripts (image-worker.ts)
 public/               # static assets (.nojekyll)
 ```
 
@@ -147,7 +150,9 @@ public/               # static assets (.nojekyll)
 
 ## 6. Worker Message Protocol
 
-A simple request/response contract between main thread and each worker.
+A simple request/response contract between the main thread and a worker. Implemented in
+`src/lib/protocol.ts`. Each job is self-contained (it carries its own `fileBuffer`) so it
+can be handed to any worker in the pool without shared state.
 
 **Main → Worker**
 ```ts
@@ -155,23 +160,37 @@ A simple request/response contract between main thread and each worker.
   type: 'process',
   jobId: string,
   fileBuffer: ArrayBuffer,   // transferred, not copied
-  sourceFormat: 'jpeg' | 'png' | 'webp' | 'avif' | string, // inferred or provided
   targetFormat: 'jpeg' | 'png' | 'webp' | 'avif' | 'jxl',
   quality?: number,          // encoder-specific
-  resize?: { width?: number, height?: number }
+  buildEstimate?: boolean    // if true, also return the size-estimate curve
+  // resize?: { width?: number; height?: number }  // Sprint 6
 }
 ```
 
 **Worker → Main**
 ```ts
 {
-  type: 'result' | 'error' | 'progress',
+  type: 'result' | 'error',
   jobId: string,
-  outputBuffer?: ArrayBuffer,  // on success, transferred back
+
+  // on result (transferred back where applicable):
+  outputBuffer?: ArrayBuffer,
   outputSize?: number,
-  error?: string,              // on failure — never throw uncaught in a worker
+  width?: number,
+  height?: number,
+  format?: 'jpeg' | 'png' | 'webp' | 'avif' | 'jxl',
+  extension?: string,
+  mimeType?: string,
+  samples?: Array<{ quality: number; bytes: number }>,  // when buildEstimate
+
+  // on error:
+  error?: string
 }
 ```
+
+`sourceFormat` is deliberately not part of the request: the worker decodes with
+`createImageBitmap`, which sniffs the container itself. A `progress` message is reserved for
+Sprint 4 (batch progress).
 
 Design intent: **one bad file should never take down a worker or stall the queue.** All
 codec calls inside the worker are wrapped in try/catch; failures are reported per-job, and

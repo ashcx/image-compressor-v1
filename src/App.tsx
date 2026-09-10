@@ -1,10 +1,9 @@
 import { computed, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { useRef } from 'preact/hooks'
-import { encodeImageData } from './lib/convert'
-import { buildSizeEstimator, type SizeEstimator } from './lib/estimate'
+import { type EstimateSample, interpolate } from './lib/estimate'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
-import { blobToImageData } from './lib/image'
+import { processImage } from './lib/workerClient'
 
 type Status = 'idle' | 'working' | 'done' | 'error'
 
@@ -20,10 +19,9 @@ const outputSize = signal(0)
 const sizeIsExact = signal(false)
 const dimensions = signal({ width: 0, height: 0 })
 const isDragging = signal(false)
+const samples = signal<EstimateSample[]>([])
 
-let sourceImageData: ImageData | null = null
-let sizeEstimator: SizeEstimator | null = null
-let encodeToken = 0
+let activeJobId = ''
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
 const savings = computed(() => {
@@ -62,82 +60,75 @@ export function App() {
   }
 
   function refreshEstimate() {
-    if (!sizeEstimator) return
-    outputSize.value = sizeEstimator.at(quality.value)
+    if (samples.value.length === 0) return
+    outputSize.value = interpolate(samples.value, quality.value)
     sizeIsExact.value = false
   }
 
-  async function encodeExact() {
-    const imageData = sourceImageData
-    if (!imageData) return
+  async function runProcess(buildEstimate: boolean) {
+    const source = file.value
+    if (!source) return
 
-    const token = ++encodeToken
+    const buffer = await source.arrayBuffer()
+    if (file.value !== source) return
+
+    const { jobId, response } = processImage({
+      fileBuffer: buffer,
+      targetFormat: 'webp',
+      quality: quality.value,
+      buildEstimate,
+    })
+
+    activeJobId = jobId
     status.value = 'working'
     errorMessage.value = ''
 
     try {
-      const result = await encodeImageData(imageData, 'webp', {
-        quality: quality.value,
-      })
-      if (token !== encodeToken) return
+      const result = await response
+      if (jobId !== activeJobId) return
+
+      if (result.samples) samples.value = result.samples
 
       releaseResult()
-      resultUrl.value = URL.createObjectURL(result.blob)
+      resultUrl.value = URL.createObjectURL(
+        new Blob([result.outputBuffer], { type: result.mimeType }),
+      )
       resultExtension.value = result.extension
-      outputSize.value = result.blob.size
+      outputSize.value = result.outputSize
       sizeIsExact.value = true
       dimensions.value = { width: result.width, height: result.height }
       status.value = 'done'
     } catch (error) {
-      if (token !== encodeToken) return
+      if (jobId !== activeJobId) return
       status.value = 'error'
       errorMessage.value =
         error instanceof Error ? error.message : 'Conversion failed'
     }
   }
 
-  async function load(source: File) {
+  function load(source: File) {
     if (debounceTimer) clearTimeout(debounceTimer)
     releaseResult()
-    sourceImageData = null
-    sizeEstimator = null
     file.value = source
+    samples.value = []
     outputSize.value = 0
     sizeIsExact.value = false
     dimensions.value = { width: 0, height: 0 }
     errorMessage.value = ''
     status.value = 'working'
-
-    try {
-      const decoded = await blobToImageData(source)
-      sourceImageData = decoded
-
-      try {
-        sizeEstimator = await buildSizeEstimator(decoded, 'webp')
-        refreshEstimate()
-      } catch {
-        sizeEstimator = null
-      }
-    } catch (error) {
-      status.value = 'error'
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Could not read image'
-      return
-    }
-
-    await encodeExact()
+    void runProcess(true)
   }
 
-  function scheduleEncode() {
+  function scheduleProcess() {
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
-      void encodeExact()
+      void runProcess(false)
     }, QUALITY_DEBOUNCE_MS)
   }
 
   function pickFiles(files: FileList | null) {
     const next = files?.[0]
-    if (next) void load(next)
+    if (next) load(next)
   }
 
   function onInputChange(event: JSX.TargetedEvent<HTMLInputElement, Event>) {
@@ -214,7 +205,7 @@ export function App() {
               onInput={(event) => {
                 quality.value = Number(event.currentTarget.value)
                 refreshEstimate()
-                scheduleEncode()
+                scheduleProcess()
               }}
             />
             <span class="field__hint" aria-live="polite">

@@ -10,41 +10,36 @@ const SAMPLE_QUALITIES = [10, 30, 50, 70, 90, 100]
 // The exact encode later replaces the estimate, so precision here is not critical.
 const DETAIL_BIAS = 1.3
 
-export interface SizeEstimator {
-  at(quality: number): number
-}
-
-interface Sample {
+export interface EstimateSample {
   quality: number
   bytes: number
 }
 
-export async function buildSizeEstimator(
+export async function buildEstimateSamples(
   imageData: ImageData,
   format: OutputFormat,
-): Promise<SizeEstimator> {
+): Promise<EstimateSample[]> {
   const thumbnail = downscaleImageData(imageData, SAMPLE_LONG_EDGE)
   const pixelRatio =
     (imageData.width * imageData.height) / (thumbnail.width * thumbnail.height)
   const bias = thumbnail === imageData ? 1 : DETAIL_BIAS
 
-  const samples: Sample[] = []
+  const samples: EstimateSample[] = []
   for (const quality of SAMPLE_QUALITIES) {
     const result = await encodeImageData(thumbnail, format, { quality })
     samples.push({
       quality,
-      bytes: Math.round(result.blob.size * pixelRatio * bias),
+      bytes: Math.round(result.buffer.byteLength * pixelRatio * bias),
     })
   }
 
-  return {
-    at(quality: number) {
-      return interpolate(samples, quality)
-    },
-  }
+  return samples
 }
 
-export function interpolate(samples: Sample[], quality: number): number {
+export function interpolate(
+  samples: EstimateSample[],
+  quality: number,
+): number {
   const first = samples[0]
   const last = samples[samples.length - 1]
   if (quality <= first.quality) return first.bytes
