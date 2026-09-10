@@ -1,41 +1,29 @@
-import { encode as encodeWebp } from '@jsquash/webp'
+import { getCodec } from './codecs/registry'
+import type { EncodeOptions, OutputFormat } from './codecs/types'
+import { blobToImageData } from './image'
 
 export interface ConversionResult {
   blob: Blob
   width: number
   height: number
+  format: OutputFormat
+  extension: string
 }
 
-export async function blobToImageData(blob: Blob): Promise<ImageData> {
-  const bitmap = await createImageBitmap(blob)
-
-  try {
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-
-    const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('Canvas 2D context is unavailable')
-    }
-
-    context.drawImage(bitmap, 0, 0)
-    return context.getImageData(0, 0, bitmap.width, bitmap.height)
-  } finally {
-    bitmap.close()
-  }
-}
-
-export async function convertToWebp(
+export async function convertImage(
   blob: Blob,
-  quality: number,
+  format: OutputFormat,
+  options: EncodeOptions = {},
 ): Promise<ConversionResult> {
+  const codec = await getCodec(format)
   const imageData = await blobToImageData(blob)
-  const buffer = await encodeWebp(imageData, { quality })
+  const buffer = await codec.encode(imageData, options)
 
   return {
-    blob: new Blob([buffer], { type: 'image/webp' }),
+    blob: new Blob([buffer], { type: codec.mimeType }),
     width: imageData.width,
     height: imageData.height,
+    format: codec.format,
+    extension: codec.extension,
   }
 }

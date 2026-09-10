@@ -90,11 +90,17 @@ static-hosted tool.
 | Codecs | `@jsquash/jpeg` (MozJPEG), `@jsquash/webp`, `@jsquash/avif`, `@jsquash/jxl`, `@jsquash/png`, `@jsquash/oxipng`, `@jsquash/resize` | All WASM, browser + worker targeted |
 | Bundler | Vite | Handles WASM asset copying; requires `optimizeDeps.exclude` for jsquash (below) |
 | Parallelism | Native `Worker` API, `type: 'module'` | No threading libraries needed |
-| Zipping | JSZip | Client-side, no server round-trip |
+| Zipping | `fflate` | Client-side, no server round-trip. Lighter and faster than JSZip (~12 KB gzip vs ~28 KB); chosen now, used from Sprint 7. |
 | Lint / format | Biome | One fast tool for both; minimal config |
 | Testing | Vitest (unit) + Playwright (browser/e2e, later sprints) | Vitest reuses the Vite config; Playwright covers cross-browser and worker behavior |
 | Package manager | npm | Lockfile committed; zero extra CI setup |
 | Hosting/CI | GitHub Pages + GitHub Actions | PR CI runs lint/typecheck/test/build; `main` deploys `dist/` |
+
+**Codec adapter.** Codecs sit behind a small `Codec` interface plus a registry that
+`import()`s each format lazily (`src/lib/codecs/`). Core and UI never import `@jsquash/*`
+directly. This keeps unused formats out of the initial bundle (per-format lazy loading),
+makes codecs mockable in unit tests, and turns a future HEIC (v1.1) or `wasm-vips` swap into
+a registry entry rather than a rewrite.
 
 **UI framework rationale.** The UI is a small stateful list (per-file status/progress) plus
 a settings form, not a content site. Preact + signals covers this with a tiny runtime and
@@ -121,7 +127,11 @@ vite.config.ts        # base path + jsquash optimizeDeps excludes
 src/
   main.tsx            # app mount
   App.tsx             # shell (drag/drop, settings, results)
-  lib/                # decode/encode helpers, shared types
+  lib/
+    codecs/           # Codec interface + lazy format registry
+    convert.ts        # decode -> encode orchestration
+    image.ts          # blob -> ImageData
+    format.ts         # size/name helpers
   workers/            # worker scripts (added in Sprint 3)
 public/               # static assets (.nojekyll)
 ```

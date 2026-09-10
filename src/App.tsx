@@ -1,7 +1,7 @@
 import { computed, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { useRef } from 'preact/hooks'
-import { convertToWebp } from './lib/convert'
+import { convertImage } from './lib/convert'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 
 type Status = 'idle' | 'working' | 'done' | 'error'
@@ -11,6 +11,7 @@ const quality = signal(75)
 const status = signal<Status>('idle')
 const errorMessage = signal('')
 const resultUrl = signal('')
+const resultExtension = signal('webp')
 const outputSize = signal(0)
 const dimensions = signal({ width: 0, height: 0 })
 const isDragging = signal(false)
@@ -22,7 +23,9 @@ const savings = computed(() => {
 
 const outputName = computed(() => {
   const current = file.value
-  return current ? replaceExtension(current.name, 'webp') : 'output.webp'
+  return current
+    ? replaceExtension(current.name, resultExtension.value)
+    : 'output.webp'
 })
 
 export function App() {
@@ -40,8 +43,11 @@ export function App() {
     status.value = 'working'
 
     try {
-      const result = await convertToWebp(source, quality.value)
+      const result = await convertImage(source, 'webp', {
+        quality: quality.value,
+      })
       resultUrl.value = URL.createObjectURL(result.blob)
+      resultExtension.value = result.extension
       outputSize.value = result.blob.size
       dimensions.value = { width: result.width, height: result.height }
       status.value = 'done'
