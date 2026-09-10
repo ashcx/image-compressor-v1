@@ -140,7 +140,8 @@ src/
     convert.ts        # decode -> encode orchestration (worker-side)
     image.ts          # decode / downscale (worker-safe: OffscreenCanvas)
     estimate.ts       # thumbnail quality-curve size estimate
-    workerClient.ts   # main-thread worker RPC client
+    workerClient.ts   # processImage() facade over the pool
+    workerPool.ts     # fixed-size worker pool + FIFO queue + fault isolation
     protocol.ts       # shared worker message types
     format.ts         # size/name helpers
   workers/            # worker scripts (image-worker.ts)
