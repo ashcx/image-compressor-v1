@@ -3,6 +3,7 @@ import type { JSX } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import { type EstimateSample, interpolate } from './lib/estimate'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
+import { appVersion, watchForUpdates } from './lib/version'
 import { getPoolStats, processImage, subscribeToPool } from './lib/workerClient'
 
 type JobStatus =
@@ -34,6 +35,7 @@ const jobs = signal<BatchJob[]>([])
 const quality = signal(75)
 const isDragging = signal(false)
 const poolStats = signal(getPoolStats())
+const newVersion = signal('')
 
 let idCounter = 0
 let reprocessTimer: ReturnType<typeof setTimeout> | undefined
@@ -296,6 +298,12 @@ export function App() {
     })
   }, [])
 
+  useEffect(() => {
+    return watchForUpdates((version) => {
+      newVersion.value = version
+    })
+  }, [])
+
   function onInputChange(event: JSX.TargetedEvent<HTMLInputElement, Event>) {
     addFiles(event.currentTarget.files)
     event.currentTarget.value = ''
@@ -320,6 +328,19 @@ export function App() {
 
   return (
     <main class="app">
+      {newVersion.value && (
+        <div class="update-banner" role="status">
+          <span>A new version is available.</span>
+          <button
+            type="button"
+            class="button button--small"
+            onClick={() => location.reload()}
+          >
+            Reload
+          </button>
+        </div>
+      )}
+
       <header class="app__header">
         <h1>Image Compressor</h1>
         <p>
@@ -500,6 +521,8 @@ export function App() {
           Compress.
         </p>
       )}
+
+      <footer class="app__footer">v{appVersion}</footer>
     </main>
   )
 }
