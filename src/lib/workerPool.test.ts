@@ -170,4 +170,60 @@ describe('WorkerPool', () => {
     expect(order).toEqual(['a', 'b', 'c'])
     pool.terminate()
   })
+
+  it('resolves estimate responses as well as results', async () => {
+    const pool = new WorkerPool({
+      size: 1,
+      createWorker: () =>
+        new FakeWorker((worker, message) =>
+          worker.respond({
+            type: 'estimate',
+            jobId: message.jobId,
+            width: 2,
+            height: 2,
+            samples: [{ quality: 50, bytes: 10 }],
+          }),
+        ),
+    })
+
+    await expect(pool.run(task('a'))).resolves.toMatchObject({
+      type: 'estimate',
+      jobId: 'a',
+    })
+    pool.terminate()
+  })
+
+  it('reports busy and queued counts and notifies on change', async () => {
+    const releases: Array<() => void> = []
+    let changes = 0
+    const pool = new WorkerPool({
+      size: 1,
+      onChange: () => {
+        changes += 1
+      },
+      createWorker: () =>
+        new FakeWorker((worker, message) => {
+          releases.push(() => worker.respond(resultFor(message.jobId)))
+        }),
+    })
+
+    const first = pool.run(task('a'))
+    const second = pool.run(task('b'))
+
+    expect(pool.busyCount).toBe(1)
+    expect(pool.queuedCount).toBe(1)
+    expect(changes).toBeGreaterThan(0)
+
+    releases.shift()?.()
+    await first
+    expect(pool.busyCount).toBe(1)
+    expect(pool.queuedCount).toBe(0)
+
+    releases.shift()?.()
+    await second
+    expect(pool.busyCount).toBe(0)
+    expect(pool.queuedCount).toBe(0)
+
+    pool.terminate()
+  })
 })

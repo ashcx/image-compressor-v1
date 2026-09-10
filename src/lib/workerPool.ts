@@ -1,4 +1,6 @@
-import type { ResultResponse, WorkerRequest, WorkerResponse } from './protocol'
+import type { WorkerRequest, WorkerResponse } from './protocol'
+
+export type PoolSuccess = Exclude<WorkerResponse, { type: 'error' }>
 
 export interface PoolWorker {
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null
@@ -14,13 +16,14 @@ export interface PoolTask {
 }
 
 interface QueuedTask extends PoolTask {
-  resolve: (response: ResultResponse) => void
+  resolve: (response: PoolSuccess) => void
   reject: (error: Error) => void
 }
 
 export interface WorkerPoolOptions {
   size: number
   createWorker: () => PoolWorker
+  onChange?: () => void
 }
 
 /**
@@ -31,6 +34,7 @@ export interface WorkerPoolOptions {
 export class WorkerPool {
   private readonly size: number
   private readonly createWorker: () => PoolWorker
+  private readonly onChange: (() => void) | undefined
   private workers: PoolWorker[] = []
   private idle: PoolWorker[] = []
   private queue: QueuedTask[] = []
@@ -40,15 +44,24 @@ export class WorkerPool {
   constructor(options: WorkerPoolOptions) {
     this.size = Math.max(1, options.size)
     this.createWorker = options.createWorker
+    this.onChange = options.onChange
   }
 
   get workerCount(): number {
     return this.workers.length
   }
 
-  run(task: PoolTask): Promise<ResultResponse> {
+  get busyCount(): number {
+    return this.busy.size
+  }
+
+  get queuedCount(): number {
+    return this.queue.length
+  }
+
+  run(task: PoolTask): Promise<PoolSuccess> {
     if (this.closed) return Promise.reject(new Error('Worker pool is closed'))
-    return new Promise<ResultResponse>((resolve, reject) => {
+    return new Promise<PoolSuccess>((resolve, reject) => {
       this.queue.push({ ...task, resolve, reject })
       this.dispatch()
     })
@@ -65,20 +78,26 @@ export class WorkerPool {
     this.idle = []
     this.queue = []
     this.busy.clear()
+    this.notify()
   }
 
   private dispatch(): void {
     while (this.queue.length > 0) {
       const worker = this.idle.pop() ?? this.spawn()
-      if (!worker) return
+      if (!worker) {
+        this.notify()
+        return
+      }
       const task = this.queue.shift()
       if (!task) {
         this.idle.push(worker)
+        this.notify()
         return
       }
       this.busy.set(worker, task)
       worker.postMessage(task.message, task.transfer)
     }
+    this.notify()
   }
 
   private spawn(): PoolWorker | null {
@@ -99,10 +118,10 @@ export class WorkerPool {
     this.busy.delete(worker)
 
     const response = event.data
-    if (response.type === 'result') {
-      task.resolve(response)
-    } else {
+    if (response.type === 'error') {
       task.reject(new Error(response.error))
+    } else {
+      task.resolve(response)
     }
 
     this.idle.push(worker)
@@ -121,5 +140,10 @@ export class WorkerPool {
     worker.terminate()
 
     if (!this.closed) this.dispatch()
+    else this.notify()
+  }
+
+  private notify(): void {
+    this.onChange?.()
   }
 }
