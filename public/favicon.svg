@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Image Compressor">
+  <rect width="32" height="32" rx="7" fill="#4c8dff" />
+  <circle cx="11" cy="11" r="2.6" fill="#06101f" />
+  <path d="M6 24l6-7 4 4 3.5-3.5L26 24z" fill="#06101f" />
+</svg>

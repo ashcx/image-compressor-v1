@@ -1,16 +1,28 @@
-export async function blobToImageData(blob: Blob): Promise<ImageData> {
-  const bitmap = await createImageBitmap(blob)
+type AnyCanvasContext =
+  | CanvasRenderingContext2D
+  | OffscreenCanvasRenderingContext2D
+
+function createContext(width: number, height: number): AnyCanvasContext {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const canvas = new OffscreenCanvas(width, height)
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Canvas 2D context is unavailable')
+    return context
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Canvas 2D context is unavailable')
+  return context
+}
+
+export async function decodeImageData(buffer: ArrayBuffer): Promise<ImageData> {
+  const bitmap = await createImageBitmap(new Blob([buffer]))
 
   try {
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-
-    const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('Canvas 2D context is unavailable')
-    }
-
+    const context = createContext(bitmap.width, bitmap.height)
     context.drawImage(bitmap, 0, 0)
     return context.getImageData(0, 0, bitmap.width, bitmap.height)
   } finally {
@@ -30,25 +42,13 @@ export function downscaleImageData(
   const targetWidth = Math.max(1, Math.round(width * scale))
   const targetHeight = Math.max(1, Math.round(height * scale))
 
-  const source = document.createElement('canvas')
-  source.width = width
-  source.height = height
-  const sourceContext = source.getContext('2d')
-  if (!sourceContext) {
-    throw new Error('Canvas 2D context is unavailable')
-  }
-  sourceContext.putImageData(imageData, 0, 0)
+  const source = createContext(width, height)
+  source.putImageData(imageData, 0, 0)
 
-  const target = document.createElement('canvas')
-  target.width = targetWidth
-  target.height = targetHeight
-  const targetContext = target.getContext('2d')
-  if (!targetContext) {
-    throw new Error('Canvas 2D context is unavailable')
-  }
-  targetContext.imageSmoothingEnabled = true
-  targetContext.imageSmoothingQuality = 'medium'
-  targetContext.drawImage(source, 0, 0, targetWidth, targetHeight)
+  const target = createContext(targetWidth, targetHeight)
+  target.imageSmoothingEnabled = true
+  target.imageSmoothingQuality = 'medium'
+  target.drawImage(source.canvas, 0, 0, targetWidth, targetHeight)
 
-  return targetContext.getImageData(0, 0, targetWidth, targetHeight)
+  return target.getImageData(0, 0, targetWidth, targetHeight)
 }
