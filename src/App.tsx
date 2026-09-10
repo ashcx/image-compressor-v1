@@ -52,6 +52,28 @@ const failed = computed(
 const progressPercent = computed(() =>
   total.value === 0 ? 0 : Math.round((finished.value / total.value) * 100),
 )
+const pendingEstimate = computed(
+  () =>
+    jobs.value.filter(
+      (job) => job.status === 'queued' || job.status === 'estimating',
+    ).length,
+)
+const estimatePhase = computed(
+  () => batchMode.value && pendingEstimate.value > 0,
+)
+const phasePercent = computed(() => {
+  if (total.value === 0) return 0
+  if (estimatePhase.value)
+    return Math.round(
+      ((total.value - pendingEstimate.value) / total.value) * 100,
+    )
+  return progressPercent.value
+})
+const phaseLabel = computed(() =>
+  estimatePhase.value
+    ? `Estimating sizes… ${total.value - pendingEstimate.value} / ${total.value}`
+    : `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}`,
+)
 const isCurrent = (job: BatchJob) =>
   job.status === 'done' && job.compressedQuality === quality.value
 const needsCompress = computed(() =>
@@ -353,28 +375,32 @@ export function App() {
             <div class="progress" aria-hidden="true">
               <div
                 class="progress__bar"
-                style={{ width: `${progressPercent.value}%` }}
+                style={{ width: `${phasePercent.value}%` }}
               />
             </div>
 
             <div class="panel__row">
-              <span class="panel__label">
-                {finished.value} / {total.value} compressed
-                {failed.value > 0 ? ` · ${failed.value} failed` : ''}
-              </span>
+              <span class="panel__label">{phaseLabel.value}</span>
               <span class="panel__value">
                 workers busy: {poolStats.value.busy}/{poolStats.value.size}
               </span>
             </div>
 
-            {batchEstimate.value > 0 && (
+            {batchMode.value && total.value > 0 && (
               <div class="panel__row">
                 <span class="panel__label">Batch estimate</span>
                 <span class="panel__value">
-                  {formatBytes(batchEstimate.value)}
-                  {originalTotal > 0
-                    ? ` (${savingsLabel(originalTotal, batchEstimate.value)})`
-                    : ''}
+                  {estimatePhase.value ? (
+                    'calculating…'
+                  ) : (
+                    <>
+                      {needsCompress.value ? '~' : ''}
+                      {formatBytes(batchEstimate.value)}
+                      {originalTotal > 0
+                        ? ` (${savingsLabel(originalTotal, batchEstimate.value)})`
+                        : ''}
+                    </>
+                  )}
                 </span>
               </div>
             )}
@@ -402,16 +428,20 @@ export function App() {
               return (
                 <li class="job" key={job.id}>
                   <div class="job__thumb">
-                    {current && job.outputUrl ? (
-                      <img src={job.outputUrl} alt="" />
-                    ) : (
-                      <span
-                        class={
-                          job.status === 'error'
-                            ? 'job__placeholder job__placeholder--error'
-                            : 'job__placeholder'
-                        }
+                    {job.status === 'processing' ? (
+                      <span class="job__spinner" />
+                    ) : job.status === 'error' ? (
+                      <span class="job__icon job__icon--error">!</span>
+                    ) : job.outputUrl ? (
+                      <img
+                        class={current ? '' : 'job__thumb--stale'}
+                        src={job.outputUrl}
+                        alt=""
                       />
+                    ) : job.status === 'estimated' ? (
+                      <span class="job__icon job__icon--ready">≈</span>
+                    ) : (
+                      <span class="job__icon job__icon--idle">…</span>
                     )}
                   </div>
                   <div class="job__info">
