@@ -1,45 +1,25 @@
 import type { OutputFormat } from './codecs/types'
-import type { ProcessRequest, ResultResponse, WorkerResponse } from './protocol'
+import type { ProcessRequest, ResultResponse } from './protocol'
+import { WorkerPool } from './workerPool'
 
-interface Pending {
-  resolve: (response: ResultResponse) => void
-  reject: (error: Error) => void
-}
+const MAX_WORKERS = 8
 
-let worker: Worker | null = null
-const pending = new Map<string, Pending>()
+let pool: WorkerPool | null = null
 let counter = 0
 
-function getWorker(): Worker {
-  if (worker) return worker
-
-  const instance = new Worker(
-    new URL('../workers/image-worker.ts', import.meta.url),
-    {
-      type: 'module',
-    },
-  )
-
-  instance.onmessage = (event: MessageEvent<WorkerResponse>) => {
-    const response = event.data
-    const entry = pending.get(response.jobId)
-    if (!entry) return
-    pending.delete(response.jobId)
-    if (response.type === 'result') {
-      entry.resolve(response)
-    } else {
-      entry.reject(new Error(response.error))
-    }
+function getPool(): WorkerPool {
+  if (!pool) {
+    const coreCount =
+      typeof navigator === 'undefined' ? 4 : navigator.hardwareConcurrency || 4
+    pool = new WorkerPool({
+      size: Math.min(coreCount, MAX_WORKERS),
+      createWorker: () =>
+        new Worker(new URL('../workers/image-worker.ts', import.meta.url), {
+          type: 'module',
+        }),
+    })
   }
-
-  instance.onerror = (event) => {
-    const error = new Error(event.message || 'Image worker failed')
-    for (const entry of pending.values()) entry.reject(error)
-    pending.clear()
-  }
-
-  worker = instance
-  return worker
+  return pool
 }
 
 export interface ProcessJobOptions {
@@ -63,14 +43,10 @@ export function processImage(options: ProcessJobOptions): {
     buildEstimate: options.buildEstimate,
   }
 
-  const response = new Promise<ResultResponse>((resolve, reject) => {
-    pending.set(jobId, { resolve, reject })
-    try {
-      getWorker().postMessage(request, [request.fileBuffer])
-    } catch (error) {
-      pending.delete(jobId)
-      reject(error instanceof Error ? error : new Error('Failed to post job'))
-    }
+  const response = getPool().run({
+    jobId,
+    message: request,
+    transfer: [request.fileBuffer],
   })
 
   return { jobId, response }
