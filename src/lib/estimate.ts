@@ -14,10 +14,10 @@ const LARGE_LONG_EDGE = 448
 const MIN_BETA = 0.35
 const MAX_BETA = 0.8
 
-// Residual calibration on top of the power-law fit: downscaled encodes still run
-// hot relative to the full-resolution encode. Tuned against recorded estimate-vs-
-// exact pairs; this is a deliberately rough estimate that the exact encode replaces.
-const SIZE_CALIBRATION = 0.7
+// Residual calibration on top of the power-law fit, tuned against real photos
+// (estimate/exact geometric mean ~= 1.0). This is a deliberately rough estimate
+// that the exact encode replaces within the debounce window.
+const SIZE_CALIBRATION = 1.25
 
 export interface EstimateSample {
   quality: number
