@@ -1,4 +1,6 @@
-import type { ResultResponse, WorkerRequest, WorkerResponse } from './protocol'
+import type { WorkerRequest, WorkerResponse } from './protocol'
+
+export type PoolSuccess = Exclude<WorkerResponse, { type: 'error' }>
 
 export interface PoolWorker {
   onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null
@@ -14,7 +16,7 @@ export interface PoolTask {
 }
 
 interface QueuedTask extends PoolTask {
-  resolve: (response: ResultResponse) => void
+  resolve: (response: PoolSuccess) => void
   reject: (error: Error) => void
 }
 
@@ -57,9 +59,9 @@ export class WorkerPool {
     return this.queue.length
   }
 
-  run(task: PoolTask): Promise<ResultResponse> {
+  run(task: PoolTask): Promise<PoolSuccess> {
     if (this.closed) return Promise.reject(new Error('Worker pool is closed'))
-    return new Promise<ResultResponse>((resolve, reject) => {
+    return new Promise<PoolSuccess>((resolve, reject) => {
       this.queue.push({ ...task, resolve, reject })
       this.dispatch()
     })
@@ -116,10 +118,10 @@ export class WorkerPool {
     this.busy.delete(worker)
 
     const response = event.data
-    if (response.type === 'result') {
-      task.resolve(response)
-    } else {
+    if (response.type === 'error') {
       task.reject(new Error(response.error))
+    } else {
+      task.resolve(response)
     }
 
     this.idle.push(worker)

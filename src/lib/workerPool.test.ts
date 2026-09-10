@@ -171,6 +171,28 @@ describe('WorkerPool', () => {
     pool.terminate()
   })
 
+  it('resolves estimate responses as well as results', async () => {
+    const pool = new WorkerPool({
+      size: 1,
+      createWorker: () =>
+        new FakeWorker((worker, message) =>
+          worker.respond({
+            type: 'estimate',
+            jobId: message.jobId,
+            width: 2,
+            height: 2,
+            samples: [{ quality: 50, bytes: 10 }],
+          }),
+        ),
+    })
+
+    await expect(pool.run(task('a'))).resolves.toMatchObject({
+      type: 'estimate',
+      jobId: 'a',
+    })
+    pool.terminate()
+  })
+
   it('reports busy and queued counts and notifies on change', async () => {
     const releases: Array<() => void> = []
     let changes = 0

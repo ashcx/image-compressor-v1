@@ -2,6 +2,7 @@ import { encodeImageData } from '../lib/convert'
 import { buildEstimateSamples } from '../lib/estimate'
 import { decodeImageData } from '../lib/image'
 import type {
+  EstimateResponse,
   ResultResponse,
   WorkerRequest,
   WorkerResponse,
@@ -19,6 +20,23 @@ scope.onmessage = async (event) => {
   if (request?.type !== 'process') return
 
   try {
+    if (request.estimateOnly) {
+      const imageData = await decodeImageData(request.fileBuffer)
+      const samples = await buildEstimateSamples(
+        imageData,
+        request.targetFormat,
+      )
+      const response: EstimateResponse = {
+        type: 'estimate',
+        jobId: request.jobId,
+        width: imageData.width,
+        height: imageData.height,
+        samples,
+      }
+      scope.postMessage(response)
+      return
+    }
+
     const imageData = await decodeImageData(request.fileBuffer)
     const encoded = await encodeImageData(imageData, request.targetFormat, {
       quality: request.quality,

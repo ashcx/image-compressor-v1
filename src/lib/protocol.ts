@@ -8,6 +8,7 @@ export interface ProcessRequest {
   targetFormat: OutputFormat
   quality?: number
   buildEstimate?: boolean
+  estimateOnly?: boolean
 }
 
 export type WorkerRequest = ProcessRequest
@@ -25,10 +26,18 @@ export interface ResultResponse {
   samples?: EstimateSample[]
 }
 
+export interface EstimateResponse {
+  type: 'estimate'
+  jobId: string
+  width: number
+  height: number
+  samples: EstimateSample[]
+}
+
 export interface ErrorResponse {
   type: 'error'
   jobId: string
   error: string
 }
 
-export type WorkerResponse = ResultResponse | ErrorResponse
+export type WorkerResponse = ResultResponse | EstimateResponse | ErrorResponse

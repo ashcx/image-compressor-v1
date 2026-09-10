@@ -1,6 +1,6 @@
 import type { OutputFormat } from './codecs/types'
-import type { ProcessRequest, ResultResponse } from './protocol'
-import { WorkerPool } from './workerPool'
+import type { ProcessRequest } from './protocol'
+import { type PoolSuccess, WorkerPool } from './workerPool'
 
 const MAX_WORKERS = 8
 
@@ -62,11 +62,12 @@ export interface ProcessJobOptions {
   targetFormat: OutputFormat
   quality?: number
   buildEstimate?: boolean
+  estimateOnly?: boolean
 }
 
 export function processImage(options: ProcessJobOptions): {
   jobId: string
-  response: Promise<ResultResponse>
+  response: Promise<PoolSuccess>
 } {
   const jobId = `job-${++counter}`
   const request: ProcessRequest = {
@@ -76,6 +77,7 @@ export function processImage(options: ProcessJobOptions): {
     targetFormat: options.targetFormat,
     quality: options.quality,
     buildEstimate: options.buildEstimate,
+    estimateOnly: options.estimateOnly,
   }
 
   const response = getPool().run({
