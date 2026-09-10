@@ -80,14 +80,61 @@ logic, no build step beyond static asset generation.
 
 ## 5. Tech Stack
 
+Crystallized before implementation (Sprint 1). Chosen for a small, compute-offloaded,
+static-hosted tool.
+
 | Concern | Choice | Notes |
 |---|---|---|
+| Language | TypeScript (strict) | Shared message types for the worker protocol in §6 |
+| UI framework | Preact + `@preact/signals` (`@preact/preset-vite`) | ~4 KB runtime, TSX; signals update individual progress rows without re-rendering the batch list |
 | Codecs | `@jsquash/jpeg` (MozJPEG), `@jsquash/webp`, `@jsquash/avif`, `@jsquash/jxl`, `@jsquash/png`, `@jsquash/oxipng`, `@jsquash/resize` | All WASM, browser + worker targeted |
-| Bundler | Vite | Handles WASM asset copying, has known workarounds documented for jsquash quirks |
+| Bundler | Vite | Handles WASM asset copying; requires `optimizeDeps.exclude` for jsquash (below) |
 | Parallelism | Native `Worker` API, `type: 'module'` | No threading libraries needed |
-| Zipping | `JSZip` | Client-side, no server round-trip |
-| UI framework | Plain JS/HTML or a light framework (React/Preact) — your call | Not architecturally significant |
-| Hosting/CI | GitHub Pages + GitHub Actions | Build on push, deploy `dist/` |
+| Zipping | `fflate` | Client-side, no server round-trip. Lighter and faster than JSZip (~12 KB gzip vs ~28 KB); chosen now, used from Sprint 7. |
+| Lint / format | Biome | One fast tool for both; minimal config |
+| Testing | Vitest (unit) + Playwright (browser/e2e, later sprints) | Vitest reuses the Vite config; Playwright covers cross-browser and worker behavior |
+| Package manager | npm | Lockfile committed; zero extra CI setup |
+| Hosting/CI | GitHub Pages + GitHub Actions | PR CI runs lint/typecheck/test/build; `main` deploys `dist/` |
+
+**Codec adapter.** Codecs sit behind a small `Codec` interface plus a registry that
+`import()`s each format lazily (`src/lib/codecs/`). Core and UI never import `@jsquash/*`
+directly. This keeps unused formats out of the initial bundle (per-format lazy loading),
+makes codecs mockable in unit tests, and turns a future HEIC (v1.1) or `wasm-vips` swap into
+a registry entry rather than a rewrite.
+
+**UI framework rationale.** The UI is a small stateful list (per-file status/progress) plus
+a settings form, not a content site. Preact + signals covers this with a tiny runtime and
+fine-grained updates; plain DOM would require hand-rolled list reconciliation, React adds
+weight for no benefit, and Svelte was the runner-up but adds a different component
+paradigm for marginal gain.
+
+**Known Vite/jsquash constraint.** jsquash WASM modules break under Vite's dependency
+pre-bundler; the fix (documented by the jSquash maintainers) is to exclude them:
+
+```ts
+optimizeDeps: { exclude: ['@jsquash/avif', '@jsquash/jpeg', '@jsquash/jxl', '@jsquash/png', '@jsquash/webp'] }
+```
+
+Note: `@jsquash/avif`, `@jsquash/jxl`, and `@jsquash/oxipng` ship nested workers that hit a
+Vite production-build bug; if this surfaces in Sprint 6, use their
+`*-single-thread-only` builds.
+
+### 5.1 Project layout
+
+```
+index.html            # Vite entry
+vite.config.ts        # base path + jsquash optimizeDeps excludes
+src/
+  main.tsx            # app mount
+  App.tsx             # shell (drag/drop, settings, results)
+  lib/
+    codecs/           # Codec interface + lazy format registry
+    convert.ts        # decode -> encode orchestration
+    image.ts          # blob -> ImageData
+    format.ts         # size/name helpers
+  workers/            # worker scripts (added in Sprint 3)
+public/               # static assets (.nojekyll)
+```
 
 ---
 
