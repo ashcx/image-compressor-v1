@@ -1,4 +1,4 @@
-import type { OutputFormat } from './codecs/types'
+import type { OutputFormat, ResizeOptions } from './codecs/types'
 import type { ProcessRequest } from './protocol'
 import { type PoolSuccess, WorkerPool } from './workerPool'
 
@@ -61,6 +61,9 @@ export interface ProcessJobOptions {
   fileBuffer: ArrayBuffer
   targetFormat: OutputFormat
   quality?: number
+  effort?: number
+  speed?: number
+  resize?: ResizeOptions
   buildEstimate?: boolean
   estimateOnly?: boolean
 }
@@ -76,6 +79,9 @@ export function processImage(options: ProcessJobOptions): {
     fileBuffer: options.fileBuffer,
     targetFormat: options.targetFormat,
     quality: options.quality,
+    effort: options.effort,
+    speed: options.speed,
+    resize: options.resize,
     buildEstimate: options.buildEstimate,
     estimateOnly: options.estimateOnly,
   }

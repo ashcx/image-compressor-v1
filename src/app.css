@@ -129,6 +129,29 @@ body {
   accent-color: var(--accent);
 }
 
+.field__hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.select,
+.input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.select:focus,
+.input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .button {
   display: inline-flex;
   align-items: center;

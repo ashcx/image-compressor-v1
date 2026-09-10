@@ -1,4 +1,5 @@
 import { encodeImageData } from '../lib/convert'
+import { detectFormat } from '../lib/detect'
 import { buildEstimateSamples } from '../lib/estimate'
 import { decodeImageData } from '../lib/image'
 import type {
@@ -7,6 +8,7 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from '../lib/protocol'
+import { resizeImageData } from '../lib/resize'
 
 interface WorkerScope {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null
@@ -20,11 +22,15 @@ scope.onmessage = async (event) => {
   if (request?.type !== 'process') return
 
   try {
+    const sourceFormat = detectFormat(request.fileBuffer)
+    const decoded = await decodeImageData(request.fileBuffer, sourceFormat)
+    const imageData = await resizeImageData(decoded, request.resize)
+
     if (request.estimateOnly) {
-      const imageData = await decodeImageData(request.fileBuffer)
       const samples = await buildEstimateSamples(
         imageData,
         request.targetFormat,
+        { effort: request.effort, speed: request.speed },
       )
       const response: EstimateResponse = {
         type: 'estimate',
@@ -37,9 +43,10 @@ scope.onmessage = async (event) => {
       return
     }
 
-    const imageData = await decodeImageData(request.fileBuffer)
     const encoded = await encodeImageData(imageData, request.targetFormat, {
       quality: request.quality,
+      effort: request.effort,
+      speed: request.speed,
     })
 
     const response: ResultResponse = {
@@ -58,6 +65,7 @@ scope.onmessage = async (event) => {
       response.samples = await buildEstimateSamples(
         imageData,
         request.targetFormat,
+        { effort: request.effort, speed: request.speed },
       )
     }
 

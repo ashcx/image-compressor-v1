@@ -1,6 +1,12 @@
 import { computed, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
+import {
+  type ControlKey,
+  FORMAT_ORDER,
+  FORMAT_SPECS,
+} from './lib/codecs/formats'
+import type { OutputFormat } from './lib/codecs/types'
 import { type EstimateSample, interpolate } from './lib/estimate'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { appVersion, watchForUpdates } from './lib/version'
@@ -24,15 +30,32 @@ interface BatchJob {
   outputExtension: string
   outputSize: number
   sizeIsExact: boolean
-  compressedQuality: number | null
+  outputKey: string
+  sampleKey: string
   width: number
   height: number
   samples: EstimateSample[]
   error: string
 }
 
+interface Settings {
+  quality: number
+  effort: number
+  speed: number
+}
+
+function defaultSettings(format: OutputFormat): Settings {
+  const base: Settings = { quality: 75, effort: 2, speed: 6 }
+  for (const control of FORMAT_SPECS[format].controls) {
+    base[control.key] = control.default
+  }
+  return base
+}
+
 const jobs = signal<BatchJob[]>([])
-const quality = signal(75)
+const targetFormat = signal<OutputFormat>('webp')
+const settings = signal<Settings>(defaultSettings('webp'))
+const maxLongEdge = signal(0)
 const isDragging = signal(false)
 const poolStats = signal(getPoolStats())
 const newVersion = signal('')
@@ -76,21 +99,45 @@ const phaseLabel = computed(() =>
     ? `Estimating sizes… ${total.value - pendingEstimate.value} / ${total.value}`
     : `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}`,
 )
+
+const activeControls = computed(() => FORMAT_SPECS[targetFormat.value].controls)
+
+// Keys capture everything that changes the encoded bytes except quality. Quality
+// is excluded from `sampleKey` because the estimate curve already spans the
+// quality range, so moving the quality slider needs no re-encode to re-estimate.
+const sampleKey = computed(() => {
+  const format = targetFormat.value
+  const parts: string[] = [format]
+  for (const control of FORMAT_SPECS[format].controls) {
+    if (control.key === 'quality') continue
+    parts.push(`${control.key}=${settings.value[control.key]}`)
+  }
+  if (maxLongEdge.value > 0) parts.push(`edge=${maxLongEdge.value}`)
+  return parts.join('|')
+})
+
+const outputKey = computed(
+  () => `${sampleKey.value}|quality=${settings.value.quality}`,
+)
+
 const isCurrent = (job: BatchJob) =>
-  job.status === 'done' && job.compressedQuality === quality.value
+  job.status === 'done' && job.outputKey === outputKey.value
+
 const needsCompress = computed(() =>
   jobs.value.some(
     (job) =>
       job.status === 'estimated' ||
-      (job.status === 'done' && job.compressedQuality !== quality.value),
+      (job.status === 'done' && job.outputKey !== outputKey.value),
   ),
 )
+
 const batchEstimate = computed(() =>
   jobs.value.reduce((sum, job) => {
     if (job.status === 'error') return sum
     if (isCurrent(job)) return sum + job.outputSize
-    if (job.samples.length > 0)
-      return sum + interpolate(job.samples, quality.value)
+    if (job.samples.length > 0 && job.sampleKey === sampleKey.value) {
+      return sum + interpolate(job.samples, settings.value.quality)
+    }
     return sum
   }, 0),
 )
@@ -112,13 +159,21 @@ async function estimateJob(id: string) {
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
 
+  const format = targetFormat.value
+  const current = settings.value
+  const edge = maxLongEdge.value
+  const key = sampleKey.value
+
   updateJob(id, { status: 'estimating', error: '' })
 
   try {
     const buffer = await job.file.arrayBuffer()
     const { response } = processImage({
       fileBuffer: buffer,
-      targetFormat: 'webp',
+      targetFormat: format,
+      effort: current.effort,
+      speed: current.speed,
+      resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       estimateOnly: true,
     })
     const result = await response
@@ -129,8 +184,9 @@ async function estimateJob(id: string) {
       samples: result.samples,
       width: result.width,
       height: result.height,
-      outputSize: interpolate(result.samples, quality.value),
+      outputSize: interpolate(result.samples, current.quality),
       sizeIsExact: false,
+      sampleKey: key,
     })
   } catch (error) {
     if (jobTokens.get(id) !== token) return
@@ -146,14 +202,23 @@ async function compressJob(id: string) {
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
 
+  const format = targetFormat.value
+  const current = settings.value
+  const edge = maxLongEdge.value
+  const key = outputKey.value
+  const samplesKey = sampleKey.value
+
   updateJob(id, { status: 'processing', error: '' })
 
   try {
     const buffer = await job.file.arrayBuffer()
     const { response } = processImage({
       fileBuffer: buffer,
-      targetFormat: 'webp',
-      quality: quality.value,
+      targetFormat: format,
+      quality: current.quality,
+      effort: current.effort,
+      speed: current.speed,
+      resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       buildEstimate: job.samples.length === 0,
     })
     const result = await response
@@ -169,7 +234,8 @@ async function compressJob(id: string) {
       outputExtension: result.extension,
       outputSize: result.outputSize,
       sizeIsExact: true,
-      compressedQuality: quality.value,
+      outputKey: key,
+      sampleKey: samplesKey,
       width: result.width,
       height: result.height,
       ...(result.samples ? { samples: result.samples } : {}),
@@ -196,10 +262,11 @@ function addFiles(fileList: FileList | File[] | null) {
     originalSize: file.size,
     status: 'queued',
     outputUrl: '',
-    outputExtension: 'webp',
+    outputExtension: FORMAT_SPECS[targetFormat.value].extension,
     outputSize: 0,
     sizeIsExact: false,
-    compressedQuality: null,
+    outputKey: '',
+    sampleKey: '',
     width: 0,
     height: 0,
     samples: [],
@@ -218,14 +285,18 @@ function addFiles(fileList: FileList | File[] | null) {
 }
 
 function refreshEstimates() {
+  const key = outputKey.value
+  const currentSampleKey = sampleKey.value
   jobs.value = jobs.value.map((job) => {
-    if (job.samples.length === 0) return job
-    const current = isCurrent(job)
+    if (job.samples.length === 0 || job.sampleKey !== currentSampleKey) {
+      return job
+    }
+    const current = job.status === 'done' && job.outputKey === key
     return {
       ...job,
       outputSize: current
         ? job.outputSize
-        : interpolate(job.samples, quality.value),
+        : interpolate(job.samples, settings.value.quality),
       sizeIsExact: current,
     }
   })
@@ -241,11 +312,48 @@ function recompressSingle() {
   }, 200)
 }
 
+function sampleInputsChanged() {
+  if (jobs.value.length === 0) return
+  if (batchMode.value) {
+    for (const job of jobs.value) {
+      if (job.status === 'error') continue
+      void estimateJob(job.id)
+    }
+  } else {
+    recompressSingle()
+  }
+}
+
+function changeFormat(format: OutputFormat) {
+  if (format === targetFormat.value) return
+  targetFormat.value = format
+  settings.value = defaultSettings(format)
+  sampleInputsChanged()
+}
+
+function changeControl(key: ControlKey, value: number) {
+  if (settings.value[key] === value) return
+  settings.value = { ...settings.value, [key]: value }
+  if (key === 'quality') {
+    refreshEstimates()
+    if (!batchMode.value) recompressSingle()
+  } else {
+    sampleInputsChanged()
+  }
+}
+
+function changeResize(value: number) {
+  const next = Number.isFinite(value) && value > 0 ? Math.round(value) : 0
+  if (next === maxLongEdge.value) return
+  maxLongEdge.value = next
+  sampleInputsChanged()
+}
+
 function compressAll() {
   if (reprocessTimer) clearTimeout(reprocessTimer)
   for (const job of jobs.value) {
     if (job.status === 'error' || job.status === 'processing') continue
-    if (job.status === 'estimated' || job.compressedQuality !== quality.value) {
+    if (job.status === 'estimated' || job.outputKey !== outputKey.value) {
       void compressJob(job.id)
     }
   }
@@ -283,7 +391,7 @@ function statusLabel(job: BatchJob): string {
     case 'processing':
       return 'compressing…'
     case 'done':
-      return isCurrent(job) ? '' : 'quality changed — re-compress'
+      return isCurrent(job) ? '' : 'settings changed — re-compress'
     case 'error':
       return job.error
   }
@@ -361,8 +469,8 @@ export function App() {
       >
         <span class="dropzone__title">Drop images here</span>
         <span class="dropzone__hint">
-          or click to choose files (JPEG, PNG, WebP). Single images compress
-          immediately; batches are estimated first.
+          or click to choose files (JPEG, PNG, WebP, AVIF, JXL). Single images
+          compress immediately; batches are estimated first.
         </span>
       </button>
 
@@ -379,17 +487,57 @@ export function App() {
         <>
           <section class="panel">
             <label class="field">
-              <span class="field__label">Quality: {quality.value}</span>
+              <span class="field__label">Output format</span>
+              <select
+                class="select"
+                value={targetFormat.value}
+                onChange={(event) =>
+                  changeFormat(event.currentTarget.value as OutputFormat)
+                }
+              >
+                {FORMAT_ORDER.map((format) => (
+                  <option value={format} key={format}>
+                    {FORMAT_SPECS[format].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {activeControls.value.map((control) => (
+              <label class="field" key={control.key}>
+                <span class="field__label">
+                  {control.label}: {settings.value[control.key]}
+                </span>
+                <input
+                  type="range"
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  value={settings.value[control.key]}
+                  onInput={(event) =>
+                    changeControl(
+                      control.key,
+                      Number(event.currentTarget.value),
+                    )
+                  }
+                />
+                {control.hint && (
+                  <span class="field__hint">{control.hint}</span>
+                )}
+              </label>
+            ))}
+
+            <label class="field">
+              <span class="field__label">Resize — max long edge (px)</span>
               <input
-                type="range"
-                min={1}
-                max={100}
-                value={quality.value}
-                onInput={(event) => {
-                  quality.value = Number(event.currentTarget.value)
-                  refreshEstimates()
-                  if (!batchMode.value) recompressSingle()
-                }}
+                class="input"
+                type="number"
+                min={0}
+                placeholder="original"
+                value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
+                onChange={(event) =>
+                  changeResize(Number(event.currentTarget.value))
+                }
               />
             </label>
 
@@ -516,8 +664,8 @@ export function App() {
 
       {jobList.length > 0 && batchMode.value && (
         <p class="footnote">
-          Batch mode: change the quality as much as you like — sizes update from
-          cached estimates instantly. Nothing is encoded until you press
+          Batch mode: change the settings as much as you like — sizes update
+          from cached estimates instantly. Nothing is encoded until you press
           Compress.
         </p>
       )}

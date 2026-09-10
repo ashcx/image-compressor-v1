@@ -1,3 +1,6 @@
+import { getCodec } from './codecs/registry'
+import type { OutputFormat } from './codecs/types'
+
 type AnyCanvasContext =
   | CanvasRenderingContext2D
   | OffscreenCanvasRenderingContext2D
@@ -18,7 +21,7 @@ function createContext(width: number, height: number): AnyCanvasContext {
   return context
 }
 
-export async function decodeImageData(buffer: ArrayBuffer): Promise<ImageData> {
+async function decodeWithBitmap(buffer: ArrayBuffer): Promise<ImageData> {
   const bitmap = await createImageBitmap(new Blob([buffer]))
 
   try {
@@ -27,6 +30,27 @@ export async function decodeImageData(buffer: ArrayBuffer): Promise<ImageData> {
     return context.getImageData(0, 0, bitmap.width, bitmap.height)
   } finally {
     bitmap.close()
+  }
+}
+
+export async function decodeImageData(
+  buffer: ArrayBuffer,
+  format?: OutputFormat | null,
+): Promise<ImageData> {
+  try {
+    return await decodeWithBitmap(buffer)
+  } catch (error) {
+    // Browsers do not decode every format (notably JPEG XL); fall back to the
+    // matching WASM decoder when we recognised the signature.
+    if (format) {
+      try {
+        const codec = await getCodec(format)
+        if (codec.decode) return await codec.decode(buffer)
+      } catch {
+        // Surface the original native error below.
+      }
+    }
+    throw error
   }
 }
 
