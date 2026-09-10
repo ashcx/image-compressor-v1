@@ -102,6 +102,13 @@ directly. This keeps unused formats out of the initial bundle (per-format lazy l
 makes codecs mockable in unit tests, and turns a future HEIC (v1.1) or `wasm-vips` swap into
 a registry entry rather than a rewrite.
 
+**Size estimation (hybrid).** While the quality slider moves, the UI shows an instant rough
+estimate from a thumbnail quality curve: once per file, a ~256px thumbnail is encoded at a
+handful of quality points, interpolated, and scaled by pixel ratio with a small bias factor
+for detail lost in downscaling. The full-resolution encode then runs (debounced) and
+replaces the estimate with the exact size. This keeps dragging responsive on the main
+thread, and becomes fully non-blocking once encoding moves to a worker in Sprint 3.
+
 **UI framework rationale.** The UI is a small stateful list (per-file status/progress) plus
 a settings form, not a content site. Preact + signals covers this with a tiny runtime and
 fine-grained updates; plain DOM would require hand-rolled list reconciliation, React adds

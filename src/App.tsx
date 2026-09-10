@@ -1,10 +1,14 @@
 import { computed, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { useRef } from 'preact/hooks'
-import { convertImage } from './lib/convert'
+import { encodeImageData } from './lib/convert'
+import { buildSizeEstimator, type SizeEstimator } from './lib/estimate'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
+import { blobToImageData } from './lib/image'
 
 type Status = 'idle' | 'working' | 'done' | 'error'
+
+const QUALITY_DEBOUNCE_MS = 200
 
 const file = signal<File | null>(null)
 const quality = signal(75)
@@ -13,8 +17,14 @@ const errorMessage = signal('')
 const resultUrl = signal('')
 const resultExtension = signal('webp')
 const outputSize = signal(0)
+const sizeIsExact = signal(false)
 const dimensions = signal({ width: 0, height: 0 })
 const isDragging = signal(false)
+
+let sourceImageData: ImageData | null = null
+let sizeEstimator: SizeEstimator | null = null
+let encodeToken = 0
+let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
 const savings = computed(() => {
   const current = file.value
@@ -25,42 +35,109 @@ const outputName = computed(() => {
   const current = file.value
   return current
     ? replaceExtension(current.name, resultExtension.value)
-    : 'output.webp'
+    : `output.${resultExtension.value}`
+})
+
+const sizeHint = computed(() => {
+  if (outputSize.value === 0) {
+    return status.value === 'working'
+      ? 'Estimating size…'
+      : 'Move the slider to estimate the output size'
+  }
+  if (sizeIsExact.value) {
+    return `Output size: ${formatBytes(outputSize.value)}`
+  }
+  const refining = status.value === 'working' ? ' (refining…)' : ''
+  return `Estimated size: ~${formatBytes(outputSize.value)}${refining}`
 })
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function convert(source: File) {
+  function releaseResult() {
     if (resultUrl.value) {
       URL.revokeObjectURL(resultUrl.value)
       resultUrl.value = ''
     }
+  }
 
-    file.value = source
-    outputSize.value = 0
-    errorMessage.value = ''
+  function refreshEstimate() {
+    if (!sizeEstimator) return
+    outputSize.value = sizeEstimator.at(quality.value)
+    sizeIsExact.value = false
+  }
+
+  async function encodeExact() {
+    const imageData = sourceImageData
+    if (!imageData) return
+
+    const token = ++encodeToken
     status.value = 'working'
+    errorMessage.value = ''
 
     try {
-      const result = await convertImage(source, 'webp', {
+      const result = await encodeImageData(imageData, 'webp', {
         quality: quality.value,
       })
+      if (token !== encodeToken) return
+
+      releaseResult()
       resultUrl.value = URL.createObjectURL(result.blob)
       resultExtension.value = result.extension
       outputSize.value = result.blob.size
+      sizeIsExact.value = true
       dimensions.value = { width: result.width, height: result.height }
       status.value = 'done'
     } catch (error) {
+      if (token !== encodeToken) return
       status.value = 'error'
       errorMessage.value =
         error instanceof Error ? error.message : 'Conversion failed'
     }
   }
 
+  async function load(source: File) {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    releaseResult()
+    sourceImageData = null
+    sizeEstimator = null
+    file.value = source
+    outputSize.value = 0
+    sizeIsExact.value = false
+    dimensions.value = { width: 0, height: 0 }
+    errorMessage.value = ''
+    status.value = 'working'
+
+    try {
+      const decoded = await blobToImageData(source)
+      sourceImageData = decoded
+
+      try {
+        sizeEstimator = await buildSizeEstimator(decoded, 'webp')
+        refreshEstimate()
+      } catch {
+        sizeEstimator = null
+      }
+    } catch (error) {
+      status.value = 'error'
+      errorMessage.value =
+        error instanceof Error ? error.message : 'Could not read image'
+      return
+    }
+
+    await encodeExact()
+  }
+
+  function scheduleEncode() {
+    if (debounceTimer) clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      void encodeExact()
+    }, QUALITY_DEBOUNCE_MS)
+  }
+
   function pickFiles(files: FileList | null) {
     const next = files?.[0]
-    if (next) void convert(next)
+    if (next) void load(next)
   }
 
   function onInputChange(event: JSX.TargetedEvent<HTMLInputElement, Event>) {
@@ -123,7 +200,7 @@ export function App() {
             </span>
           </div>
           <div class="panel__row">
-            <span class="panel__label">Original</span>
+            <span class="panel__label">Original size</span>
             <span class="panel__value">{formatBytes(current.size)}</span>
           </div>
 
@@ -136,20 +213,14 @@ export function App() {
               value={quality.value}
               onInput={(event) => {
                 quality.value = Number(event.currentTarget.value)
+                refreshEstimate()
+                scheduleEncode()
               }}
             />
+            <span class="field__hint" aria-live="polite">
+              {sizeHint.value}
+            </span>
           </label>
-
-          <button
-            type="button"
-            class="button"
-            disabled={status.value === 'working'}
-            onClick={() => {
-              if (current) void convert(current)
-            }}
-          >
-            {status.value === 'working' ? 'Converting…' : 'Encode to WebP'}
-          </button>
         </section>
       )}
 
@@ -159,7 +230,7 @@ export function App() {
         </p>
       )}
 
-      {status.value === 'done' && current && (
+      {resultUrl.value && current && (
         <section class="result">
           <img
             class="result__preview"
@@ -168,8 +239,13 @@ export function App() {
           />
           <div class="result__meta">
             <div class="panel__row">
-              <span class="panel__label">Output</span>
-              <span class="panel__value">{formatBytes(outputSize.value)}</span>
+              <span class="panel__label">
+                {sizeIsExact.value ? 'Output size' : 'Estimated size'}
+              </span>
+              <span class="panel__value">
+                {sizeIsExact.value ? '' : '~'}
+                {formatBytes(outputSize.value)}
+              </span>
             </div>
             <div class="panel__row">
               <span class="panel__label">Dimensions</span>

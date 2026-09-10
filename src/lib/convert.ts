@@ -10,13 +10,12 @@ export interface ConversionResult {
   extension: string
 }
 
-export async function convertImage(
-  blob: Blob,
+export async function encodeImageData(
+  imageData: ImageData,
   format: OutputFormat,
   options: EncodeOptions = {},
 ): Promise<ConversionResult> {
   const codec = await getCodec(format)
-  const imageData = await blobToImageData(blob)
   const buffer = await codec.encode(imageData, options)
 
   return {
@@ -26,4 +25,13 @@ export async function convertImage(
     format: codec.format,
     extension: codec.extension,
   }
+}
+
+export async function convertImage(
+  blob: Blob,
+  format: OutputFormat,
+  options: EncodeOptions = {},
+): Promise<ConversionResult> {
+  const imageData = await blobToImageData(blob)
+  return encodeImageData(imageData, format, options)
 }
