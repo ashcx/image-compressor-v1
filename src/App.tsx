@@ -1,144 +1,196 @@
 import { computed, signal } from '@preact/signals'
 import type { JSX } from 'preact'
-import { useRef } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { type EstimateSample, interpolate } from './lib/estimate'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
-import { processImage } from './lib/workerClient'
+import { getPoolStats, processImage, subscribeToPool } from './lib/workerClient'
 
-type Status = 'idle' | 'working' | 'done' | 'error'
+type JobStatus = 'queued' | 'processing' | 'done' | 'error'
+
+interface BatchJob {
+  id: string
+  name: string
+  file: File
+  originalSize: number
+  status: JobStatus
+  outputUrl: string
+  outputExtension: string
+  outputSize: number
+  sizeIsExact: boolean
+  width: number
+  height: number
+  samples: EstimateSample[]
+  error: string
+}
 
 const QUALITY_DEBOUNCE_MS = 200
 
-const file = signal<File | null>(null)
+const jobs = signal<BatchJob[]>([])
 const quality = signal(75)
-const status = signal<Status>('idle')
-const errorMessage = signal('')
-const resultUrl = signal('')
-const resultExtension = signal('webp')
-const outputSize = signal(0)
-const sizeIsExact = signal(false)
-const dimensions = signal({ width: 0, height: 0 })
 const isDragging = signal(false)
-const samples = signal<EstimateSample[]>([])
+const poolStats = signal(getPoolStats())
 
-let activeJobId = ''
-let debounceTimer: ReturnType<typeof setTimeout> | undefined
+let idCounter = 0
+let reprocessTimer: ReturnType<typeof setTimeout> | undefined
+const jobTokens = new Map<string, number>()
 
-const savings = computed(() => {
-  const current = file.value
-  return current ? percentReduction(current.size, outputSize.value) : 0
-})
+const total = computed(() => jobs.value.length)
+const finished = computed(
+  () =>
+    jobs.value.filter((job) => job.status === 'done' || job.status === 'error')
+      .length,
+)
+const failed = computed(
+  () => jobs.value.filter((job) => job.status === 'error').length,
+)
+const active = computed(
+  () =>
+    jobs.value.filter(
+      (job) => job.status === 'processing' || job.status === 'queued',
+    ).length,
+)
+const progressPercent = computed(() =>
+  total.value === 0 ? 0 : Math.round((finished.value / total.value) * 100),
+)
 
-const outputName = computed(() => {
-  const current = file.value
-  return current
-    ? replaceExtension(current.name, resultExtension.value)
-    : `output.${resultExtension.value}`
-})
+function updateJob(id: string, patch: Partial<BatchJob>) {
+  jobs.value = jobs.value.map((job) =>
+    job.id === id ? { ...job, ...patch } : job,
+  )
+}
 
-const sizeHint = computed(() => {
-  if (outputSize.value === 0) {
-    return status.value === 'working'
-      ? 'Estimating size…'
-      : 'Move the slider to estimate the output size'
-  }
-  if (sizeIsExact.value) {
-    return `Output size: ${formatBytes(outputSize.value)}`
-  }
-  const refining = status.value === 'working' ? ' (refining…)' : ''
-  return `Estimated size: ~${formatBytes(outputSize.value)}${refining}`
-})
+async function processJob(id: string, buildEstimate: boolean) {
+  const token = (jobTokens.get(id) ?? 0) + 1
+  jobTokens.set(id, token)
 
-export function App() {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const job = jobs.value.find((candidate) => candidate.id === id)
+  if (!job) return
 
-  function releaseResult() {
-    if (resultUrl.value) {
-      URL.revokeObjectURL(resultUrl.value)
-      resultUrl.value = ''
-    }
-  }
+  updateJob(id, { status: 'processing', error: '' })
 
-  function refreshEstimate() {
-    if (samples.value.length === 0) return
-    outputSize.value = interpolate(samples.value, quality.value)
-    sizeIsExact.value = false
-  }
-
-  async function runProcess(buildEstimate: boolean) {
-    const source = file.value
-    if (!source) return
-
-    const buffer = await source.arrayBuffer()
-    if (file.value !== source) return
-
-    const { jobId, response } = processImage({
+  try {
+    const buffer = await job.file.arrayBuffer()
+    const { response } = processImage({
       fileBuffer: buffer,
       targetFormat: 'webp',
       quality: quality.value,
       buildEstimate,
     })
+    const result = await response
+    if (jobTokens.get(id) !== token) return
 
-    activeJobId = jobId
-    status.value = 'working'
-    errorMessage.value = ''
-
-    try {
-      const result = await response
-      if (jobId !== activeJobId) return
-
-      if (result.samples) samples.value = result.samples
-
-      releaseResult()
-      resultUrl.value = URL.createObjectURL(
-        new Blob([result.outputBuffer], { type: result.mimeType }),
-      )
-      resultExtension.value = result.extension
-      outputSize.value = result.outputSize
-      sizeIsExact.value = true
-      dimensions.value = { width: result.width, height: result.height }
-      status.value = 'done'
-    } catch (error) {
-      if (jobId !== activeJobId) return
-      status.value = 'error'
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Conversion failed'
-    }
+    const previousUrl = job.outputUrl
+    const url = URL.createObjectURL(
+      new Blob([result.outputBuffer], { type: result.mimeType }),
+    )
+    updateJob(id, {
+      status: 'done',
+      outputUrl: url,
+      outputExtension: result.extension,
+      outputSize: result.outputSize,
+      sizeIsExact: true,
+      width: result.width,
+      height: result.height,
+      ...(result.samples ? { samples: result.samples } : {}),
+    })
+    if (previousUrl) URL.revokeObjectURL(previousUrl)
+  } catch (error) {
+    if (jobTokens.get(id) !== token) return
+    updateJob(id, {
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Conversion failed',
+    })
   }
+}
 
-  function load(source: File) {
-    if (debounceTimer) clearTimeout(debounceTimer)
-    releaseResult()
-    file.value = source
-    samples.value = []
-    outputSize.value = 0
-    sizeIsExact.value = false
-    dimensions.value = { width: 0, height: 0 }
-    errorMessage.value = ''
-    status.value = 'working'
-    void runProcess(true)
-  }
+function addFiles(fileList: FileList | File[] | null) {
+  if (!fileList) return
+  const incoming = Array.from(fileList)
+  if (incoming.length === 0) return
 
-  function scheduleProcess() {
-    if (debounceTimer) clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
-      void runProcess(false)
-    }, QUALITY_DEBOUNCE_MS)
-  }
+  const created: BatchJob[] = incoming.map((file) => ({
+    id: `file-${++idCounter}`,
+    name: file.name,
+    file,
+    originalSize: file.size,
+    status: 'queued',
+    outputUrl: '',
+    outputExtension: 'webp',
+    outputSize: 0,
+    sizeIsExact: false,
+    width: 0,
+    height: 0,
+    samples: [],
+    error: '',
+  }))
 
-  function pickFiles(files: FileList | null) {
-    const next = files?.[0]
-    if (next) load(next)
+  jobs.value = [...jobs.value, ...created]
+  for (const job of created) void processJob(job.id, true)
+}
+
+function refreshEstimates() {
+  jobs.value = jobs.value.map((job) =>
+    job.samples.length === 0
+      ? job
+      : {
+          ...job,
+          outputSize: interpolate(job.samples, quality.value),
+          sizeIsExact: false,
+        },
+  )
+}
+
+function reprocessAll() {
+  for (const job of jobs.value) {
+    if (job.status === 'error') continue
+    void processJob(job.id, job.samples.length === 0)
   }
+}
+
+function scheduleReprocess() {
+  if (reprocessTimer) clearTimeout(reprocessTimer)
+  reprocessTimer = setTimeout(reprocessAll, QUALITY_DEBOUNCE_MS)
+}
+
+function removeJob(id: string) {
+  jobTokens.set(id, (jobTokens.get(id) ?? 0) + 1)
+  const job = jobs.value.find((candidate) => candidate.id === id)
+  if (job?.outputUrl) URL.revokeObjectURL(job.outputUrl)
+  jobs.value = jobs.value.filter((candidate) => candidate.id !== id)
+}
+
+function clearAll() {
+  if (reprocessTimer) clearTimeout(reprocessTimer)
+  for (const job of jobs.value) {
+    jobTokens.set(job.id, (jobTokens.get(job.id) ?? 0) + 1)
+    if (job.outputUrl) URL.revokeObjectURL(job.outputUrl)
+  }
+  jobs.value = []
+}
+
+function savingsLabel(job: BatchJob): string {
+  const percent = percentReduction(job.originalSize, job.outputSize)
+  return percent >= 0 ? `−${percent}%` : `+${Math.abs(percent)}%`
+}
+
+export function App() {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return subscribeToPool(() => {
+      poolStats.value = getPoolStats()
+    })
+  }, [])
 
   function onInputChange(event: JSX.TargetedEvent<HTMLInputElement, Event>) {
-    pickFiles(event.currentTarget.files)
+    addFiles(event.currentTarget.files)
+    event.currentTarget.value = ''
   }
 
   function onDrop(event: JSX.TargetedDragEvent<HTMLButtonElement>) {
     event.preventDefault()
     isDragging.value = false
-    pickFiles(event.dataTransfer?.files ?? null)
+    addFiles(event.dataTransfer?.files ?? null)
   }
 
   function onDragOver(event: JSX.TargetedDragEvent<HTMLButtonElement>) {
@@ -146,7 +198,7 @@ export function App() {
     isDragging.value = true
   }
 
-  const current = file.value
+  const jobList = jobs.value
 
   return (
     <main class="app">
@@ -168,9 +220,9 @@ export function App() {
           isDragging.value = false
         }}
       >
-        <span class="dropzone__title">Drop an image here</span>
+        <span class="dropzone__title">Drop images here</span>
         <span class="dropzone__hint">
-          or click to choose a file (JPEG, PNG, WebP)
+          or click to choose files (JPEG, PNG, WebP)
         </span>
       </button>
 
@@ -179,90 +231,117 @@ export function App() {
         class="visually-hidden"
         type="file"
         accept="image/*"
+        multiple
         onChange={onInputChange}
       />
 
-      {current && (
-        <section class="panel">
-          <div class="panel__row">
-            <span class="panel__label">File</span>
-            <span class="panel__value" title={current.name}>
-              {current.name}
-            </span>
-          </div>
-          <div class="panel__row">
-            <span class="panel__label">Original size</span>
-            <span class="panel__value">{formatBytes(current.size)}</span>
-          </div>
+      {jobList.length > 0 && (
+        <>
+          <section class="panel">
+            <label class="field">
+              <span class="field__label">Quality: {quality.value}</span>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={quality.value}
+                onInput={(event) => {
+                  quality.value = Number(event.currentTarget.value)
+                  refreshEstimates()
+                  scheduleReprocess()
+                }}
+              />
+            </label>
 
-          <label class="field">
-            <span class="field__label">Quality: {quality.value}</span>
-            <input
-              type="range"
-              min={1}
-              max={100}
-              value={quality.value}
-              onInput={(event) => {
-                quality.value = Number(event.currentTarget.value)
-                refreshEstimate()
-                scheduleProcess()
-              }}
-            />
-            <span class="field__hint" aria-live="polite">
-              {sizeHint.value}
-            </span>
-          </label>
-        </section>
-      )}
+            <div class="progress" aria-hidden="true">
+              <div
+                class="progress__bar"
+                style={{ width: `${progressPercent.value}%` }}
+              />
+            </div>
 
-      {status.value === 'error' && (
-        <p class="message message--error" role="alert">
-          {errorMessage.value}
-        </p>
-      )}
-
-      {resultUrl.value && current && (
-        <section class="result">
-          <img
-            class="result__preview"
-            src={resultUrl.value}
-            alt="Converted preview"
-          />
-          <div class="result__meta">
             <div class="panel__row">
               <span class="panel__label">
-                {sizeIsExact.value ? 'Output size' : 'Estimated size'}
+                {finished.value} / {total.value} done
+                {failed.value > 0 ? ` · ${failed.value} failed` : ''}
               </span>
               <span class="panel__value">
-                {sizeIsExact.value ? '' : '~'}
-                {formatBytes(outputSize.value)}
+                workers busy: {poolStats.value.busy}/{poolStats.value.size}
               </span>
             </div>
-            <div class="panel__row">
-              <span class="panel__label">Dimensions</span>
-              <span class="panel__value">
-                {dimensions.value.width} × {dimensions.value.height}
-              </span>
-            </div>
-            <div class="panel__row">
-              <span class="panel__label">Size change</span>
-              <span
-                class={`panel__value${savings.value >= 0 ? ' panel__value--good' : ' panel__value--bad'}`}
-              >
-                {savings.value >= 0
-                  ? `−${savings.value}%`
-                  : `+${Math.abs(savings.value)}%`}
-              </span>
-            </div>
-            <a
-              class="button button--primary"
-              href={resultUrl.value}
-              download={outputName.value}
-            >
-              Download WebP
-            </a>
-          </div>
-        </section>
+
+            <button type="button" class="button" onClick={clearAll}>
+              Clear all
+            </button>
+          </section>
+
+          <ul class="jobs">
+            {jobList.map((job) => (
+              <li class="job" key={job.id}>
+                <div class="job__thumb">
+                  {job.outputUrl ? (
+                    <img src={job.outputUrl} alt="" />
+                  ) : (
+                    <span
+                      class={
+                        job.status === 'error'
+                          ? 'job__placeholder job__placeholder--error'
+                          : 'job__placeholder'
+                      }
+                    />
+                  )}
+                </div>
+                <div class="job__info">
+                  <span class="job__name" title={job.name}>
+                    {job.name}
+                  </span>
+                  <span
+                    class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
+                  >
+                    {formatBytes(job.originalSize)}
+                    {job.outputSize > 0 && (
+                      <>
+                        {' → '}
+                        {job.sizeIsExact ? '' : '~'}
+                        {formatBytes(job.outputSize)} ({savingsLabel(job)})
+                      </>
+                    )}
+                    {job.status === 'processing' && ' · processing'}
+                    {job.status === 'queued' && ' · queued'}
+                    {job.status === 'error' && ` · ${job.error}`}
+                  </span>
+                </div>
+                <div class="job__actions">
+                  {job.outputUrl && (
+                    <a
+                      class="button button--small"
+                      href={job.outputUrl}
+                      download={replaceExtension(job.name, job.outputExtension)}
+                    >
+                      Download
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    class="icon-button"
+                    title="Remove"
+                    aria-label={`Remove ${job.name}`}
+                    onClick={() => removeJob(job.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {jobList.length > 0 && active.value > 0 && (
+        <p class="footnote">
+          {active.value} file{active.value === 1 ? '' : 's'} in progress across{' '}
+          {poolStats.value.size} worker slots.
+        </p>
       )}
     </main>
   )

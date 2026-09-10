@@ -21,6 +21,7 @@ interface QueuedTask extends PoolTask {
 export interface WorkerPoolOptions {
   size: number
   createWorker: () => PoolWorker
+  onChange?: () => void
 }
 
 /**
@@ -31,6 +32,7 @@ export interface WorkerPoolOptions {
 export class WorkerPool {
   private readonly size: number
   private readonly createWorker: () => PoolWorker
+  private readonly onChange: (() => void) | undefined
   private workers: PoolWorker[] = []
   private idle: PoolWorker[] = []
   private queue: QueuedTask[] = []
@@ -40,10 +42,19 @@ export class WorkerPool {
   constructor(options: WorkerPoolOptions) {
     this.size = Math.max(1, options.size)
     this.createWorker = options.createWorker
+    this.onChange = options.onChange
   }
 
   get workerCount(): number {
     return this.workers.length
+  }
+
+  get busyCount(): number {
+    return this.busy.size
+  }
+
+  get queuedCount(): number {
+    return this.queue.length
   }
 
   run(task: PoolTask): Promise<ResultResponse> {
@@ -65,20 +76,26 @@ export class WorkerPool {
     this.idle = []
     this.queue = []
     this.busy.clear()
+    this.notify()
   }
 
   private dispatch(): void {
     while (this.queue.length > 0) {
       const worker = this.idle.pop() ?? this.spawn()
-      if (!worker) return
+      if (!worker) {
+        this.notify()
+        return
+      }
       const task = this.queue.shift()
       if (!task) {
         this.idle.push(worker)
+        this.notify()
         return
       }
       this.busy.set(worker, task)
       worker.postMessage(task.message, task.transfer)
     }
+    this.notify()
   }
 
   private spawn(): PoolWorker | null {
@@ -121,5 +138,10 @@ export class WorkerPool {
     worker.terminate()
 
     if (!this.closed) this.dispatch()
+    else this.notify()
+  }
+
+  private notify(): void {
+    this.onChange?.()
   }
 }
