@@ -103,11 +103,12 @@ makes codecs mockable in unit tests, and turns a future HEIC (v1.1) or `wasm-vip
 a registry entry rather than a rewrite.
 
 **Size estimation (hybrid).** While the quality slider moves, the UI shows an instant rough
-estimate from a thumbnail quality curve: once per file, a ~256px thumbnail is encoded at a
-handful of quality points, interpolated, and scaled by pixel ratio with a small bias factor
-for detail lost in downscaling. The full-resolution encode then runs (debounced) and
-replaces the estimate with the exact size. This keeps dragging responsive on the main
-thread, and becomes fully non-blocking once encoding moves to a worker in Sprint 3.
+estimate. Once per file, the worker encodes two downscaled copies (~192px and ~448px long
+edge) at several quality points, fits a power law `bytes ≈ k · pixels^β` per quality (clamped
+to `β ∈ [0.35, 0.8]`), and extrapolates to the full resolution; a calibration constant
+corrects the residual bias. Encoded size does not scale linearly with pixel count, so this
+beats a naive thumbnail × pixel-ratio model. The full-resolution encode then runs (debounced)
+and replaces the estimate with the exact size.
 
 **UI framework rationale.** The UI is a small stateful list (per-file status/progress) plus
 a settings form, not a content site. Preact + signals covers this with a tiny runtime and

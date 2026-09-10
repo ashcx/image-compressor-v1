@@ -2,34 +2,83 @@ import type { OutputFormat } from './codecs/types'
 import { encodeImageData } from './convert'
 import { downscaleImageData } from './image'
 
-const SAMPLE_LONG_EDGE = 256
 const SAMPLE_QUALITIES = [10, 30, 50, 70, 90, 100]
+const SMALL_LONG_EDGE = 192
+const LARGE_LONG_EDGE = 448
 
-// Downscaling strips high-frequency detail, so a thumbnail compresses better
-// per pixel than the full image. This rough factor corrects for that bias.
-// The exact encode later replaces the estimate, so precision here is not critical.
-const DETAIL_BIAS = 1.3
+// Encoded size does not scale linearly with pixel count: smaller images carry
+// relatively more per-pixel overhead, so a naive "thumbnail bytes x pixel ratio"
+// overestimates badly (worse at high quality and large sizes). Instead we sample
+// two downscaled sizes at each quality and fit a power law bytes = k * pixels^beta,
+// then extrapolate to the full resolution.
+const MIN_BETA = 0.35
+const MAX_BETA = 0.8
+
+// Residual calibration on top of the power-law fit: downscaled encodes still run
+// hot relative to the full-resolution encode. Tuned against recorded estimate-vs-
+// exact pairs; this is a deliberately rough estimate that the exact encode replaces.
+const SIZE_CALIBRATION = 0.7
 
 export interface EstimateSample {
   quality: number
   bytes: number
 }
 
+export function scaleToFullSize(
+  largeBytes: number,
+  largePixels: number,
+  smallBytes: number,
+  smallPixels: number,
+  fullPixels: number,
+): number {
+  if (
+    largePixels >= fullPixels ||
+    smallBytes <= 0 ||
+    largeBytes <= 0 ||
+    smallPixels >= largePixels
+  ) {
+    return Math.round(largeBytes * (fullPixels / largePixels))
+  }
+
+  const beta = Math.min(
+    MAX_BETA,
+    Math.max(
+      MIN_BETA,
+      Math.log(largeBytes / smallBytes) / Math.log(largePixels / smallPixels),
+    ),
+  )
+
+  return Math.round(largeBytes * (fullPixels / largePixels) ** beta)
+}
+
 export async function buildEstimateSamples(
   imageData: ImageData,
   format: OutputFormat,
 ): Promise<EstimateSample[]> {
-  const thumbnail = downscaleImageData(imageData, SAMPLE_LONG_EDGE)
-  const pixelRatio =
-    (imageData.width * imageData.height) / (thumbnail.width * thumbnail.height)
-  const bias = thumbnail === imageData ? 1 : DETAIL_BIAS
+  const small = downscaleImageData(imageData, SMALL_LONG_EDGE)
+  const large = downscaleImageData(imageData, LARGE_LONG_EDGE)
+
+  const smallPixels = small.width * small.height
+  const largePixels = large.width * large.height
+  const fullPixels = imageData.width * imageData.height
 
   const samples: EstimateSample[] = []
   for (const quality of SAMPLE_QUALITIES) {
-    const result = await encodeImageData(thumbnail, format, { quality })
+    const smallBytes = (await encodeImageData(small, format, { quality }))
+      .buffer.byteLength
+    const largeBytes = (await encodeImageData(large, format, { quality }))
+      .buffer.byteLength
     samples.push({
       quality,
-      bytes: Math.round(result.buffer.byteLength * pixelRatio * bias),
+      bytes: Math.round(
+        scaleToFullSize(
+          largeBytes,
+          largePixels,
+          smallBytes,
+          smallPixels,
+          fullPixels,
+        ) * SIZE_CALIBRATION,
+      ),
     })
   }
 
