@@ -9,6 +9,7 @@ export interface ProcessRequest {
   quality?: number
   effort?: number
   speed?: number
+  mode?: number
   resize?: ResizeOptions
   buildEstimate?: boolean
   estimateOnly?: boolean

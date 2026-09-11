@@ -30,7 +30,7 @@ scope.onmessage = async (event) => {
       const samples = await buildEstimateSamples(
         imageData,
         request.targetFormat,
-        { effort: request.effort, speed: request.speed },
+        { effort: request.effort, speed: request.speed, mode: request.mode },
       )
       const response: EstimateResponse = {
         type: 'estimate',
@@ -47,6 +47,7 @@ scope.onmessage = async (event) => {
       quality: request.quality,
       effort: request.effort,
       speed: request.speed,
+      mode: request.mode,
     })
 
     const response: ResultResponse = {
@@ -65,7 +66,7 @@ scope.onmessage = async (event) => {
       response.samples = await buildEstimateSamples(
         imageData,
         request.targetFormat,
-        { effort: request.effort, speed: request.speed },
+        { effort: request.effort, speed: request.speed, mode: request.mode },
       )
     }
 
