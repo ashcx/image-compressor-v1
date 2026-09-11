@@ -2,11 +2,36 @@ import type { Codec, OutputFormat } from './types'
 
 type CodecLoader = () => Promise<Codec>
 
-function supportsNativeEncode(): boolean {
-  return (
-    typeof OffscreenCanvas !== 'undefined' &&
-    typeof OffscreenCanvas.prototype.convertToBlob === 'function'
-  )
+// `OffscreenCanvas.convertToBlob` exists in Safari but silently ignores types it
+// cannot actually encode (notably image/webp), returning a PNG instead. Probing
+// the real output MIME once per type and caching it stops us from shipping a
+// PNG-sized file under a .webp name. Falls back to the WASM encoder otherwise.
+const nativeSupport = new Map<string, Promise<boolean>>()
+
+function canEncodeNatively(type: string): Promise<boolean> {
+  const cached = nativeSupport.get(type)
+  if (cached) return cached
+  const probe = (async () => {
+    if (
+      typeof OffscreenCanvas === 'undefined' ||
+      typeof OffscreenCanvas.prototype.convertToBlob !== 'function'
+    ) {
+      return false
+    }
+    try {
+      const canvas = new OffscreenCanvas(2, 2)
+      const context = canvas.getContext('2d')
+      if (!context) return false
+      context.fillStyle = '#000'
+      context.fillRect(0, 0, 2, 2)
+      const blob = await canvas.convertToBlob({ type, quality: 0.75 })
+      return blob.type === type
+    } catch {
+      return false
+    }
+  })()
+  nativeSupport.set(type, probe)
+  return probe
 }
 
 async function encodeWithCanvas(
@@ -26,7 +51,7 @@ async function encodeWithCanvas(
 
 // JPEG and WebP prefer the browser's native encoder (OffscreenCanvas.convertToBlob),
 // which is much faster and avoids the WASM/ImageData copies. jsquash remains the
-// fallback for browsers without it and covers AVIF/JXL/PNG.
+// fallback for browsers without real support and covers AVIF/JXL/PNG.
 const loaders: Record<OutputFormat, CodecLoader> = {
   jpeg: async () => {
     const { encode: jsquashEncode, decode } = await import('@jsquash/jpeg')
@@ -34,8 +59,8 @@ const loaders: Record<OutputFormat, CodecLoader> = {
       format: 'jpeg',
       mimeType: 'image/jpeg',
       extension: 'jpg',
-      encode: (imageData, options) => {
-        if (supportsNativeEncode()) {
+      encode: async (imageData, options) => {
+        if (await canEncodeNatively('image/jpeg')) {
           return encodeWithCanvas(
             imageData,
             'image/jpeg',
@@ -63,7 +88,7 @@ const loaders: Record<OutputFormat, CodecLoader> = {
         if (mode === 2) return encodeImagequant(imageData)
         const encoded = await pngEncode(imageData)
         if (mode === 1) return optimise(encoded, { level: 0 })
-        if (supportsNativeEncode())
+        if (await canEncodeNatively('image/png'))
           return encodeWithCanvas(imageData, 'image/png')
         return encoded
       },
@@ -76,8 +101,8 @@ const loaders: Record<OutputFormat, CodecLoader> = {
       format: 'webp',
       mimeType: 'image/webp',
       extension: 'webp',
-      encode: (imageData, options) => {
-        if (supportsNativeEncode()) {
+      encode: async (imageData, options) => {
+        if (await canEncodeNatively('image/webp')) {
           return encodeWithCanvas(
             imageData,
             'image/webp',
