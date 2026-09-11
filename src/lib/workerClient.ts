@@ -65,7 +65,7 @@ export function getPoolStats(): PoolStats {
 }
 
 export interface ProcessJobOptions {
-  file: File
+  readFile: () => Promise<ArrayBuffer>
   targetFormat: OutputFormat
   quality?: number
   effort?: number
@@ -89,9 +89,10 @@ export function processImage(options: ProcessJobOptions): {
       jobId,
       signal: options.signal,
       prepare: async () => {
-        // Read the file only when a worker is free; the pool holds `File`
-        // handles, not full buffers, while the task is queued.
-        const fileBuffer = await options.file.arrayBuffer()
+        // The buffer is read eagerly at selection time (see fileBufferStore) and
+        // cached per job; it is cloned rather than transferred so the same job
+        // can reuse it for both size estimation and compression.
+        const fileBuffer = await options.readFile()
         const message: ProcessRequest = {
           type: 'process',
           jobId,
@@ -105,7 +106,7 @@ export function processImage(options: ProcessJobOptions): {
           buildEstimate: options.buildEstimate,
           estimateOnly: options.estimateOnly,
         }
-        return { message, transfer: [fileBuffer] }
+        return { message }
       },
     },
     options.priority ?? 'high',

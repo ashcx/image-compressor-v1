@@ -16,6 +16,13 @@ import {
   interpolate,
   sampleSize,
 } from './lib/estimate'
+import {
+  acquireFileBuffer,
+  configureFileBufferCap,
+  forgetFile,
+  registerFile,
+  releaseFileBuffer,
+} from './lib/fileBufferStore'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { readDimensions } from './lib/metadataClient'
 import { appVersion, watchForUpdates } from './lib/version'
@@ -175,7 +182,7 @@ const settingsWarning = computed(() => {
   if (total.value > 5 && format === 'avif' && values.speed <= 6) {
     return 'AVIF below speed 7 can take a very long time and may hit memory errors on large batches. Use speed 7 or higher for big batches.'
   }
-  if (total.value > 5 && format === 'jxl' && values.quality >= 6) {
+  if (total.value > 5 && format === 'jxl' && values.quality >= 90) {
     return 'High JPEG XL quality can take a very long time and may hit memory errors on large batches. Lower the quality for big batches.'
   }
   const heavy =
@@ -344,7 +351,7 @@ async function estimateJob(id: string) {
 
   try {
     const { response } = processImage({
-      file: job.file,
+      readFile: () => acquireFileBuffer(id),
       targetFormat: format,
       effort: current.effort,
       speed: current.speed,
@@ -397,7 +404,7 @@ async function compressJob(id: string) {
 
   try {
     const { response } = processImage({
-      file: job.file,
+      readFile: () => acquireFileBuffer(id),
       targetFormat: format,
       quality: current.quality,
       effort: current.effort,
@@ -435,6 +442,8 @@ async function compressJob(id: string) {
       status: 'error',
       error: error instanceof Error ? error.message : 'Conversion failed',
     })
+  } finally {
+    releaseFileBuffer(id)
   }
 }
 
@@ -494,6 +503,7 @@ function addFiles(fileList: FileList | File[] | null) {
   const sampled = updateSampling()
 
   for (const job of created) {
+    registerFile(job.id, job.file)
     void readDimensions(job.file).then((dimensions) => {
       if (dimensions) {
         updateJob(job.id, {
@@ -599,6 +609,7 @@ function compressAll() {
 function removeJob(id: string) {
   cancelEstimate(id)
   nextToken(id)
+  forgetFile(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (job?.outputUrl) URL.revokeObjectURL(job.outputUrl)
   jobs.value = jobs.value.filter((candidate) => candidate.id !== id)
@@ -610,6 +621,7 @@ function clearAll() {
   cancelAllEstimates()
   for (const job of jobs.value) {
     nextToken(job.id)
+    forgetFile(job.id)
     if (job.outputUrl) URL.revokeObjectURL(job.outputUrl)
   }
   jobs.value = []
@@ -707,6 +719,7 @@ export function App() {
 
   useEffect(() => {
     applyWorkerBudget()
+    configureFileBufferCap(Math.floor(getDeviceProfile().maxZipBytes / 4))
     return subscribeToPool(() => {
       poolStats.value = getPoolStats()
     })
