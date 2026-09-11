@@ -4,17 +4,33 @@ import type { ProcessRequest } from './protocol'
 import { type PoolPriority, type PoolSuccess, WorkerPool } from './workerPool'
 
 let pool: WorkerPool | null = null
+let desiredSize = getDeviceProfile().workerCount
 let counter = 0
 const listeners = new Set<() => void>()
 
 export function resolvePoolSize(): number {
-  return getDeviceProfile().workerCount
+  return desiredSize
+}
+
+/**
+ * Sets the worker budget (e.g. half for heavy codecs). Recreates the pool
+ * lazily the next time a worker is needed if the current one is idle.
+ */
+export function configureWorkers(size: number): void {
+  const next = Math.max(1, Math.floor(size))
+  if (next === desiredSize) return
+  desiredSize = next
+  if (pool && pool.busyCount === 0 && pool.queuedCount === 0) {
+    pool.terminate()
+    pool = null
+  }
+  for (const listener of listeners) listener()
 }
 
 function getPool(): WorkerPool {
   if (!pool) {
     pool = new WorkerPool({
-      size: resolvePoolSize(),
+      size: desiredSize,
       createWorker: () =>
         new Worker(new URL('../workers/image-worker.ts', import.meta.url), {
           type: 'module',
@@ -49,7 +65,7 @@ export function getPoolStats(): PoolStats {
 }
 
 export interface ProcessJobOptions {
-  file: File
+  readFile: () => Promise<ArrayBuffer>
   targetFormat: OutputFormat
   quality?: number
   effort?: number
@@ -73,9 +89,10 @@ export function processImage(options: ProcessJobOptions): {
       jobId,
       signal: options.signal,
       prepare: async () => {
-        // Read the file only when a worker is free; the pool holds `File`
-        // handles, not full buffers, while the task is queued.
-        const fileBuffer = await options.file.arrayBuffer()
+        // The buffer is read eagerly at selection time (see fileBufferStore) and
+        // cached per job; it is cloned rather than transferred so the same job
+        // can reuse it for both size estimation and compression.
+        const fileBuffer = await options.readFile()
         const message: ProcessRequest = {
           type: 'process',
           jobId,
@@ -89,7 +106,7 @@ export function processImage(options: ProcessJobOptions): {
           buildEstimate: options.buildEstimate,
           estimateOnly: options.estimateOnly,
         }
-        return { message, transfer: [fileBuffer] }
+        return { message }
       },
     },
     options.priority ?? 'high',
