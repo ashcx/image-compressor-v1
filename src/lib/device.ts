@@ -77,12 +77,9 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
   ) {
     // Temporary tier until Sprint 8.1 identifies iPad Pro models directly:
     // 6 cores or fewer is treated as a base iPad, more as a Pro-class device.
-    const workerCount =
-      cores <= 6
-        ? Math.max(1, Math.min(cores, 4))
-        : Math.max(1, Math.min(cores, MAX_WORKERS))
+    const cap = cores <= 6 ? 4 : MAX_WORKERS
     return {
-      workerCount,
+      workerCount: Math.max(1, Math.min(cores - 1, cap)),
       constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
@@ -97,7 +94,7 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
       }
     }
     return {
-      workerCount: Math.max(1, Math.min(cores, 4)),
+      workerCount: Math.max(1, Math.min(cores - 1, 4)),
       constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
@@ -106,8 +103,8 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
   if (memory !== undefined && memory >= 8) {
     const workerCount =
       cores >= 16 && memory >= 12
-        ? Math.min(cores, MAX_WORKERS_HIGH_MEMORY)
-        : Math.min(cores, MAX_WORKERS)
+        ? Math.max(1, Math.min(cores - 1, MAX_WORKERS_HIGH_MEMORY))
+        : Math.max(1, Math.min(cores - 1, MAX_WORKERS))
     return {
       workerCount,
       constrained: false,
@@ -117,17 +114,25 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
 
   if (memory !== undefined && memory < 8) {
     return {
-      workerCount: Math.max(1, Math.min(cores, 6)),
+      workerCount: Math.max(1, Math.min(cores - 1, 6)),
       constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
   }
 
   return {
-    workerCount: Math.min(cores, MAX_WORKERS),
+    workerCount: Math.max(1, Math.min(cores - 1, MAX_WORKERS)),
     constrained: false,
     maxZipBytes: DESKTOP_MAX_ZIP_BYTES,
   }
+}
+
+/**
+ * Heavy codecs (AVIF, JXL, lossy PNG) keep large WASM heaps and decoded
+ * canvases per worker, so they run with half the pool to bound peak memory.
+ */
+export function heavyWorkerCount(workerCount: number): number {
+  return Math.max(1, Math.floor(workerCount / 2))
 }
 
 function readWorkerOverride(): number | undefined {

@@ -235,6 +235,9 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 0.6rem 0.75rem;
+  /* Skip layout/paint for offscreen rows so large batches stay responsive. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 
 .job__thumb {

@@ -4,17 +4,33 @@ import type { ProcessRequest } from './protocol'
 import { type PoolPriority, type PoolSuccess, WorkerPool } from './workerPool'
 
 let pool: WorkerPool | null = null
+let desiredSize = getDeviceProfile().workerCount
 let counter = 0
 const listeners = new Set<() => void>()
 
 export function resolvePoolSize(): number {
-  return getDeviceProfile().workerCount
+  return desiredSize
+}
+
+/**
+ * Sets the worker budget (e.g. half for heavy codecs). Recreates the pool
+ * lazily the next time a worker is needed if the current one is idle.
+ */
+export function configureWorkers(size: number): void {
+  const next = Math.max(1, Math.floor(size))
+  if (next === desiredSize) return
+  desiredSize = next
+  if (pool && pool.busyCount === 0 && pool.queuedCount === 0) {
+    pool.terminate()
+    pool = null
+  }
+  for (const listener of listeners) listener()
 }
 
 function getPool(): WorkerPool {
   if (!pool) {
     pool = new WorkerPool({
-      size: resolvePoolSize(),
+      size: desiredSize,
       createWorker: () =>
         new Worker(new URL('../workers/image-worker.ts', import.meta.url), {
           type: 'module',
