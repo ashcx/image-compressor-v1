@@ -24,4 +24,15 @@ describe('format specs', () => {
       expect(FORMAT_SPECS[format].lossless).toBe(format === 'png')
     }
   })
+
+  it('ships the tuned defaults for the slow codecs', () => {
+    const avifSpeed = FORMAT_SPECS.avif.controls.find(
+      (control) => control.key === 'speed',
+    )
+    const jxlQuality = FORMAT_SPECS.jxl.controls.find(
+      (control) => control.key === 'quality',
+    )
+    expect(avifSpeed?.default).toBe(8)
+    expect(jxlQuality?.default).toBe(5)
+  })
 })
