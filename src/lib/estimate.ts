@@ -55,6 +55,7 @@ export function scaleToFullSize(
 export interface EstimateOptions {
   effort?: number
   speed?: number
+  mode?: number
 }
 
 export async function buildEstimateSamples(
@@ -75,6 +76,7 @@ export async function buildEstimateSamples(
         quality,
         effort: options.effort,
         speed: options.speed,
+        mode: options.mode,
       })
     ).buffer.byteLength
 

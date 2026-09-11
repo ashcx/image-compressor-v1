@@ -5,6 +5,7 @@ import {
   type ControlKey,
   FORMAT_ORDER,
   FORMAT_SPECS,
+  type FormatControl,
 } from './lib/codecs/formats'
 import type { OutputFormat } from './lib/codecs/types'
 import { getDeviceProfile } from './lib/device'
@@ -56,6 +57,7 @@ interface Settings {
   quality: number
   effort: number
   speed: number
+  mode: number
 }
 
 interface WritableFileHandle {
@@ -84,11 +86,22 @@ const directoryPicker =
 const supportsDirectoryPicker = typeof directoryPicker === 'function'
 
 function defaultSettings(format: OutputFormat): Settings {
-  const base: Settings = { quality: 75, effort: 2, speed: 6 }
+  const base: Settings = { quality: 75, effort: 2, speed: 6, mode: 0 }
   for (const control of FORMAT_SPECS[format].controls) {
     base[control.key] = control.default
   }
   return base
+}
+
+function controlHint(control: FormatControl, value: number): string {
+  if (control.kind === 'select') {
+    return (
+      control.options.find((option) => option.value === value)?.hint ??
+      control.hint ??
+      ''
+    )
+  }
+  return control.hint ?? ''
 }
 
 const jobs = signal<BatchJob[]>([])
@@ -154,14 +167,18 @@ const settingsWarning = computed(() => {
   const format = targetFormat.value
   const values = settings.value
 
-  if ((format === 'jpeg' || format === 'webp') && values.quality >= 90) {
-    return 'Quality 90+ is largely redundant: file sizes balloon with almost no perceivable quality gain. Try 80–85.'
-  }
   if (total.value > 5 && format === 'avif' && values.speed <= 6) {
     return 'AVIF below speed 7 can take a very long time and may hit memory errors on large batches. Use speed 7 or higher for big batches.'
   }
   if (total.value > 5 && format === 'jxl' && values.quality >= 6) {
     return 'High JPEG XL quality can take a very long time and may hit memory errors on large batches. Lower the quality for big batches.'
+  }
+  const heavy =
+    format === 'avif' ||
+    format === 'jxl' ||
+    (format === 'png' && values.mode === 2)
+  if (total.value > 50 && heavy) {
+    return 'Large batches of this format can use a lot of memory. Consider compressing in smaller groups.'
   }
   return ''
 })
@@ -283,6 +300,7 @@ async function estimateJob(id: string) {
       targetFormat: format,
       effort: current.effort,
       speed: current.speed,
+      mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       estimateOnly: true,
       priority: 'low',
@@ -335,6 +353,7 @@ async function compressJob(id: string) {
       quality: current.quality,
       effort: current.effort,
       speed: current.speed,
+      mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       buildEstimate: job.samples.length === 0,
       priority: 'high',
@@ -753,27 +772,53 @@ export function App() {
             </label>
 
             {activeControls.value.map((control) => (
-              <label class="field" key={control.key}>
+              <div class="field" key={control.key}>
                 <span class="field__label">
-                  {control.label}: {settings.value[control.key]}
+                  {control.label}
+                  {control.kind === 'range'
+                    ? `: ${settings.value[control.key]}`
+                    : ''}
                 </span>
-                <input
-                  type="range"
-                  min={control.min}
-                  max={control.max}
-                  step={control.step}
-                  value={settings.value[control.key]}
-                  onInput={(event) =>
-                    changeControl(
-                      control.key,
-                      Number(event.currentTarget.value),
-                    )
-                  }
-                />
-                {control.hint && (
-                  <span class="field__hint">{control.hint}</span>
+                {control.kind === 'range' ? (
+                  <input
+                    type="range"
+                    aria-label={control.label}
+                    min={control.min}
+                    max={control.max}
+                    step={control.step}
+                    value={settings.value[control.key]}
+                    onInput={(event) =>
+                      changeControl(
+                        control.key,
+                        Number(event.currentTarget.value),
+                      )
+                    }
+                  />
+                ) : (
+                  <select
+                    class="select"
+                    aria-label={control.label}
+                    value={String(settings.value[control.key])}
+                    onChange={(event) =>
+                      changeControl(
+                        control.key,
+                        Number(event.currentTarget.value),
+                      )
+                    }
+                  >
+                    {control.options.map((option) => (
+                      <option value={option.value} key={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 )}
-              </label>
+                {controlHint(control, settings.value[control.key]) && (
+                  <span class="field__hint">
+                    {controlHint(control, settings.value[control.key])}
+                  </span>
+                )}
+              </div>
             ))}
 
             <label class="field">

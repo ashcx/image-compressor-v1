@@ -40,6 +40,7 @@ export default defineConfig(() => {
         '@jsquash/png',
         '@jsquash/resize',
         '@jsquash/webp',
+        'imagequant',
       ],
     },
     build: {

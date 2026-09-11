@@ -54,6 +54,7 @@ export interface ProcessJobOptions {
   quality?: number
   effort?: number
   speed?: number
+  mode?: number
   resize?: ResizeOptions
   buildEstimate?: boolean
   estimateOnly?: boolean
@@ -83,6 +84,7 @@ export function processImage(options: ProcessJobOptions): {
           quality: options.quality,
           effort: options.effort,
           speed: options.speed,
+          mode: options.mode,
           resize: options.resize,
           buildEstimate: options.buildEstimate,
           estimateOnly: options.estimateOnly,

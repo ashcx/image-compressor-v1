@@ -2,53 +2,93 @@ import type { Codec, OutputFormat } from './types'
 
 type CodecLoader = () => Promise<Codec>
 
-// Each entry is loaded via dynamic import so a codec (and its WASM) only ships
-// when a job actually targets that format. PNG is lossless via @jsquash/png and
-// is squeezed afterwards with oxipng; JPEG/WebP/AVIF/JXL carry an explicit
-// quality (and, where the encoder supports it, an effort/speed knob).
+function supportsNativeEncode(): boolean {
+  return (
+    typeof OffscreenCanvas !== 'undefined' &&
+    typeof OffscreenCanvas.prototype.convertToBlob === 'function'
+  )
+}
+
+async function encodeWithCanvas(
+  imageData: ImageData,
+  type: string,
+  quality?: number,
+): Promise<ArrayBuffer> {
+  const canvas = new OffscreenCanvas(imageData.width, imageData.height)
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Canvas 2D context is unavailable')
+  context.putImageData(imageData, 0, 0)
+  const blob = await canvas.convertToBlob(
+    quality != null ? { type, quality } : { type },
+  )
+  return blob.arrayBuffer()
+}
+
+// JPEG and WebP prefer the browser's native encoder (OffscreenCanvas.convertToBlob),
+// which is much faster and avoids the WASM/ImageData copies. jsquash remains the
+// fallback for browsers without it and covers AVIF/JXL/PNG.
 const loaders: Record<OutputFormat, CodecLoader> = {
   jpeg: async () => {
-    const { encode, decode } = await import('@jsquash/jpeg')
+    const { encode: jsquashEncode, decode } = await import('@jsquash/jpeg')
     return {
       format: 'jpeg',
       mimeType: 'image/jpeg',
       extension: 'jpg',
-      encode: (imageData, options) =>
-        encode(
+      encode: (imageData, options) => {
+        if (supportsNativeEncode()) {
+          return encodeWithCanvas(
+            imageData,
+            'image/jpeg',
+            (options?.quality ?? 75) / 100,
+          )
+        }
+        return jsquashEncode(
           imageData,
           options?.quality != null ? { quality: options.quality } : {},
-        ),
-      decode: (buffer) => decode(buffer),
-    }
-  },
-  png: async () => {
-    const { encode, decode } = await import('@jsquash/png')
-    const { optimise } = await import('@jsquash/oxipng')
-    return {
-      format: 'png',
-      mimeType: 'image/png',
-      extension: 'png',
-      encode: async (imageData, options) => {
-        const encoded = await encode(imageData)
-        return optimise(
-          encoded,
-          options?.effort != null ? { level: options.effort } : {},
         )
       },
       decode: (buffer) => decode(buffer),
     }
   },
+  png: async () => {
+    const { encode: pngEncode, decode } = await import('@jsquash/png')
+    const { optimise } = await import('@jsquash/oxipng')
+    const { encodeImagequant } = await import('./imagequant')
+    return {
+      format: 'png',
+      mimeType: 'image/png',
+      extension: 'png',
+      encode: async (imageData, options) => {
+        const mode = options?.mode ?? 0
+        if (mode === 2) return encodeImagequant(imageData)
+        const encoded = await pngEncode(imageData)
+        if (mode === 1) return optimise(encoded, { level: 0 })
+        if (supportsNativeEncode())
+          return encodeWithCanvas(imageData, 'image/png')
+        return encoded
+      },
+      decode: (buffer) => decode(buffer),
+    }
+  },
   webp: async () => {
-    const { encode, decode } = await import('@jsquash/webp')
+    const { encode: jsquashEncode, decode } = await import('@jsquash/webp')
     return {
       format: 'webp',
       mimeType: 'image/webp',
       extension: 'webp',
-      encode: (imageData, options) =>
-        encode(
+      encode: (imageData, options) => {
+        if (supportsNativeEncode()) {
+          return encodeWithCanvas(
+            imageData,
+            'image/webp',
+            (options?.quality ?? 75) / 100,
+          )
+        }
+        return jsquashEncode(
           imageData,
           options?.quality != null ? { quality: options.quality } : {},
-        ),
+        )
+      },
       decode: (buffer) => decode(buffer),
     }
   },

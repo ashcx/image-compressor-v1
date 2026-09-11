@@ -1,16 +1,34 @@
 import type { OutputFormat } from './types'
 
-export type ControlKey = 'quality' | 'effort' | 'speed'
+export type ControlKey = 'quality' | 'effort' | 'speed' | 'mode'
 
-export interface FormatControl {
+interface ControlBase {
   key: ControlKey
   label: string
+  hint?: string
+}
+
+export interface RangeControl extends ControlBase {
+  kind: 'range'
   min: number
   max: number
   step: number
   default: number
+}
+
+export interface SelectOption {
+  label: string
+  value: number
   hint?: string
 }
+
+export interface SelectControl extends ControlBase {
+  kind: 'select'
+  options: SelectOption[]
+  default: number
+}
+
+export type FormatControl = RangeControl | SelectControl
 
 export interface FormatSpec {
   format: OutputFormat
@@ -29,6 +47,23 @@ export const FORMAT_ORDER: OutputFormat[] = [
   'jxl',
 ]
 
+const QUALITY_PRESETS: SelectControl = {
+  kind: 'select',
+  key: 'quality',
+  label: 'Quality',
+  options: [
+    {
+      label: 'Best',
+      value: 94,
+      hint: 'Largest file. Very high quality is often redundant for photos — big files with little perceivable gain.',
+    },
+    { label: 'Better', value: 85 },
+    { label: 'Default', value: 75 },
+    { label: 'Low', value: 50, hint: 'Smallest file, visible trade-off.' },
+  ],
+  default: 75,
+}
+
 export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   jpeg: {
     format: 'jpeg',
@@ -36,16 +71,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
     mimeType: 'image/jpeg',
     extension: 'jpg',
     lossless: false,
-    controls: [
-      {
-        key: 'quality',
-        label: 'Quality',
-        min: 40,
-        max: 95,
-        step: 1,
-        default: 75,
-      },
-    ],
+    controls: [QUALITY_PRESETS],
   },
   png: {
     format: 'png',
@@ -55,13 +81,27 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
     lossless: true,
     controls: [
       {
-        key: 'effort',
-        label: 'Optimisation',
-        min: 0,
-        max: 6,
-        step: 1,
-        default: 2,
-        hint: 'oxipng level — higher is smaller but slower',
+        kind: 'select',
+        key: 'mode',
+        label: 'Compression',
+        default: 0,
+        options: [
+          {
+            label: 'Uncompressed',
+            value: 0,
+            hint: 'Fastest. Native PNG, lossless.',
+          },
+          {
+            label: 'Lossless Compressed (slow)',
+            value: 1,
+            hint: 'oxipng L0 — 30–50% smaller, still lossless.',
+          },
+          {
+            label: 'Compressed (lower quality, slowest)',
+            value: 2,
+            hint: 'Reduces to 256 colours (lossy). Best for screenshots/graphics; may band photos.',
+          },
+        ],
       },
     ],
   },
@@ -71,25 +111,17 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
     mimeType: 'image/webp',
     extension: 'webp',
     lossless: false,
-    controls: [
-      {
-        key: 'quality',
-        label: 'Quality',
-        min: 40,
-        max: 95,
-        step: 1,
-        default: 75,
-      },
-    ],
+    controls: [QUALITY_PRESETS],
   },
   avif: {
     format: 'avif',
-    label: 'AVIF (slow)',
+    label: 'AVIF (slower)',
     mimeType: 'image/avif',
     extension: 'avif',
     lossless: false,
     controls: [
       {
+        kind: 'range',
         key: 'quality',
         label: 'Quality',
         min: 1,
@@ -98,24 +130,28 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
         default: 50,
       },
       {
+        kind: 'select',
         key: 'speed',
         label: 'Speed',
-        min: 6,
-        max: 10,
-        step: 1,
         default: 8,
-        hint: 'lower is smaller but slower',
+        hint: 'Slower speeds compress more but can exhaust memory on big batches.',
+        options: [
+          { label: 'Slow', value: 6 },
+          { label: 'Balanced', value: 8 },
+          { label: 'Fast', value: 10 },
+        ],
       },
     ],
   },
   jxl: {
     format: 'jxl',
-    label: 'JPEG XL',
+    label: 'JPEG XL (slower)',
     mimeType: 'image/jxl',
     extension: 'jxl',
     lossless: false,
     controls: [
       {
+        kind: 'range',
         key: 'quality',
         label: 'Quality',
         min: 1,
@@ -123,7 +159,18 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
         step: 1,
         default: 5,
       },
-      { key: 'effort', label: 'Effort', min: 1, max: 9, step: 1, default: 7 },
+      {
+        kind: 'select',
+        key: 'effort',
+        label: 'Effort',
+        default: 5,
+        hint: 'Higher effort compresses more but can exhaust memory on big batches.',
+        options: [
+          { label: 'Slow', value: 7 },
+          { label: 'Balanced', value: 5 },
+          { label: 'Fast', value: 3 },
+        ],
+      },
     ],
   },
 }
