@@ -8,7 +8,7 @@ import {
   type FormatControl,
 } from './lib/codecs/formats'
 import type { OutputFormat } from './lib/codecs/types'
-import { getDeviceProfile } from './lib/device'
+import { getDeviceProfile, heavyWorkerCount } from './lib/device'
 import {
   averageRatioSamples,
   deriveEstimate,
@@ -19,7 +19,12 @@ import {
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { readDimensions } from './lib/metadataClient'
 import { appVersion, watchForUpdates } from './lib/version'
-import { getPoolStats, processImage, subscribeToPool } from './lib/workerClient'
+import {
+  configureWorkers,
+  getPoolStats,
+  processImage,
+  subscribeToPool,
+} from './lib/workerClient'
 import {
   createStreamingZip,
   uniqueEntryName,
@@ -241,10 +246,50 @@ function nextToken(id: string): number {
   return token
 }
 
+let pendingPatches = new Map<string, Partial<BatchJob>>()
+let flushHandle: number | null = null
+
+// Coalesces per-result job updates so a burst of worker completions causes one
+// render per frame instead of N full-list renders.
+function flushJobPatches() {
+  if (flushHandle !== null) {
+    if (typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(flushHandle)
+    } else {
+      clearTimeout(flushHandle)
+    }
+    flushHandle = null
+  }
+  if (pendingPatches.size === 0) return
+  const patches = pendingPatches
+  pendingPatches = new Map()
+  jobs.value = jobs.value.map((job) => {
+    const patch = patches.get(job.id)
+    return patch ? { ...job, ...patch } : job
+  })
+}
+
 function updateJob(id: string, patch: Partial<BatchJob>) {
-  jobs.value = jobs.value.map((job) =>
-    job.id === id ? { ...job, ...patch } : job,
-  )
+  pendingPatches.set(id, { ...pendingPatches.get(id), ...patch })
+  if (flushHandle !== null) return
+  const run = () => {
+    flushHandle = null
+    flushJobPatches()
+  }
+  flushHandle =
+    typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame(run)
+      : (setTimeout(run, 0) as unknown as number)
+}
+
+function applyWorkerBudget() {
+  const base = getDeviceProfile().workerCount
+  const format = targetFormat.value
+  const heavy =
+    format === 'avif' ||
+    format === 'jxl' ||
+    (format === 'png' && settings.value.mode === 2)
+  configureWorkers(heavy ? heavyWorkerCount(base) : base)
 }
 
 function cancelEstimate(id: string) {
@@ -258,6 +303,7 @@ function cancelAllEstimates() {
 }
 
 function updateAverageRatios() {
+  flushJobPatches()
   const curves = jobs.value
     .filter(
       (job) => job.samples.length > 0 && job.sampleKey === sampleKey.value,
@@ -267,6 +313,7 @@ function updateAverageRatios() {
 }
 
 function refreshEstimates() {
+  flushJobPatches()
   const key = outputKey.value
   const quality = settings.value.quality
   jobs.value = jobs.value.map((job) => {
@@ -279,6 +326,7 @@ function refreshEstimates() {
 }
 
 async function estimateJob(id: string) {
+  flushJobPatches()
   const token = nextToken(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
@@ -332,6 +380,7 @@ async function estimateJob(id: string) {
 }
 
 async function compressJob(id: string) {
+  flushJobPatches()
   const token = nextToken(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
@@ -355,7 +404,7 @@ async function compressJob(id: string) {
       speed: current.speed,
       mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
-      buildEstimate: job.samples.length === 0,
+      buildEstimate: false,
       priority: 'high',
     })
     const result = await response
@@ -390,6 +439,7 @@ async function compressJob(id: string) {
 }
 
 function updateSampling(): Set<string> {
+  flushJobPatches()
   const ids = jobs.value
     .filter((job) => job.status !== 'error')
     .map((job) => job.id)
@@ -512,6 +562,7 @@ function changeFormat(format: OutputFormat) {
   if (format === targetFormat.value) return
   targetFormat.value = format
   settings.value = defaultSettings(format)
+  applyWorkerBudget()
   scheduleSampleReestimate()
 }
 
@@ -522,6 +573,7 @@ function changeControl(key: ControlKey, value: number) {
     refreshEstimates()
     if (!batchMode.value) recompressSingle()
   } else {
+    applyWorkerBudget()
     scheduleSampleReestimate()
   }
 }
@@ -654,6 +706,7 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    applyWorkerBudget()
     return subscribeToPool(() => {
       poolStats.value = getPoolStats()
     })

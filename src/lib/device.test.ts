@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  heavyWorkerCount,
   MAX_WORKERS_HIGH_MEMORY,
   profileFromSignals,
   resolveWorkerCount,
@@ -30,16 +31,16 @@ describe('resolveWorkerCount', () => {
     ).toBe(1)
   })
 
-  it('tiers iPad workers by core count (temp fix)', () => {
+  it('tiers iPad workers by core count, reserving a core', () => {
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 8 }),
-    ).toBe(8)
+    ).toBe(7)
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 6 }),
     ).toBe(4)
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 2 }),
-    ).toBe(2)
+    ).toBe(1)
   })
 
   it('treats a touch-enabled Macintosh as an iPad', () => {
@@ -49,7 +50,7 @@ describe('resolveWorkerCount', () => {
         maxTouchPoints: 5,
         hardwareConcurrency: 8,
       }),
-    ).toBe(8)
+    ).toBe(7)
   })
 
   it('returns 1 for low-memory Android', () => {
@@ -62,7 +63,7 @@ describe('resolveWorkerCount', () => {
     ).toBe(1)
   })
 
-  it('returns min(cores, 4) for high-memory Android', () => {
+  it('returns min(cores - 1, 4) for high-memory Android', () => {
     expect(
       resolveWorkerCount({
         userAgent: ANDROID_UA,
@@ -72,17 +73,23 @@ describe('resolveWorkerCount', () => {
     ).toBe(4)
   })
 
-  it('uses the desktop worker budget', () => {
+  it('uses the desktop worker budget, reserving a core', () => {
     expect(
       resolveWorkerCount({ deviceMemory: 16, hardwareConcurrency: 24 }),
     ).toBe(MAX_WORKERS_HIGH_MEMORY)
     expect(
       resolveWorkerCount({ deviceMemory: 8, hardwareConcurrency: 8 }),
-    ).toBe(8)
+    ).toBe(7)
     expect(
       resolveWorkerCount({ deviceMemory: 4, hardwareConcurrency: 8 }),
     ).toBe(6)
-    expect(resolveWorkerCount({ hardwareConcurrency: 4 })).toBe(4)
+    expect(resolveWorkerCount({ hardwareConcurrency: 4 })).toBe(3)
+  })
+
+  it('halves workers for heavy codecs but never to zero', () => {
+    expect(heavyWorkerCount(8)).toBe(4)
+    expect(heavyWorkerCount(3)).toBe(1)
+    expect(heavyWorkerCount(1)).toBe(1)
   })
 })
 
@@ -102,7 +109,7 @@ describe('profileFromSignals', () => {
       userAgent: IPAD_UA,
       hardwareConcurrency: 8,
     })
-    expect(profile.workerCount).toBe(8)
+    expect(profile.workerCount).toBe(7)
     expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(1024 * 1024 * 1024)
   })
@@ -123,7 +130,7 @@ describe('profileFromSignals', () => {
       deviceMemory: 8,
       hardwareConcurrency: 8,
     })
-    expect(profile.workerCount).toBe(8)
+    expect(profile.workerCount).toBe(7)
     expect(profile.constrained).toBe(false)
     expect(profile.maxZipBytes).toBe(2 * 1024 * 1024 * 1024)
   })
