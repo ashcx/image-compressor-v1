@@ -118,10 +118,10 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
       {
         key: 'quality',
         label: 'Quality',
-        min: 8,
-        max: 100,
+        min: 1,
+        max: 8,
         step: 1,
-        default: 8,
+        default: 5,
       },
       { key: 'effort', label: 'Effort', min: 1, max: 9, step: 1, default: 7 },
     ],

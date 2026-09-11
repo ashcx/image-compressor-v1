@@ -35,9 +35,9 @@ describe('format specs', () => {
       default: 8,
     })
     expect(control('jxl', 'quality')).toMatchObject({
-      min: 8,
-      max: 100,
-      default: 8,
+      min: 1,
+      max: 8,
+      default: 5,
     })
     expect(control('jpeg', 'quality')).toMatchObject({ min: 40, max: 95 })
     expect(control('webp', 'quality')).toMatchObject({ min: 40, max: 95 })
