@@ -30,10 +30,13 @@ describe('resolveWorkerCount', () => {
     ).toBe(1)
   })
 
-  it('returns min(cores, 3) for iPad', () => {
+  it('tiers iPad workers by core count (temp fix)', () => {
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 8 }),
-    ).toBe(3)
+    ).toBe(8)
+    expect(
+      resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 6 }),
+    ).toBe(4)
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 2 }),
     ).toBe(2)
@@ -46,7 +49,7 @@ describe('resolveWorkerCount', () => {
         maxTouchPoints: 5,
         hardwareConcurrency: 8,
       }),
-    ).toBe(3)
+    ).toBe(8)
   })
 
   it('returns 1 for low-memory Android', () => {
@@ -99,7 +102,7 @@ describe('profileFromSignals', () => {
       userAgent: IPAD_UA,
       hardwareConcurrency: 8,
     })
-    expect(profile.workerCount).toBe(3)
+    expect(profile.workerCount).toBe(8)
     expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(1024 * 1024 * 1024)
   })
