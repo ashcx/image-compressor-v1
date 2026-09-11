@@ -155,9 +155,9 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
         key: 'quality',
         label: 'Quality',
         min: 1,
-        max: 8,
+        max: 100,
         step: 1,
-        default: 5,
+        default: 75,
       },
       {
         kind: 'select',

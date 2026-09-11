@@ -62,8 +62,8 @@ describe('format specs', () => {
     expect(jxlQuality).toMatchObject({
       kind: 'range',
       min: 1,
-      max: 8,
-      default: 5,
+      max: 100,
+      default: 75,
     })
 
     const jxlEffort = byKey(FORMAT_SPECS.jxl.controls, 'effort')
