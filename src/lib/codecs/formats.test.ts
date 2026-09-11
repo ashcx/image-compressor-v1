@@ -25,14 +25,21 @@ describe('format specs', () => {
     }
   })
 
-  it('ships the tuned defaults for the slow codecs', () => {
-    const avifSpeed = FORMAT_SPECS.avif.controls.find(
-      (control) => control.key === 'speed',
-    )
-    const jxlQuality = FORMAT_SPECS.jxl.controls.find(
-      (control) => control.key === 'quality',
-    )
-    expect(avifSpeed?.default).toBe(8)
-    expect(jxlQuality?.default).toBe(5)
+  it('ships the tuned defaults and bounds for the codec controls', () => {
+    const control = (format: 'jpeg' | 'webp' | 'avif' | 'jxl', key: string) =>
+      FORMAT_SPECS[format].controls.find((entry) => entry.key === key)
+
+    expect(control('avif', 'speed')).toMatchObject({
+      min: 6,
+      max: 10,
+      default: 8,
+    })
+    expect(control('jxl', 'quality')).toMatchObject({
+      min: 8,
+      max: 100,
+      default: 8,
+    })
+    expect(control('jpeg', 'quality')).toMatchObject({ min: 40, max: 95 })
+    expect(control('webp', 'quality')).toMatchObject({ min: 40, max: 95 })
   })
 })

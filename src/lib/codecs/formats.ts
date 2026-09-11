@@ -40,8 +40,8 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
       {
         key: 'quality',
         label: 'Quality',
-        min: 1,
-        max: 100,
+        min: 40,
+        max: 95,
         step: 1,
         default: 75,
       },
@@ -75,8 +75,8 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
       {
         key: 'quality',
         label: 'Quality',
-        min: 1,
-        max: 100,
+        min: 40,
+        max: 95,
         step: 1,
         default: 75,
       },
@@ -100,7 +100,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
       {
         key: 'speed',
         label: 'Speed',
-        min: 0,
+        min: 6,
         max: 10,
         step: 1,
         default: 8,
@@ -118,10 +118,10 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
       {
         key: 'quality',
         label: 'Quality',
-        min: 1,
+        min: 8,
         max: 100,
         step: 1,
-        default: 5,
+        default: 8,
       },
       { key: 'effort', label: 'Effort', min: 1, max: 9, step: 1, default: 7 },
     ],
