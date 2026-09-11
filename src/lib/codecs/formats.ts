@@ -84,7 +84,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   },
   avif: {
     format: 'avif',
-    label: 'AVIF',
+    label: 'AVIF (slow)',
     mimeType: 'image/avif',
     extension: 'avif',
     lossless: false,
