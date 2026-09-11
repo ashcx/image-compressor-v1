@@ -152,6 +152,12 @@ body {
   outline-offset: 1px;
 }
 
+.panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .button {
   display: inline-flex;
   align-items: center;

@@ -11,6 +11,7 @@ import { type EstimateSample, interpolate } from './lib/estimate'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { appVersion, watchForUpdates } from './lib/version'
 import { getPoolStats, processImage, subscribeToPool } from './lib/workerClient'
+import { buildZip, uniqueEntryName } from './lib/zip'
 
 type JobStatus =
   | 'queued'
@@ -27,6 +28,7 @@ interface BatchJob {
   originalSize: number
   status: JobStatus
   outputUrl: string
+  outputBuffer: Uint8Array<ArrayBuffer> | null
   outputExtension: string
   outputSize: number
   sizeIsExact: boolean
@@ -43,6 +45,31 @@ interface Settings {
   effort: number
   speed: number
 }
+
+interface WritableFileHandle {
+  createWritable(): Promise<{
+    write(data: BlobPart): Promise<void>
+    close(): Promise<void>
+  }>
+}
+
+interface DirectoryHandle {
+  getFileHandle(
+    name: string,
+    options: { create: boolean },
+  ): Promise<WritableFileHandle>
+}
+
+interface WindowWithDirectoryPicker extends Window {
+  showDirectoryPicker?: () => Promise<DirectoryHandle>
+}
+
+const directoryPicker =
+  typeof window === 'undefined'
+    ? undefined
+    : (window as WindowWithDirectoryPicker).showDirectoryPicker
+
+const supportsDirectoryPicker = typeof directoryPicker === 'function'
 
 function defaultSettings(format: OutputFormat): Settings {
   const base: Settings = { quality: 75, effort: 2, speed: 6 }
@@ -142,6 +169,15 @@ const batchEstimate = computed(() =>
   }, 0),
 )
 
+const downloadable = computed(() =>
+  jobs.value.filter(
+    (job) => job.status === 'done' && isCurrent(job) && job.outputBuffer,
+  ),
+)
+const canDownloadAll = computed(
+  () => jobs.value.length > 1 && downloadable.value.length > 0,
+)
+
 function nextToken(id: string): number {
   const token = (jobTokens.get(id) ?? 0) + 1
   jobTokens.set(id, token)
@@ -231,6 +267,7 @@ async function compressJob(id: string) {
     updateJob(id, {
       status: 'done',
       outputUrl: url,
+      outputBuffer: new Uint8Array(result.outputBuffer),
       outputExtension: result.extension,
       outputSize: result.outputSize,
       sizeIsExact: true,
@@ -262,6 +299,7 @@ function addFiles(fileList: FileList | File[] | null) {
     originalSize: file.size,
     status: 'queued',
     outputUrl: '',
+    outputBuffer: null,
     outputExtension: FORMAT_SPECS[targetFormat.value].extension,
     outputSize: 0,
     sizeIsExact: false,
@@ -373,6 +411,49 @@ function clearAll() {
     if (job.outputUrl) URL.revokeObjectURL(job.outputUrl)
   }
   jobs.value = []
+}
+
+function triggerDownload(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = name
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadAll() {
+  const entries = downloadable.value.map((job) => ({
+    name: replaceExtension(job.name, job.outputExtension),
+    data: job.outputBuffer as Uint8Array,
+  }))
+  if (entries.length === 0) return
+  triggerDownload(
+    new Blob([buildZip(entries)], { type: 'application/zip' }),
+    'images.zip',
+  )
+}
+
+async function saveToFolder() {
+  if (!directoryPicker) return
+  try {
+    const directory = await directoryPicker()
+    const used = new Set<string>()
+    for (const job of downloadable.value) {
+      const name = uniqueEntryName(
+        replaceExtension(job.name, job.outputExtension),
+        used,
+      )
+      const handle = await directory.getFileHandle(name, { create: true })
+      const writable = await handle.createWritable()
+      await writable.write(job.outputBuffer as Uint8Array<ArrayBuffer>)
+      await writable.close()
+    }
+  } catch (error) {
+    // The user dismissing the picker is not an error worth surfacing.
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    throw error
+  }
 }
 
 function savingsLabel(originalSize: number, outputSize: number): string {
@@ -585,9 +666,27 @@ export function App() {
               </button>
             )}
 
-            <button type="button" class="button" onClick={clearAll}>
-              Clear all
-            </button>
+            <div class="panel__actions">
+              {canDownloadAll.value && (
+                <button
+                  type="button"
+                  class="button button--primary"
+                  onClick={downloadAll}
+                >
+                  Download all ({downloadable.value.length}) as zip
+                </button>
+              )}
+
+              {canDownloadAll.value && supportsDirectoryPicker && (
+                <button type="button" class="button" onClick={saveToFolder}>
+                  Save to folder…
+                </button>
+              )}
+
+              <button type="button" class="button" onClick={clearAll}>
+                Clear all
+              </button>
+            </div>
           </section>
 
           <ul class="jobs">
