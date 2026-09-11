@@ -134,6 +134,16 @@ body {
   font-size: 0.78rem;
 }
 
+.field__warning {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  background: #3a2a12;
+  border: 1px solid #b7791f;
+  border-radius: var(--radius);
+  color: #f6c177;
+  font-size: 0.85rem;
+}
+
 .select,
 .input {
   width: 100%;

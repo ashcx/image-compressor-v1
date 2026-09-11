@@ -7,11 +7,23 @@ import {
   FORMAT_SPECS,
 } from './lib/codecs/formats'
 import type { OutputFormat } from './lib/codecs/types'
-import { type EstimateSample, interpolate } from './lib/estimate'
+import { getDeviceProfile } from './lib/device'
+import {
+  averageRatioSamples,
+  deriveEstimate,
+  type EstimateSample,
+  interpolate,
+  sampleSize,
+} from './lib/estimate'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
+import { readDimensions } from './lib/metadataClient'
 import { appVersion, watchForUpdates } from './lib/version'
 import { getPoolStats, processImage, subscribeToPool } from './lib/workerClient'
-import { buildZip, uniqueEntryName } from './lib/zip'
+import {
+  createStreamingZip,
+  uniqueEntryName,
+  ZipTooLargeError,
+} from './lib/zip'
 
 type JobStatus =
   | 'queued'
@@ -28,7 +40,7 @@ interface BatchJob {
   originalSize: number
   status: JobStatus
   outputUrl: string
-  outputBuffer: Uint8Array<ArrayBuffer> | null
+  outputBlob: Blob | null
   outputExtension: string
   outputSize: number
   sizeIsExact: boolean
@@ -86,10 +98,19 @@ const maxLongEdge = signal(0)
 const isDragging = signal(false)
 const poolStats = signal(getPoolStats())
 const newVersion = signal('')
+const notice = signal('')
+const zipping = signal(false)
+
+// Ratios of estimated output to original size, averaged over the sampled
+// images, used to extrapolate estimates for unmeasured rows in a big batch.
+const averageRatios = signal<EstimateSample[]>([])
+const sampledIds = signal<Set<string>>(new Set())
 
 let idCounter = 0
 let reprocessTimer: ReturnType<typeof setTimeout> | undefined
+let sampleChangeTimer: ReturnType<typeof setTimeout> | undefined
 const jobTokens = new Map<string, number>()
+const estimateControllers = new Map<string, AbortController>()
 
 const total = computed(() => jobs.value.length)
 const batchMode = computed(() => jobs.value.length > 1)
@@ -129,6 +150,22 @@ const phaseLabel = computed(() =>
 
 const activeControls = computed(() => FORMAT_SPECS[targetFormat.value].controls)
 
+const settingsWarning = computed(() => {
+  const format = targetFormat.value
+  const values = settings.value
+
+  if ((format === 'jpeg' || format === 'webp') && values.quality >= 90) {
+    return 'Quality 90+ is largely redundant: file sizes balloon with almost no perceivable quality gain. Try 80–85.'
+  }
+  if (total.value > 5 && format === 'avif' && values.speed <= 6) {
+    return 'AVIF below speed 7 can take a very long time and may hit memory errors on large batches. Use speed 7 or higher for big batches.'
+  }
+  if (total.value > 5 && format === 'jxl' && values.quality >= 6) {
+    return 'High JPEG XL quality can take a very long time and may hit memory errors on large batches. Lower the quality for big batches.'
+  }
+  return ''
+})
+
 // Keys capture everything that changes the encoded bytes except quality. Quality
 // is excluded from `sampleKey` because the estimate curve already spans the
 // quality range, so moving the quality slider needs no re-encode to re-estimate.
@@ -158,20 +195,23 @@ const needsCompress = computed(() =>
   ),
 )
 
+function estimateFor(job: BatchJob, quality: number): number {
+  if (job.sampleKey !== sampleKey.value) return 0
+  if (job.samples.length > 0) return interpolate(job.samples, quality)
+  return deriveEstimate(job.originalSize, averageRatios.value, quality)
+}
+
 const batchEstimate = computed(() =>
   jobs.value.reduce((sum, job) => {
     if (job.status === 'error') return sum
     if (isCurrent(job)) return sum + job.outputSize
-    if (job.samples.length > 0 && job.sampleKey === sampleKey.value) {
-      return sum + interpolate(job.samples, settings.value.quality)
-    }
-    return sum
+    return sum + estimateFor(job, settings.value.quality)
   }, 0),
 )
 
 const downloadable = computed(() =>
   jobs.value.filter(
-    (job) => job.status === 'done' && isCurrent(job) && job.outputBuffer,
+    (job) => job.status === 'done' && isCurrent(job) && job.outputBlob,
   ),
 )
 const canDownloadAll = computed(
@@ -190,27 +230,63 @@ function updateJob(id: string, patch: Partial<BatchJob>) {
   )
 }
 
+function cancelEstimate(id: string) {
+  estimateControllers.get(id)?.abort()
+  estimateControllers.delete(id)
+}
+
+function cancelAllEstimates() {
+  for (const controller of estimateControllers.values()) controller.abort()
+  estimateControllers.clear()
+}
+
+function updateAverageRatios() {
+  const curves = jobs.value
+    .filter(
+      (job) => job.samples.length > 0 && job.sampleKey === sampleKey.value,
+    )
+    .map((job) => ({ samples: job.samples, originalSize: job.originalSize }))
+  averageRatios.value = averageRatioSamples(curves)
+}
+
+function refreshEstimates() {
+  const key = outputKey.value
+  const quality = settings.value.quality
+  jobs.value = jobs.value.map((job) => {
+    if (job.status === 'error') return job
+    if (job.status === 'done' && job.outputKey === key) return job
+    const estimate = estimateFor(job, quality)
+    if (estimate === 0) return job
+    return { ...job, outputSize: estimate, sizeIsExact: false }
+  })
+}
+
 async function estimateJob(id: string) {
   const token = nextToken(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
+
+  cancelEstimate(id)
+  const controller = new AbortController()
+  estimateControllers.set(id, controller)
 
   const format = targetFormat.value
   const current = settings.value
   const edge = maxLongEdge.value
   const key = sampleKey.value
 
-  updateJob(id, { status: 'estimating', error: '' })
+  updateJob(id, { status: 'estimating', error: '', sampleKey: key })
 
   try {
-    const buffer = await job.file.arrayBuffer()
     const { response } = processImage({
-      fileBuffer: buffer,
+      file: job.file,
       targetFormat: format,
       effort: current.effort,
       speed: current.speed,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       estimateOnly: true,
+      priority: 'low',
+      signal: controller.signal,
     })
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'estimate') return
@@ -218,18 +294,22 @@ async function estimateJob(id: string) {
     updateJob(id, {
       status: 'estimated',
       samples: result.samples,
-      width: result.width,
-      height: result.height,
       outputSize: interpolate(result.samples, current.quality),
       sizeIsExact: false,
       sampleKey: key,
     })
+    updateAverageRatios()
+    refreshEstimates()
   } catch (error) {
-    if (jobTokens.get(id) !== token) return
+    if (controller.signal.aborted || jobTokens.get(id) !== token) return
     updateJob(id, {
       status: 'error',
       error: error instanceof Error ? error.message : 'Conversion failed',
     })
+  } finally {
+    if (estimateControllers.get(id) === controller) {
+      estimateControllers.delete(id)
+    }
   }
 }
 
@@ -237,6 +317,8 @@ async function compressJob(id: string) {
   const token = nextToken(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
+
+  cancelEstimate(id)
 
   const format = targetFormat.value
   const current = settings.value
@@ -247,37 +329,38 @@ async function compressJob(id: string) {
   updateJob(id, { status: 'processing', error: '' })
 
   try {
-    const buffer = await job.file.arrayBuffer()
     const { response } = processImage({
-      fileBuffer: buffer,
+      file: job.file,
       targetFormat: format,
       quality: current.quality,
       effort: current.effort,
       speed: current.speed,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       buildEstimate: job.samples.length === 0,
+      priority: 'high',
     })
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'result') return
 
     const previousUrl = job.outputUrl
-    const url = URL.createObjectURL(
-      new Blob([result.outputBuffer], { type: result.mimeType }),
-    )
+    const blob = new Blob([result.outputBuffer], { type: result.mimeType })
+    const url = URL.createObjectURL(blob)
     updateJob(id, {
       status: 'done',
       outputUrl: url,
-      outputBuffer: new Uint8Array(result.outputBuffer),
+      outputBlob: blob,
       outputExtension: result.extension,
       outputSize: result.outputSize,
       sizeIsExact: true,
       outputKey: key,
       sampleKey: samplesKey,
-      width: result.width,
-      height: result.height,
       ...(result.samples ? { samples: result.samples } : {}),
     })
     if (previousUrl) URL.revokeObjectURL(previousUrl)
+    if (result.samples) {
+      updateAverageRatios()
+      refreshEstimates()
+    }
   } catch (error) {
     if (jobTokens.get(id) !== token) return
     updateJob(id, {
@@ -285,6 +368,33 @@ async function compressJob(id: string) {
       error: error instanceof Error ? error.message : 'Conversion failed',
     })
   }
+}
+
+function updateSampling(): Set<string> {
+  const ids = jobs.value
+    .filter((job) => job.status !== 'error')
+    .map((job) => job.id)
+  const limit = sampleSize(ids.length)
+  const existing = new Set(
+    [...sampledIds.value].filter((id) => ids.includes(id)),
+  )
+  if (existing.size >= limit) {
+    sampledIds.value = existing
+    return existing
+  }
+
+  const candidates = ids.filter((id) => !existing.has(id))
+  for (let i = candidates.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[candidates[i], candidates[j]] = [candidates[j], candidates[i]]
+  }
+  for (const id of candidates) {
+    if (existing.size >= limit) break
+    existing.add(id)
+  }
+
+  sampledIds.value = existing
+  return existing
 }
 
 function addFiles(fileList: FileList | File[] | null) {
@@ -299,7 +409,7 @@ function addFiles(fileList: FileList | File[] | null) {
     originalSize: file.size,
     status: 'queued',
     outputUrl: '',
-    outputBuffer: null,
+    outputBlob: null,
     outputExtension: FORMAT_SPECS[targetFormat.value].extension,
     outputSize: 0,
     sizeIsExact: false,
@@ -312,35 +422,32 @@ function addFiles(fileList: FileList | File[] | null) {
   }))
 
   jobs.value = [...jobs.value, ...created]
+  const sampled = updateSampling()
 
-  // A lone image is compressed right away; a batch is only estimated so the user
-  // can dial in settings before any expensive encoding happens.
-  const isBatch = jobs.value.length > 1
   for (const job of created) {
-    if (isBatch) void estimateJob(job.id)
-    else void compressJob(job.id)
+    void readDimensions(job.file).then((dimensions) => {
+      if (dimensions) {
+        updateJob(job.id, {
+          width: dimensions.width,
+          height: dimensions.height,
+        })
+      }
+    })
+
+    // A lone image is compressed right away; a batch is only estimated (a
+    // bounded sample for large batches) so settings can be dialled in first.
+    if (jobs.value.length > 1) {
+      if (sampled.has(job.id)) void estimateJob(job.id)
+      else
+        updateJob(job.id, { status: 'estimated', sampleKey: sampleKey.value })
+    } else {
+      void compressJob(job.id)
+    }
   }
 }
 
-function refreshEstimates() {
-  const key = outputKey.value
-  const currentSampleKey = sampleKey.value
-  jobs.value = jobs.value.map((job) => {
-    if (job.samples.length === 0 || job.sampleKey !== currentSampleKey) {
-      return job
-    }
-    const current = job.status === 'done' && job.outputKey === key
-    return {
-      ...job,
-      outputSize: current
-        ? job.outputSize
-        : interpolate(job.samples, settings.value.quality),
-      sizeIsExact: current,
-    }
-  })
-}
-
 function recompressSingle() {
+  cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   reprocessTimer = setTimeout(() => {
     for (const job of jobs.value) {
@@ -350,23 +457,43 @@ function recompressSingle() {
   }, 200)
 }
 
-function sampleInputsChanged() {
+function scheduleSampleReestimate() {
   if (jobs.value.length === 0) return
-  if (batchMode.value) {
-    for (const job of jobs.value) {
-      if (job.status === 'error') continue
-      void estimateJob(job.id)
+  if (sampleChangeTimer) clearTimeout(sampleChangeTimer)
+  sampleChangeTimer = setTimeout(() => {
+    sampleChangeTimer = undefined
+    if (!batchMode.value) {
+      recompressSingle()
+      return
     }
-  } else {
-    recompressSingle()
-  }
+
+    cancelAllEstimates()
+    const sampled = updateSampling()
+    const key = sampleKey.value
+    jobs.value = jobs.value.map((job) => {
+      if (job.status === 'error') return job
+      const measured = sampled.has(job.id)
+      return {
+        ...job,
+        status: measured ? 'estimating' : 'estimated',
+        samples: [],
+        outputSize: 0,
+        sizeIsExact: false,
+        sampleKey: measured ? '' : key,
+      }
+    })
+    averageRatios.value = []
+    for (const job of jobs.value) {
+      if (sampled.has(job.id)) void estimateJob(job.id)
+    }
+  }, 200)
 }
 
 function changeFormat(format: OutputFormat) {
   if (format === targetFormat.value) return
   targetFormat.value = format
   settings.value = defaultSettings(format)
-  sampleInputsChanged()
+  scheduleSampleReestimate()
 }
 
 function changeControl(key: ControlKey, value: number) {
@@ -376,7 +503,7 @@ function changeControl(key: ControlKey, value: number) {
     refreshEstimates()
     if (!batchMode.value) recompressSingle()
   } else {
-    sampleInputsChanged()
+    scheduleSampleReestimate()
   }
 }
 
@@ -384,10 +511,11 @@ function changeResize(value: number) {
   const next = Number.isFinite(value) && value > 0 ? Math.round(value) : 0
   if (next === maxLongEdge.value) return
   maxLongEdge.value = next
-  sampleInputsChanged()
+  scheduleSampleReestimate()
 }
 
 function compressAll() {
+  cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   for (const job of jobs.value) {
     if (job.status === 'error' || job.status === 'processing') continue
@@ -398,6 +526,7 @@ function compressAll() {
 }
 
 function removeJob(id: string) {
+  cancelEstimate(id)
   nextToken(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (job?.outputUrl) URL.revokeObjectURL(job.outputUrl)
@@ -406,11 +535,16 @@ function removeJob(id: string) {
 
 function clearAll() {
   if (reprocessTimer) clearTimeout(reprocessTimer)
+  if (sampleChangeTimer) clearTimeout(sampleChangeTimer)
+  cancelAllEstimates()
   for (const job of jobs.value) {
     nextToken(job.id)
     if (job.outputUrl) URL.revokeObjectURL(job.outputUrl)
   }
   jobs.value = []
+  averageRatios.value = []
+  sampledIds.value = new Set()
+  notice.value = ''
 }
 
 function triggerDownload(blob: Blob, name: string) {
@@ -422,16 +556,34 @@ function triggerDownload(blob: Blob, name: string) {
   URL.revokeObjectURL(url)
 }
 
-function downloadAll() {
-  const entries = downloadable.value.map((job) => ({
-    name: replaceExtension(job.name, job.outputExtension),
-    data: job.outputBuffer as Uint8Array,
-  }))
-  if (entries.length === 0) return
-  triggerDownload(
-    new Blob([buildZip(entries)], { type: 'application/zip' }),
-    'images.zip',
-  )
+async function downloadAll() {
+  if (zipping.value) return
+  const list = downloadable.value
+  if (list.length === 0) return
+
+  zipping.value = true
+  notice.value = ''
+  try {
+    const zip = await createStreamingZip(getDeviceProfile().maxZipBytes)
+    const used = new Set<string>()
+    for (const job of list) {
+      if (!job.outputBlob) continue
+      const name = uniqueEntryName(
+        replaceExtension(job.name, job.outputExtension),
+        used,
+      )
+      await zip.add(name, job.outputBlob)
+    }
+    const blob = await zip.finish()
+    triggerDownload(blob, 'images.zip')
+  } catch (error) {
+    notice.value =
+      error instanceof ZipTooLargeError
+        ? error.message
+        : 'Could not build the zip.'
+  } finally {
+    zipping.value = false
+  }
 }
 
 async function saveToFolder() {
@@ -440,13 +592,14 @@ async function saveToFolder() {
     const directory = await directoryPicker()
     const used = new Set<string>()
     for (const job of downloadable.value) {
+      if (!job.outputBlob) continue
       const name = uniqueEntryName(
         replaceExtension(job.name, job.outputExtension),
         used,
       )
       const handle = await directory.getFileHandle(name, { create: true })
       const writable = await handle.createWritable()
-      await writable.write(job.outputBuffer as Uint8Array<ArrayBuffer>)
+      await writable.write(job.outputBlob)
       await writable.close()
     }
   } catch (error) {
@@ -526,6 +679,21 @@ export function App() {
             onClick={() => location.reload()}
           >
             Reload
+          </button>
+        </div>
+      )}
+
+      {notice.value && (
+        <div class="update-banner" role="status">
+          <span>{notice.value}</span>
+          <button
+            type="button"
+            class="button button--small"
+            onClick={() => {
+              notice.value = ''
+            }}
+          >
+            Dismiss
           </button>
         </div>
       )}
@@ -629,6 +797,12 @@ export function App() {
               />
             </div>
 
+            {settingsWarning.value && (
+              <p class="field__warning" role="alert">
+                {settingsWarning.value}
+              </p>
+            )}
+
             <div class="panel__row">
               <span class="panel__label">{phaseLabel.value}</span>
               <span class="panel__value">
@@ -672,8 +846,11 @@ export function App() {
                   type="button"
                   class="button button--primary"
                   onClick={downloadAll}
+                  disabled={zipping.value}
                 >
-                  Download all ({downloadable.value.length}) as zip
+                  {zipping.value
+                    ? 'Building zip…'
+                    : `Download all (${downloadable.value.length}) as zip`}
                 </button>
               )}
 
@@ -719,6 +896,7 @@ export function App() {
                     <span
                       class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
                     >
+                      {job.width > 0 && `${job.width}×${job.height}px · `}
                       {formatBytes(job.originalSize)}
                       {job.outputSize > 0 && (
                         <>

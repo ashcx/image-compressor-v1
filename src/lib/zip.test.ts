@@ -1,6 +1,11 @@
 import { unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { buildZip, uniqueEntryName } from './zip'
+import {
+  buildZip,
+  createStreamingZip,
+  uniqueEntryName,
+  ZipTooLargeError,
+} from './zip'
 
 describe('uniqueEntryName', () => {
   it('returns the original name when unused', () => {
@@ -47,5 +52,26 @@ describe('buildZip', () => {
 
   it('produces a valid empty zip', () => {
     expect(Object.keys(unzipSync(buildZip([])))).toEqual([])
+  })
+})
+
+describe('createStreamingZip', () => {
+  it('streams Uint8Array and Blob entries into a valid zip', async () => {
+    const zip = await createStreamingZip(1024 * 1024)
+    await zip.add('a.jpg', new Uint8Array([1, 2, 3]))
+    await zip.add('b.png', new Blob([new Uint8Array([4, 5, 6])]))
+    const blob = await zip.finish()
+
+    const contents = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+    expect(Object.keys(contents).sort()).toEqual(['a.jpg', 'b.png'])
+    expect(Array.from(contents['a.jpg'])).toEqual([1, 2, 3])
+    expect(Array.from(contents['b.png'])).toEqual([4, 5, 6])
+  })
+
+  it('rejects an archive that exceeds the size limit', async () => {
+    const zip = await createStreamingZip(4)
+    await expect(
+      zip.add('big.jpg', new Uint8Array(100)),
+    ).rejects.toBeInstanceOf(ZipTooLargeError)
   })
 })

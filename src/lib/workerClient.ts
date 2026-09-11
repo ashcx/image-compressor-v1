@@ -1,23 +1,14 @@
 import type { OutputFormat, ResizeOptions } from './codecs/types'
+import { getDeviceProfile } from './device'
 import type { ProcessRequest } from './protocol'
-import { type PoolSuccess, WorkerPool } from './workerPool'
-
-const MAX_WORKERS = 8
+import { type PoolPriority, type PoolSuccess, WorkerPool } from './workerPool'
 
 let pool: WorkerPool | null = null
 let counter = 0
 const listeners = new Set<() => void>()
 
 export function resolvePoolSize(): number {
-  if (typeof window !== 'undefined') {
-    const override = new URLSearchParams(window.location.search).get('workers')
-    const parsed = override ? Number.parseInt(override, 10) : Number.NaN
-    if (Number.isFinite(parsed) && parsed > 0)
-      return Math.min(parsed, MAX_WORKERS)
-  }
-  const coreCount =
-    typeof navigator === 'undefined' ? 4 : navigator.hardwareConcurrency || 4
-  return Math.min(coreCount, MAX_WORKERS)
+  return getDeviceProfile().workerCount
 }
 
 function getPool(): WorkerPool {
@@ -58,7 +49,7 @@ export function getPoolStats(): PoolStats {
 }
 
 export interface ProcessJobOptions {
-  fileBuffer: ArrayBuffer
+  file: File
   targetFormat: OutputFormat
   quality?: number
   effort?: number
@@ -66,6 +57,8 @@ export interface ProcessJobOptions {
   resize?: ResizeOptions
   buildEstimate?: boolean
   estimateOnly?: boolean
+  priority?: PoolPriority
+  signal?: AbortSignal
 }
 
 export function processImage(options: ProcessJobOptions): {
@@ -73,24 +66,32 @@ export function processImage(options: ProcessJobOptions): {
   response: Promise<PoolSuccess>
 } {
   const jobId = `job-${++counter}`
-  const request: ProcessRequest = {
-    type: 'process',
-    jobId,
-    fileBuffer: options.fileBuffer,
-    targetFormat: options.targetFormat,
-    quality: options.quality,
-    effort: options.effort,
-    speed: options.speed,
-    resize: options.resize,
-    buildEstimate: options.buildEstimate,
-    estimateOnly: options.estimateOnly,
-  }
 
-  const response = getPool().run({
-    jobId,
-    message: request,
-    transfer: [request.fileBuffer],
-  })
+  const response = getPool().run(
+    {
+      jobId,
+      signal: options.signal,
+      prepare: async () => {
+        // Read the file only when a worker is free; the pool holds `File`
+        // handles, not full buffers, while the task is queued.
+        const fileBuffer = await options.file.arrayBuffer()
+        const message: ProcessRequest = {
+          type: 'process',
+          jobId,
+          fileBuffer,
+          targetFormat: options.targetFormat,
+          quality: options.quality,
+          effort: options.effort,
+          speed: options.speed,
+          resize: options.resize,
+          buildEstimate: options.buildEstimate,
+          estimateOnly: options.estimateOnly,
+        }
+        return { message, transfer: [fileBuffer] }
+      },
+    },
+    options.priority ?? 'high',
+  )
 
   return { jobId, response }
 }

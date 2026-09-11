@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { interpolate, scaleToFullSize } from './estimate'
+import {
+  averageRatioSamples,
+  deriveEstimate,
+  interpolate,
+  sampleSize,
+  scaleToFullSize,
+} from './estimate'
 
 const samples = [
   { quality: 10, bytes: 1000 },
@@ -54,5 +60,64 @@ describe('scaleToFullSize', () => {
   it('clamps a near-flat exponent to the minimum', () => {
     // raw beta ~= 0 -> clamped to 0.35 -> 1000 * 4^0.35 ~= 1625
     expect(scaleToFullSize(1000, 4000, 999, 1000, 16000)).toBe(1625)
+  })
+})
+
+describe('sampleSize', () => {
+  it('measures every image in small batches', () => {
+    expect(sampleSize(1)).toBe(1)
+    expect(sampleSize(30)).toBe(30)
+  })
+
+  it('caps large batches at 20 samples, with a floor of 5', () => {
+    expect(sampleSize(31)).toBe(5)
+    expect(sampleSize(100)).toBe(10)
+    expect(sampleSize(200)).toBe(20)
+    expect(sampleSize(10_000)).toBe(20)
+  })
+})
+
+describe('averageRatioSamples', () => {
+  const curves = [
+    {
+      originalSize: 1000,
+      samples: [
+        { quality: 50, bytes: 200 },
+        { quality: 100, bytes: 500 },
+      ],
+    },
+    {
+      originalSize: 2000,
+      samples: [
+        { quality: 50, bytes: 600 },
+        { quality: 100, bytes: 1400 },
+      ],
+    },
+  ]
+
+  it('averages each image ratio at every quality', () => {
+    expect(averageRatioSamples(curves)).toEqual([
+      { quality: 50, bytes: 0.25 },
+      { quality: 100, bytes: 0.6 },
+    ])
+  })
+
+  it('returns an empty curve without samples', () => {
+    expect(averageRatioSamples([])).toEqual([])
+  })
+})
+
+describe('deriveEstimate', () => {
+  it('scales the averaged ratio by the original size', () => {
+    const ratios = [
+      { quality: 50, bytes: 0.25 },
+      { quality: 100, bytes: 0.6 },
+    ]
+    expect(deriveEstimate(4000, ratios, 50)).toBe(1000)
+    expect(deriveEstimate(4000, ratios, 75)).toBe(1700)
+  })
+
+  it('returns zero when there is no ratio curve', () => {
+    expect(deriveEstimate(4000, [], 75)).toBe(0)
   })
 })

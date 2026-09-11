@@ -119,10 +119,7 @@ export async function buildEstimateSamples(
   return samples
 }
 
-export function interpolate(
-  samples: EstimateSample[],
-  quality: number,
-): number {
+function interpolateRaw(samples: EstimateSample[], quality: number): number {
   const first = samples[0]
   const last = samples[samples.length - 1]
   if (quality <= first.quality) return first.bytes
@@ -133,9 +130,64 @@ export function interpolate(
     const upper = samples[index]
     if (quality <= upper.quality) {
       const ratio = (quality - lower.quality) / (upper.quality - lower.quality)
-      return Math.round(lower.bytes + ratio * (upper.bytes - lower.bytes))
+      return lower.bytes + ratio * (upper.bytes - lower.bytes)
     }
   }
 
   return last.bytes
+}
+
+export function interpolate(
+  samples: EstimateSample[],
+  quality: number,
+): number {
+  return Math.round(interpolateRaw(samples, quality))
+}
+
+const FULL_ESTIMATE_LIMIT = 30
+const MAX_SAMPLES = 20
+const MIN_SAMPLES = 5
+
+/**
+ * For large batches we only measure a sample of images and extrapolate, so the
+ * estimate cost stays bounded regardless of batch size.
+ */
+export function sampleSize(total: number): number {
+  if (total <= FULL_ESTIMATE_LIMIT) return total
+  return Math.min(MAX_SAMPLES, Math.max(MIN_SAMPLES, Math.round(total * 0.1)))
+}
+
+export interface CurveSample {
+  samples: EstimateSample[]
+  originalSize: number
+}
+
+/**
+ * Averages the per-image compression ratio at each sampled quality, so the
+ * result can be applied to unmeasured images (`ratio x originalSize`).
+ */
+export function averageRatioSamples(curves: CurveSample[]): EstimateSample[] {
+  const base = curves[0]?.samples
+  if (!base || base.length === 0) return []
+
+  return base.map((sample, index) => {
+    let sum = 0
+    let count = 0
+    for (const curve of curves) {
+      const point = curve.samples[index]
+      if (!point || curve.originalSize <= 0) continue
+      sum += point.bytes / curve.originalSize
+      count += 1
+    }
+    return { quality: sample.quality, bytes: count > 0 ? sum / count : 0 }
+  })
+}
+
+export function deriveEstimate(
+  originalSize: number,
+  ratios: EstimateSample[],
+  quality: number,
+): number {
+  if (ratios.length === 0) return 0
+  return Math.round(originalSize * interpolateRaw(ratios, quality))
 }

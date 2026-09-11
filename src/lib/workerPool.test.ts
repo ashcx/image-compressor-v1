@@ -226,4 +226,83 @@ describe('WorkerPool', () => {
 
     pool.terminate()
   })
+
+  it('dispatches high-priority jobs before queued low-priority jobs', async () => {
+    const order: string[] = []
+    const releases: Array<() => void> = []
+    const pool = new WorkerPool({
+      size: 1,
+      createWorker: () =>
+        new FakeWorker((worker, message) => {
+          order.push(message.jobId)
+          releases.push(() => worker.respond(resultFor(message.jobId)))
+        }),
+    })
+
+    const first = pool.run(task('a'), 'high')
+    const low = pool.run(task('b'), 'low')
+    const high = pool.run(task('c'), 'high')
+
+    releases.shift()?.()
+    await first
+    releases.shift()?.()
+    await high
+    releases.shift()?.()
+    await low
+
+    expect(order).toEqual(['a', 'c', 'b'])
+    pool.terminate()
+  })
+
+  it('removes a queued job when its signal aborts', async () => {
+    const pool = new WorkerPool({
+      size: 1,
+      createWorker: () => new FakeWorker(() => {}),
+    })
+
+    const running = pool.run(task('a'))
+    const controller = new AbortController()
+    const queued = pool.run({ ...task('b'), signal: controller.signal }, 'low')
+    controller.abort()
+
+    await expect(queued).rejects.toThrow('Task cancelled')
+    expect(pool.queuedCount).toBe(0)
+
+    pool.terminate()
+    await Promise.allSettled([running])
+  })
+
+  it('materializes a queued task only when a worker is free', async () => {
+    const releases: Array<() => void> = []
+    const pool = new WorkerPool({
+      size: 1,
+      createWorker: () =>
+        new FakeWorker((worker, message) => {
+          releases.push(() => worker.respond(resultFor(message.jobId)))
+        }),
+    })
+
+    const first = pool.run(task('a'))
+    let prepared = 0
+    const second = pool.run({
+      jobId: 'b',
+      prepare: async () => {
+        prepared += 1
+        return { message: task('b').message as WorkerRequest }
+      },
+    })
+
+    expect(prepared).toBe(0)
+    expect(pool.queuedCount).toBe(1)
+
+    releases.shift()?.()
+    await first
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(prepared).toBe(1)
+    expect(pool.busyCount).toBe(1)
+
+    releases.shift()?.()
+    await second
+    pool.terminate()
+  })
 })

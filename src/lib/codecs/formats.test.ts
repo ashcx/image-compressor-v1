@@ -24,4 +24,22 @@ describe('format specs', () => {
       expect(FORMAT_SPECS[format].lossless).toBe(format === 'png')
     }
   })
+
+  it('ships the tuned defaults and bounds for the codec controls', () => {
+    const control = (format: 'jpeg' | 'webp' | 'avif' | 'jxl', key: string) =>
+      FORMAT_SPECS[format].controls.find((entry) => entry.key === key)
+
+    expect(control('avif', 'speed')).toMatchObject({
+      min: 6,
+      max: 10,
+      default: 8,
+    })
+    expect(control('jxl', 'quality')).toMatchObject({
+      min: 1,
+      max: 8,
+      default: 5,
+    })
+    expect(control('jpeg', 'quality')).toMatchObject({ min: 40, max: 95 })
+    expect(control('webp', 'quality')).toMatchObject({ min: 40, max: 95 })
+  })
 })
