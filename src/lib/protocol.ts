@@ -1,4 +1,4 @@
-import type { OutputFormat } from './codecs/types'
+import type { OutputFormat, ResizeOptions } from './codecs/types'
 import type { EstimateSample } from './estimate'
 
 export interface ProcessRequest {
@@ -7,6 +7,9 @@ export interface ProcessRequest {
   fileBuffer: ArrayBuffer
   targetFormat: OutputFormat
   quality?: number
+  effort?: number
+  speed?: number
+  resize?: ResizeOptions
   buildEstimate?: boolean
   estimateOnly?: boolean
 }

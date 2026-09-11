@@ -1,3 +1,4 @@
+import { FORMAT_SPECS } from './codecs/formats'
 import type { OutputFormat } from './codecs/types'
 import { encodeImageData } from './convert'
 import { downscaleImageData } from './image'
@@ -51,9 +52,15 @@ export function scaleToFullSize(
   return Math.round(largeBytes * (fullPixels / largePixels) ** beta)
 }
 
+export interface EstimateOptions {
+  effort?: number
+  speed?: number
+}
+
 export async function buildEstimateSamples(
   imageData: ImageData,
   format: OutputFormat,
+  options: EstimateOptions = {},
 ): Promise<EstimateSample[]> {
   const small = downscaleImageData(imageData, SMALL_LONG_EDGE)
   const large = downscaleImageData(imageData, LARGE_LONG_EDGE)
@@ -62,12 +69,39 @@ export async function buildEstimateSamples(
   const largePixels = large.width * large.height
   const fullPixels = imageData.width * imageData.height
 
+  const measure = async (data: ImageData, quality: number) =>
+    (
+      await encodeImageData(data, format, {
+        quality,
+        effort: options.effort,
+        speed: options.speed,
+      })
+    ).buffer.byteLength
+
+  // Lossless formats (PNG) ignore quality, so one measurement per thumbnail is
+  // enough; expose it across the whole quality range so interpolation works.
+  if (FORMAT_SPECS[format].lossless) {
+    const smallBytes = await measure(small, 100)
+    const largeBytes = await measure(large, 100)
+    const bytes = Math.round(
+      scaleToFullSize(
+        largeBytes,
+        largePixels,
+        smallBytes,
+        smallPixels,
+        fullPixels,
+      ) * SIZE_CALIBRATION,
+    )
+    return [
+      { quality: 0, bytes },
+      { quality: 100, bytes },
+    ]
+  }
+
   const samples: EstimateSample[] = []
   for (const quality of SAMPLE_QUALITIES) {
-    const smallBytes = (await encodeImageData(small, format, { quality }))
-      .buffer.byteLength
-    const largeBytes = (await encodeImageData(large, format, { quality }))
-      .buffer.byteLength
+    const smallBytes = await measure(small, quality)
+    const largeBytes = await measure(large, quality)
     samples.push({
       quality,
       bytes: Math.round(
