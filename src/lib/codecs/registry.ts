@@ -108,12 +108,13 @@ const loaders: Record<OutputFormat, CodecLoader> = {
         )
       }
       // No native WebP encoder (Safari): fall back to WASM, fetched only now.
+      // method 1 is ~3x faster than the default 4 for ~10% larger files.
       const { encode } = await import('@jsquash/webp')
       return wrap(
-        await encode(
-          toImageData(source),
-          options?.quality != null ? { quality: options.quality } : {},
-        ),
+        await encode(toImageData(source), {
+          ...(options?.quality != null ? { quality: options.quality } : {}),
+          method: 1,
+        }),
         'image/webp',
       )
     },
