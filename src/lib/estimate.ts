@@ -57,6 +57,10 @@ export interface EstimateOptions {
   effort?: number
   speed?: number
   mode?: number
+  /** True pixel size of the image being estimated. Estimates may run on a
+   * scaled decode, so the decoded `source` size must not be used here. */
+  fullWidth?: number
+  fullHeight?: number
 }
 
 export async function buildEstimateSamples(
@@ -69,7 +73,10 @@ export async function buildEstimateSamples(
 
   const smallPixels = small.width * small.height
   const largePixels = large.width * large.height
-  const fullPixels = source.width * source.height
+  const fullPixels =
+    options.fullWidth && options.fullHeight
+      ? options.fullWidth * options.fullHeight
+      : source.width * source.height
 
   const measure = async (data: ImageSource, quality: number) =>
     (
