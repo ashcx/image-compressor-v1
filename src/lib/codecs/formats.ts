@@ -88,12 +88,12 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
           {
             label: 'Lossless Compressed (slow)',
             value: 1,
-            hint: 'oxipng L0 — 30–50% smaller, still lossless.',
+            hint: 'Slow to process, but fully lossless (30–50% smaller).',
           },
           {
             label: 'Compressed (lower quality, slowest)',
             value: 2,
-            hint: 'Reduces to 256 colours (lossy). Best for screenshots/graphics; may band photos.',
+            hint: 'Slow. Not recommended for photos — use JPEG for those. Can be acceptable for graphics with solid colours.',
           },
         ],
       },
