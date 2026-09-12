@@ -76,13 +76,13 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
     (ua.includes('Macintosh') && (signals.maxTouchPoints ?? 0) >= 2)
   ) {
     // Temporary tier until Sprint 8.1 identifies iPad Pro models directly:
-    // 6 cores or fewer is treated as a base iPad (leave a core for the UI);
-    // more than 6 is an M-series iPad Pro, which gets the full budget for
-    // light codecs. Heavy codecs still run at half via heavyWorkerCount().
-    const workerCount =
-      cores > 6
-        ? Math.max(1, Math.min(cores, MAX_WORKERS))
-        : Math.max(1, Math.min(cores - 1, 4))
+    // 6 cores or fewer is treated as a base iPad, more than 6 as an M-series
+    // iPad Pro. iPads get the full core budget for light codecs (no reserved
+    // core) because Safari often reports only the active cores, and
+    // `cores - 1` collapses a 2-core report to a single worker. Heavy codecs
+    // still run at half via heavyWorkerCount().
+    const cap = cores > 6 ? MAX_WORKERS : 4
+    const workerCount = Math.max(1, Math.min(cores, cap))
     return {
       workerCount,
       constrained: true,
