@@ -37,6 +37,7 @@ export default defineConfig(() => {
         '@jsquash/jxl',
         '@jsquash/oxipng',
         '@jsquash/png',
+        '@jsquash/webp',
         'imagequant',
       ],
     },

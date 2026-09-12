@@ -1,5 +1,6 @@
 import { computed, signal } from '@preact/signals'
 import type { JSX } from 'preact'
+import { memo } from 'preact/compat'
 import { useEffect, useRef } from 'preact/hooks'
 import {
   type ControlKey,
@@ -223,6 +224,12 @@ const needsCompress = computed(() =>
       job.status === 'estimated' ||
       (job.status === 'done' && job.outputKey !== outputKey.value),
   ),
+)
+
+// Settings and downloads are frozen while anything is encoding, so the
+// estimate/compress pipeline cannot be mutated mid-flight.
+const busy = computed(
+  () => zipping.value || jobs.value.some((job) => job.status === 'processing'),
 )
 
 function estimateFor(job: BatchJob, quality: number): number {
@@ -571,7 +578,7 @@ function scheduleSampleReestimate() {
 }
 
 function changeFormat(format: OutputFormat) {
-  if (format === targetFormat.value) return
+  if (busy.value || format === targetFormat.value) return
   targetFormat.value = format
   settings.value = defaultSettings(format)
   applyWorkerBudget()
@@ -582,7 +589,7 @@ function changeFormat(format: OutputFormat) {
 }
 
 function changeControl(key: ControlKey, value: number) {
-  if (settings.value[key] === value) return
+  if (busy.value || settings.value[key] === value) return
   settings.value = { ...settings.value, [key]: value }
   if (key === 'quality') {
     refreshEstimates()
@@ -594,6 +601,7 @@ function changeControl(key: ControlKey, value: number) {
 }
 
 function changeResize(value: number) {
+  if (busy.value) return
   const next = Number.isFinite(value) && value > 0 ? Math.round(value) : 0
   if (next === maxLongEdge.value) return
   maxLongEdge.value = next
@@ -601,6 +609,7 @@ function changeResize(value: number) {
 }
 
 function compressAll() {
+  if (busy.value) return
   cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   for (const job of jobs.value) {
@@ -719,6 +728,104 @@ function statusLabel(job: BatchJob): string {
   }
 }
 
+// Reads poolStats itself so frequent pool notifications re-render only this
+// meter, not the whole job list.
+function PoolMeter() {
+  return (
+    <span class="panel__value">
+      workers busy: {poolStats.value.busy}/{poolStats.value.size}
+    </span>
+  )
+}
+
+interface JobRowProps {
+  job: BatchJob
+  current: boolean
+  label: string
+  busy: boolean
+  onRemove: (id: string) => void
+}
+
+// Memoized so an update to one job does not re-render every other row.
+const JobRow = memo(function JobRow({
+  job,
+  current,
+  label,
+  busy,
+  onRemove,
+}: JobRowProps) {
+  return (
+    <li class="job">
+      <div class="job__thumb">
+        {job.status === 'processing' ? (
+          <span class="job__spinner" />
+        ) : job.status === 'error' ? (
+          <span class="job__icon job__icon--error">!</span>
+        ) : job.outputUrl ? (
+          <img
+            class={current ? '' : 'job__thumb--stale'}
+            src={job.outputUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        ) : job.status === 'estimated' ? (
+          <span class="job__icon job__icon--ready">≈</span>
+        ) : (
+          <span class="job__icon job__icon--idle">…</span>
+        )}
+      </div>
+      <div class="job__info">
+        <span class="job__name" title={job.name}>
+          {job.name}
+        </span>
+        <span
+          class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
+        >
+          {job.width > 0 && `${job.width}×${job.height}px · `}
+          {formatBytes(job.originalSize)}
+          {job.outputSize > 0 && (
+            <>
+              {' → '}
+              {job.sizeIsExact ? '' : '~'}
+              {formatBytes(job.outputSize)} (
+              {savingsLabel(job.originalSize, job.outputSize)})
+            </>
+          )}
+          {label && ` · ${label}`}
+        </span>
+      </div>
+      <div class="job__actions">
+        {current && job.outputUrl ? (
+          busy ? (
+            <button type="button" class="button button--small" disabled>
+              Download
+            </button>
+          ) : (
+            <a
+              class="button button--small"
+              href={job.outputUrl}
+              download={replaceExtension(job.name, job.outputExtension)}
+            >
+              Download
+            </a>
+          )
+        ) : null}
+        <button
+          type="button"
+          class="icon-button"
+          title="Remove"
+          aria-label={`Remove ${job.name}`}
+          disabled={busy}
+          onClick={() => onRemove(job.id)}
+        >
+          ×
+        </button>
+      </div>
+    </li>
+  )
+})
+
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -741,13 +848,13 @@ export function App() {
     event.currentTarget.value = ''
   }
 
-  function onDrop(event: JSX.TargetedDragEvent<HTMLButtonElement>) {
+  function onDrop(event: JSX.TargetedDragEvent<HTMLElement>) {
     event.preventDefault()
     isDragging.value = false
     addFiles(event.dataTransfer?.files ?? null)
   }
 
-  function onDragOver(event: JSX.TargetedDragEvent<HTMLButtonElement>) {
+  function onDragOver(event: JSX.TargetedDragEvent<HTMLElement>) {
     event.preventDefault()
     isDragging.value = true
   }
@@ -759,7 +866,14 @@ export function App() {
   )
 
   return (
-    <main class="app">
+    <main
+      class="app"
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDragLeave={() => {
+        isDragging.value = false
+      }}
+    >
       {newVersion.value && (
         <div class="update-banner" role="status">
           <span>A new version is available.</span>
@@ -796,22 +910,19 @@ export function App() {
         </p>
       </header>
 
-      <button
-        type="button"
-        class={`dropzone${isDragging.value ? ' dropzone--active' : ''}`}
-        onClick={() => inputRef.current?.click()}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        onDragLeave={() => {
-          isDragging.value = false
-        }}
-      >
-        <span class="dropzone__title">Drop images here</span>
-        <span class="dropzone__hint">
-          or click to choose files (JPEG, PNG, WebP, AVIF, JXL). Single images
-          compress immediately; batches are estimated first.
-        </span>
-      </button>
+      {jobList.length === 0 && (
+        <button
+          type="button"
+          class={`dropzone${isDragging.value ? ' dropzone--active' : ''}`}
+          onClick={() => inputRef.current?.click()}
+        >
+          <span class="dropzone__title">Drop images here</span>
+          <span class="dropzone__hint">
+            or click to choose files (JPEG, PNG, WebP, AVIF, JXL). Single images
+            compress immediately; batches are estimated first.
+          </span>
+        </button>
+      )}
 
       <input
         ref={inputRef}
@@ -830,6 +941,7 @@ export function App() {
               <select
                 class="select"
                 value={targetFormat.value}
+                disabled={busy.value}
                 onChange={(event) =>
                   changeFormat(event.currentTarget.value as OutputFormat)
                 }
@@ -858,6 +970,7 @@ export function App() {
                     max={control.max}
                     step={control.step}
                     value={settings.value[control.key]}
+                    disabled={busy.value}
                     onInput={(event) =>
                       changeControl(
                         control.key,
@@ -870,6 +983,7 @@ export function App() {
                     class="select"
                     aria-label={control.label}
                     value={String(settings.value[control.key])}
+                    disabled={busy.value}
                     onChange={(event) =>
                       changeControl(
                         control.key,
@@ -900,6 +1014,7 @@ export function App() {
                 min={0}
                 placeholder="original"
                 value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
+                disabled={busy.value}
                 onChange={(event) =>
                   changeResize(Number(event.currentTarget.value))
                 }
@@ -921,9 +1036,7 @@ export function App() {
 
             <div class="panel__row">
               <span class="panel__label">{phaseLabel.value}</span>
-              <span class="panel__value">
-                workers busy: {poolStats.value.busy}/{poolStats.value.size}
-              </span>
+              <PoolMeter />
             </div>
 
             {batchMode.value && total.value > 0 && (
@@ -949,6 +1062,7 @@ export function App() {
               <button
                 type="button"
                 class="button button--primary"
+                disabled={busy.value}
                 onClick={compressAll}
               >
                 Compress{' '}
@@ -957,12 +1071,21 @@ export function App() {
             )}
 
             <div class="panel__actions">
+              <button
+                type="button"
+                class="button"
+                disabled={busy.value}
+                onClick={() => inputRef.current?.click()}
+              >
+                Add images
+              </button>
+
               {canDownloadAll.value && (
                 <button
                   type="button"
                   class="button button--primary"
                   onClick={downloadAll}
-                  disabled={zipping.value}
+                  disabled={zipping.value || busy.value}
                 >
                   {zipping.value
                     ? 'Building zip…'
@@ -971,86 +1094,38 @@ export function App() {
               )}
 
               {canDownloadAll.value && supportsDirectoryPicker && (
-                <button type="button" class="button" onClick={saveToFolder}>
+                <button
+                  type="button"
+                  class="button"
+                  disabled={busy.value}
+                  onClick={saveToFolder}
+                >
                   Save to folder…
                 </button>
               )}
 
-              <button type="button" class="button" onClick={clearAll}>
+              <button
+                type="button"
+                class="button"
+                disabled={busy.value}
+                onClick={clearAll}
+              >
                 Clear all
               </button>
             </div>
           </section>
 
           <ul class="jobs">
-            {jobList.map((job) => {
-              const current = isCurrent(job)
-              const label = statusLabel(job)
-              return (
-                <li class="job" key={job.id}>
-                  <div class="job__thumb">
-                    {job.status === 'processing' ? (
-                      <span class="job__spinner" />
-                    ) : job.status === 'error' ? (
-                      <span class="job__icon job__icon--error">!</span>
-                    ) : job.outputUrl ? (
-                      <img
-                        class={current ? '' : 'job__thumb--stale'}
-                        src={job.outputUrl}
-                        alt=""
-                      />
-                    ) : job.status === 'estimated' ? (
-                      <span class="job__icon job__icon--ready">≈</span>
-                    ) : (
-                      <span class="job__icon job__icon--idle">…</span>
-                    )}
-                  </div>
-                  <div class="job__info">
-                    <span class="job__name" title={job.name}>
-                      {job.name}
-                    </span>
-                    <span
-                      class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
-                    >
-                      {job.width > 0 && `${job.width}×${job.height}px · `}
-                      {formatBytes(job.originalSize)}
-                      {job.outputSize > 0 && (
-                        <>
-                          {' → '}
-                          {job.sizeIsExact ? '' : '~'}
-                          {formatBytes(job.outputSize)} (
-                          {savingsLabel(job.originalSize, job.outputSize)})
-                        </>
-                      )}
-                      {label && ` · ${label}`}
-                    </span>
-                  </div>
-                  <div class="job__actions">
-                    {current && job.outputUrl && (
-                      <a
-                        class="button button--small"
-                        href={job.outputUrl}
-                        download={replaceExtension(
-                          job.name,
-                          job.outputExtension,
-                        )}
-                      >
-                        Download
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      class="icon-button"
-                      title="Remove"
-                      aria-label={`Remove ${job.name}`}
-                      onClick={() => removeJob(job.id)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </li>
-              )
-            })}
+            {jobList.map((job) => (
+              <JobRow
+                key={job.id}
+                job={job}
+                current={isCurrent(job)}
+                label={statusLabel(job)}
+                busy={busy.value}
+                onRemove={removeJob}
+              />
+            ))}
           </ul>
         </>
       )}

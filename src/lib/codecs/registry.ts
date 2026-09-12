@@ -52,9 +52,10 @@ function wrap(buffer: ArrayBuffer, type: string): Blob {
   return new Blob([buffer], { type })
 }
 
-// JPEG and WebP are encoded exclusively with the browser's native encoder, so
-// no codec package is fetched or instantiated for them. AVIF/JXL (and the PNG
-// compression modes) pull their WASM in lazily, only when selected.
+// JPEG and WebP use the browser's native encoder when it is available, so no
+// codec package is fetched for them on Chromium/Firefox. Safari has no native
+// WebP encoder, so the WASM encoder is imported lazily only in that case.
+// AVIF/JXL (and the PNG compression modes) pull their WASM in lazily too.
 const loaders: Record<OutputFormat, CodecLoader> = {
   jpeg: async () => ({
     format: 'jpeg',
@@ -99,10 +100,22 @@ const loaders: Record<OutputFormat, CodecLoader> = {
     mimeType: 'image/webp',
     extension: 'webp',
     encode: async (source, options) => {
-      if (!(await canEncodeNatively('image/webp'))) {
-        throw new Error('WebP encoding is not supported in this browser')
+      if (await canEncodeNatively('image/webp')) {
+        return encodeCanvas(
+          source,
+          'image/webp',
+          (options?.quality ?? 75) / 100,
+        )
       }
-      return encodeCanvas(source, 'image/webp', (options?.quality ?? 75) / 100)
+      // No native WebP encoder (Safari): fall back to WASM, fetched only now.
+      const { encode } = await import('@jsquash/webp')
+      return wrap(
+        await encode(
+          toImageData(source),
+          options?.quality != null ? { quality: options.quality } : {},
+        ),
+        'image/webp',
+      )
     },
   }),
   avif: async () => {

@@ -76,10 +76,15 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
     (ua.includes('Macintosh') && (signals.maxTouchPoints ?? 0) >= 2)
   ) {
     // Temporary tier until Sprint 8.1 identifies iPad Pro models directly:
-    // 6 cores or fewer is treated as a base iPad, more as a Pro-class device.
-    const cap = cores <= 6 ? 4 : MAX_WORKERS
+    // 6 cores or fewer is treated as a base iPad (leave a core for the UI);
+    // more than 6 is an M-series iPad Pro, which gets the full budget for
+    // light codecs. Heavy codecs still run at half via heavyWorkerCount().
+    const workerCount =
+      cores > 6
+        ? Math.max(1, Math.min(cores, MAX_WORKERS))
+        : Math.max(1, Math.min(cores - 1, 4))
     return {
-      workerCount: Math.max(1, Math.min(cores - 1, cap)),
+      workerCount,
       constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }

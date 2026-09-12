@@ -162,6 +162,13 @@ body {
   outline-offset: 1px;
 }
 
+.select:disabled,
+.input:disabled,
+input[type="range"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .panel__actions {
   display: flex;
   flex-wrap: wrap;
