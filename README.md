@@ -89,6 +89,8 @@ The main source areas are:
   trade-offs.
 - [Performance](./docs/PERFORMANCE.md) — measured encode times, output sizes, memory model,
   worker scaling, estimate accuracy, and remaining measurement gaps.
+- [Scrum TODO roadmap](./docs/TODO.md) — sprint backlog, story points, acceptance criteria,
+  tests, parallel work, and the HEIC delivery plan.
 
 ## Current validation status
 
