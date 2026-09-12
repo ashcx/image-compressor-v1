@@ -1,73 +1,45 @@
 # Image Compressor
 
-Image Compressor is a browser app for converting and resizing images in batches.
-It runs locally in your browser: image files are processed on your device and are
-not uploaded to an application server.
+Image Compressor is a browser app for converting and resizing images in batches. It is
+built around one goal: make image processing fast, private, and useful on the device you
+already have.
 
 [Open the live app](https://ashcx.github.io/image-compressor-v1/)
 
-## Key features
+## Why use it?
 
-### Built for speed
+- **Speed-first processing.** Common formats prefer native browser encoding, while separate
+  images are processed in parallel background workers that adapt to the device's hardware.
+- **No upload required.** Image bytes stay on your device. There is no upload step, server
+  queue, or network transfer of the images.
+- **Control over the result.** Choose the output format, quality, compression mode, and
+  maximum image size.
+- **Built for batches.** Add several images, see per-image estimates and progress, then
+  download results individually, as a ZIP, or into a folder where supported.
 
-Image Compressor is designed to be one of the fastest image-processing tools available in
-the browser. It uses the browser's native encoders for common formats where available,
-including JPEG, WebP, and the fast default PNG mode, then processes independent images in
-parallel background workers.
+The application is designed to be one of the fastest image-processing tools available in a
+browser. The architecture supports that goal, but the absolute fastest-tool claim will be
+confirmed with real-world benchmarks across browsers and devices.
 
-The worker pool adapts to the device's available hardware instead of processing a batch one
-image at a time. This keeps the interface responsive while making better use of modern
-multi-core devices. The fastest-tool claim is the product goal and will be confirmed with
-real-world benchmarks across browsers and devices.
-
-### No upload, no waiting on a server
-
-Images stay on your device. There is no upload step, no server queue, and no network transfer
-of the image data. This improves privacy and can be faster for large batches or slower
-connections.
-
-### Control over the result
-
-Choose the output format, quality, compression mode, and maximum image size. You can decide
-whether the priority is smaller files, higher visual quality, lossless output, or speed.
-
-### Serious batch processing
-
-Add several images and process them together through the parallel pipeline. Each image is
-tracked separately, estimates are shown before processing, and the completed files can be
-downloaded individually, as a ZIP, or directly into a folder where supported.
-
-## What it does
-
-- Accepts common image files selected from your device or dropped onto the page.
-- Converts images to JPEG, PNG, WebP, or AVIF.
-- Lets you choose format-specific quality or compression settings.
-- Can resize images by setting a maximum long edge.
-- Processes batches using background workers so the page stays responsive.
-- Shows an estimated output size before processing and the actual size afterwards.
-- Downloads one result at a time, downloads the batch as a ZIP, or saves a batch to a folder when the browser supports that feature.
-
-The app does not edit, crop, watermark, catalogue, or store an image history. HEIC,
-GIF animation, TIFF, and SVG are not current output targets.
-
-## Quick start
+## How to use it
 
 1. Open the app and choose **Select images**, or drop images onto the drop area.
-2. Choose the output format and adjust its options if needed.
-3. Review the estimates. For several files, select **Compress all**.
-4. Download individual results, download a ZIP, or use **Save to folder** where available.
+2. Choose the output format and adjust its options.
+3. Review the estimated sizes. For several files, select **Compress all**.
+4. Download individual results, download the batch as a ZIP, or use **Save to folder** where
+   the browser supports it.
 
-The estimates are guidance, not a guarantee. The final size depends on the image content,
-dimensions, selected format, and browser codec.
+Estimates are guidance, not a guarantee. The final size depends on image content, dimensions,
+selected settings, and the browser codec.
 
-## Choosing a format
+## Output formats
 
-| Format | Good for | Notes |
+| Format | Best for | Important details |
 | --- | --- | --- |
 | JPEG | Photographs and broad compatibility | Lossy; does not preserve transparency |
-| PNG | Screenshots, graphics, and transparency | Lossless by default; a lossy palette mode is also available |
+| PNG | Screenshots, graphics, and transparency | Native lossless mode by default; slower lossless and lossy modes are available |
 | WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality |
-| AVIF | Very small modern web images | Often gives excellent size, but encoding is slower and browser support is newer |
+| AVIF | Very small modern web images | Can produce excellent sizes, but encoding is slower and browser support is newer |
 
 If an output is larger than the original, that is expected for some images and settings.
 Compression is not always a size reduction.
@@ -75,13 +47,16 @@ Compression is not always a size reduction.
 ## Privacy and browser support
 
 The conversion pipeline runs in the browser using Web Workers and WebAssembly or native
-browser image encoders. The application does not send selected image bytes to a server.
-The hosting service only delivers the app's static files.
+browser image encoders. The application does not send selected image bytes to a server; the
+hosting service only delivers the app's static files.
 
-The core workflow is intended for recent desktop and mobile versions of Chrome, Firefox,
-and Safari. Browser capabilities differ, especially for AVIF, large batches, folder saving,
-and available memory. The ZIP download is the compatibility fallback when folder saving is
-not available.
+The core workflow is intended for recent desktop and mobile versions of Chrome, Firefox, and
+Safari. Browser capabilities differ, especially for AVIF, large batches, folder saving, and
+available memory. ZIP download is the compatibility fallback when folder saving is not
+available.
+
+The app does not edit, crop, watermark, catalogue, or store an image history. HEIC, animated
+GIF, TIFF, and SVG are not current output targets.
 
 ## For developers
 
@@ -97,8 +72,8 @@ npm run build     # typecheck and create the production build
 npm run preview   # serve the production build locally
 ```
 
-The project is a Vite + TypeScript + Preact application. GitHub Pages deploys the build
-from `main` through the workflow in `.github/workflows/pages.yml`.
+The project is a Vite + TypeScript + Preact application. GitHub Pages deploys the build from
+`main` through `.github/workflows/pages.yml`.
 
 The main source areas are:
 
@@ -108,21 +83,24 @@ The main source areas are:
 - `src/workers/` — decode, resize, estimate, and encode work away from the UI thread
 - `src/lib/*.test.ts` — unit tests for the non-UI modules
 
-The detailed pipeline and the reasons behind the main architecture decisions are in
-[Architecture](./docs/ARCHITECTURE.md). The measured encode times, output sizes,
-memory model, and device worker-scaling data are in
-[Performance](./docs/PERFORMANCE.md).
+## Further documentation
+
+- [Architecture](./docs/ARCHITECTURE.md) — the processing pipeline, design choices, and
+  trade-offs.
+- [Performance](./docs/PERFORMANCE.md) — measured encode times, output sizes, memory model,
+  worker scaling, estimate accuracy, and remaining measurement gaps.
 
 ## Current validation status
 
-The automated unit-test, typecheck, lint, and production-build commands are maintained as
-the local quality baseline. The most important browser-specific risks are codec support,
-large-memory behavior, folder saving, and cross-device differences; these need to be
-checked against the actual release build when making a release claim.
+The automated unit-test, typecheck, lint, and production-build commands are the local quality
+baseline. Browser-specific release confidence still requires checking codec support,
+large-memory behavior, folder saving, and cross-device differences on the actual release
+build.
 
 ## Known limitations
 
-- Browser memory limits still constrain very large images and batches.
+- Browser memory limits constrain very large images and batches.
 - AVIF and some PNG modes can be substantially slower than JPEG or WebP.
 - Folder saving requires a browser File System Access API; otherwise use the ZIP download.
-- A ZIP stores image bytes without attempting to recompress them, so its size is close to the combined output files plus ZIP metadata.
+- A ZIP stores image bytes without attempting to recompress them, so its size is close to the
+  combined output files plus ZIP metadata.
