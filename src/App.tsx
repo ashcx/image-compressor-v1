@@ -178,12 +178,8 @@ const settingsWarning = computed(() => {
   const format = targetFormat.value
   const values = settings.value
 
-  if (total.value > 5 && format === 'avif' && values.speed <= 6) {
-    return 'AVIF below speed 7 can take a very long time and may hit memory errors on large batches. Use speed 7 or higher for big batches.'
-  }
-  const heavy = isHeavyFormat(format, values.mode)
-  if (total.value > 50 && heavy) {
-    return 'Large batches of this format can use a lot of memory. Consider compressing in smaller groups.'
+  if (format === 'avif' && values.speed <= 6) {
+    return 'AVIF at the Slow preset can take a very long time to process. Use Balanced or Fast for better performance.'
   }
   return ''
 })
