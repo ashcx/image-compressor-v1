@@ -128,7 +128,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
         key: 'speed',
         label: 'Speed',
         default: 8,
-        hint: 'Slower speeds compress more but can exhaust memory on big batches.',
+        hint: 'Slower speeds compress more but take much longer.',
         options: [
           { label: 'Slow', value: 6 },
           { label: 'Balanced', value: 8 },
