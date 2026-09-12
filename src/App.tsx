@@ -1,4 +1,4 @@
-import { computed, signal } from '@preact/signals'
+import { computed, type Signal, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { memo } from 'preact/compat'
 import { useEffect, useRef } from 'preact/hooks'
@@ -120,7 +120,10 @@ function controlHint(control: FormatControl, value: number): string {
   return control.hint ?? ''
 }
 
-const jobs = signal<BatchJob[]>([])
+// Jobs live in a per-id signal so a completion updates only that row; `jobIds`
+// carries order and only changes when the set of jobs changes.
+const jobIds = signal<string[]>([])
+const jobStore = new Map<string, Signal<BatchJob>>()
 const targetFormat = signal<OutputFormat>('jpeg')
 const settings = signal<Settings>(defaultSettings('jpeg'))
 const maxLongEdge = signal(0)
@@ -142,22 +145,35 @@ let sampleChangeTimer: ReturnType<typeof setTimeout> | undefined
 const jobTokens = new Map<string, number>()
 const estimateControllers = new Map<string, AbortController>()
 
-const total = computed(() => jobs.value.length)
-const batchMode = computed(() => jobs.value.length > 1)
+const total = computed(() => jobIds.value.length)
+const batchMode = computed(() => jobIds.value.length > 1)
+
+// Reads every job signal, so aggregates update on any change; used by the panel
+// (never by the list, which is driven by per-job signals).
+const allJobs = computed(() => listJobs())
+
+const originalTotal = computed(() =>
+  allJobs.value.reduce(
+    (sum, job) => (job.status === 'error' ? sum : sum + job.originalSize),
+    0,
+  ),
+)
+
 const finished = computed(
   () =>
-    jobs.value.filter((job) => job.status === 'done' || job.status === 'error')
-      .length,
+    allJobs.value.filter(
+      (job) => job.status === 'done' || job.status === 'error',
+    ).length,
 )
 const failed = computed(
-  () => jobs.value.filter((job) => job.status === 'error').length,
+  () => allJobs.value.filter((job) => job.status === 'error').length,
 )
 const progressPercent = computed(() =>
   total.value === 0 ? 0 : Math.round((finished.value / total.value) * 100),
 )
 const pendingEstimate = computed(
   () =>
-    jobs.value.filter(
+    allJobs.value.filter(
       (job) => job.status === 'queued' || job.status === 'estimating',
     ).length,
 )
@@ -206,7 +222,7 @@ const isCurrent = (job: BatchJob) =>
   job.status === 'done' && job.outputKey === outputKey.value
 
 const needsCompress = computed(() =>
-  jobs.value.some(
+  allJobs.value.some(
     (job) =>
       job.status !== 'error' &&
       !(job.status === 'done' && job.outputKey === outputKey.value),
@@ -216,7 +232,8 @@ const needsCompress = computed(() =>
 // Settings and downloads are frozen while anything is encoding, so the
 // estimate/compress pipeline cannot be mutated mid-flight.
 const busy = computed(
-  () => zipping.value || jobs.value.some((job) => job.status === 'processing'),
+  () =>
+    zipping.value || allJobs.value.some((job) => job.status === 'processing'),
 )
 
 function estimateFor(job: BatchJob, quality: number): number {
@@ -226,7 +243,7 @@ function estimateFor(job: BatchJob, quality: number): number {
 }
 
 const batchEstimate = computed(() =>
-  jobs.value.reduce((sum, job) => {
+  allJobs.value.reduce((sum, job) => {
     if (job.status === 'error') return sum
     if (isCurrent(job)) return sum + job.outputSize
     return sum + estimateFor(job, settings.value.quality)
@@ -234,12 +251,12 @@ const batchEstimate = computed(() =>
 )
 
 const downloadable = computed(() =>
-  jobs.value.filter(
+  allJobs.value.filter(
     (job) => job.status === 'done' && isCurrent(job) && job.outputBlob,
   ),
 )
 const canDownloadAll = computed(
-  () => jobs.value.length > 1 && downloadable.value.length > 0,
+  () => jobIds.value.length > 1 && downloadable.value.length > 0,
 )
 
 function nextToken(id: string): number {
@@ -248,35 +265,46 @@ function nextToken(id: string): number {
   return token
 }
 
-let pendingPatches = new Map<string, Partial<BatchJob>>()
-let flushHandle: ReturnType<typeof setTimeout> | null = null
+// --- Per-job store -----------------------------------------------------------
+// Each job is its own signal, so patching one job re-renders only its row.
+// `jobIds` changes only when jobs are added/removed; the panel reads `allJobs`.
 
-// Coalesce per-result job updates to ~5 Hz. Re-rendering a large list at frame
-// rate is the main source of main-thread work during compression; the progress
-// bar still moves smoothly via a CSS transition.
-const JOB_UPDATE_INTERVAL = 200
-
-function flushJobPatches() {
-  if (flushHandle !== null) {
-    clearTimeout(flushHandle)
-    flushHandle = null
+function setJob(job: BatchJob) {
+  const existing = jobStore.get(job.id)
+  if (existing) {
+    existing.value = job
+    return
   }
-  if (pendingPatches.size === 0) return
-  const patches = pendingPatches
-  pendingPatches = new Map()
-  jobs.value = jobs.value.map((job) => {
-    const patch = patches.get(job.id)
-    return patch ? { ...job, ...patch } : job
-  })
+  jobStore.set(job.id, signal(job))
+  jobIds.value = [...jobIds.value, job.id]
 }
 
 function updateJob(id: string, patch: Partial<BatchJob>) {
-  pendingPatches.set(id, { ...pendingPatches.get(id), ...patch })
-  if (flushHandle !== null) return
-  flushHandle = setTimeout(() => {
-    flushHandle = null
-    flushJobPatches()
-  }, JOB_UPDATE_INTERVAL)
+  const job = jobStore.get(id)
+  if (job) job.value = { ...job.value, ...patch }
+}
+
+function getJob(id: string): BatchJob | undefined {
+  return jobStore.get(id)?.value
+}
+
+function dropJob(id: string) {
+  jobStore.delete(id)
+  jobIds.value = jobIds.value.filter((candidate) => candidate !== id)
+}
+
+function clearJobs() {
+  jobStore.clear()
+  jobIds.value = []
+}
+
+function listJobs(): BatchJob[] {
+  const jobs: BatchJob[] = []
+  for (const id of jobIds.value) {
+    const job = jobStore.get(id)?.value
+    if (job) jobs.push(job)
+  }
+  return jobs
 }
 
 function applyWorkerBudget() {
@@ -313,7 +341,7 @@ function scheduleIdleTeardown() {
   cancelIdleTeardown()
   idleTeardownTimer = setTimeout(() => {
     idleTeardownTimer = undefined
-    const active = jobs.value.some(
+    const active = allJobs.value.some(
       (job) =>
         job.status === 'processing' ||
         job.status === 'estimating' ||
@@ -336,8 +364,7 @@ function cancelAllEstimates() {
 }
 
 function updateAverageRatios() {
-  flushJobPatches()
-  const curves = jobs.value
+  const curves = allJobs.value
     .filter(
       (job) => job.samples.length > 0 && job.sampleKey === sampleKey.value,
     )
@@ -346,23 +373,22 @@ function updateAverageRatios() {
 }
 
 function refreshEstimates() {
-  flushJobPatches()
   const key = outputKey.value
   const quality = settings.value.quality
-  jobs.value = jobs.value.map((job) => {
-    if (job.status === 'error') return job
-    if (job.status === 'done' && job.outputKey === key) return job
+  for (const id of jobIds.value) {
+    const job = getJob(id)
+    if (!job || job.status === 'error') continue
+    if (job.status === 'done' && job.outputKey === key) continue
     const estimate = estimateFor(job, quality)
-    if (estimate === 0) return job
-    return { ...job, outputSize: estimate, sizeIsExact: false }
-  })
+    if (estimate === 0) continue
+    updateJob(id, { outputSize: estimate, sizeIsExact: false })
+  }
 }
 
 async function estimateJob(id: string) {
-  flushJobPatches()
   cancelIdleTeardown()
   const token = nextToken(id)
-  const job = jobs.value.find((candidate) => candidate.id === id)
+  const job = getJob(id)
   if (!job) return
 
   cancelEstimate(id)
@@ -420,10 +446,9 @@ async function estimateJob(id: string) {
 }
 
 async function compressJob(id: string) {
-  flushJobPatches()
   cancelIdleTeardown()
   const token = nextToken(id)
-  const job = jobs.value.find((candidate) => candidate.id === id)
+  const job = getJob(id)
   if (!job) return
 
   cancelEstimate(id)
@@ -483,10 +508,7 @@ async function compressJob(id: string) {
 }
 
 function updateSampling(): Set<string> {
-  flushJobPatches()
-  const ids = jobs.value
-    .filter((job) => job.status !== 'error')
-    .map((job) => job.id)
+  const ids = jobIds.value.filter((id) => getJob(id)?.status !== 'error')
   const limit = sampleSize(
     ids.length,
     isHeavyFormat(targetFormat.value, settings.value.mode),
@@ -537,7 +559,7 @@ function addFiles(fileList: FileList | File[] | null) {
     error: '',
   }))
 
-  jobs.value = [...jobs.value, ...created]
+  for (const job of created) setJob(job)
   const sampled = updateSampling()
 
   for (const job of created) {
@@ -553,7 +575,7 @@ function addFiles(fileList: FileList | File[] | null) {
 
     // A lone image is compressed right away; a batch is only estimated (a
     // bounded sample for large batches) so settings can be dialled in first.
-    if (jobs.value.length > 1) {
+    if (jobIds.value.length > 1) {
       if (sampled.has(job.id)) void estimateJob(job.id)
       else
         updateJob(job.id, { status: 'estimated', sampleKey: sampleKey.value })
@@ -567,15 +589,15 @@ function recompressSingle() {
   cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   reprocessTimer = setTimeout(() => {
-    for (const job of jobs.value) {
-      if (job.status === 'error') continue
-      void compressJob(job.id)
+    for (const id of jobIds.value) {
+      if (getJob(id)?.status === 'error') continue
+      void compressJob(id)
     }
   }, 200)
 }
 
 function scheduleSampleReestimate() {
-  if (jobs.value.length === 0) return
+  if (jobIds.value.length === 0) return
   if (sampleChangeTimer) clearTimeout(sampleChangeTimer)
   sampleChangeTimer = setTimeout(() => {
     sampleChangeTimer = undefined
@@ -587,21 +609,21 @@ function scheduleSampleReestimate() {
     cancelAllEstimates()
     const sampled = updateSampling()
     const key = sampleKey.value
-    jobs.value = jobs.value.map((job) => {
-      if (job.status === 'error') return job
-      const measured = sampled.has(job.id)
-      return {
-        ...job,
+    for (const id of jobIds.value) {
+      const job = getJob(id)
+      if (!job || job.status === 'error') continue
+      const measured = sampled.has(id)
+      updateJob(id, {
         status: measured ? 'estimating' : 'estimated',
         samples: [],
         outputSize: 0,
         sizeIsExact: false,
         sampleKey: measured ? '' : key,
-      }
-    })
+      })
+    }
     averageRatios.value = []
-    for (const job of jobs.value) {
-      if (sampled.has(job.id)) void estimateJob(job.id)
+    for (const id of jobIds.value) {
+      if (sampled.has(id)) void estimateJob(id)
     }
   }, 200)
 }
@@ -653,10 +675,11 @@ function compressAll() {
   if (busy.value) return
   cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
-  for (const job of jobs.value) {
-    if (job.status === 'error' || job.status === 'processing') continue
+  for (const id of jobIds.value) {
+    const job = getJob(id)
+    if (!job || job.status === 'error' || job.status === 'processing') continue
     if (job.status === 'estimated' || job.outputKey !== outputKey.value) {
-      void compressJob(job.id)
+      void compressJob(id)
     }
   }
 }
@@ -665,9 +688,9 @@ function removeJob(id: string) {
   cancelEstimate(id)
   nextToken(id)
   forgetFile(id)
-  const job = jobs.value.find((candidate) => candidate.id === id)
+  const job = getJob(id)
   if (job?.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
-  jobs.value = jobs.value.filter((candidate) => candidate.id !== id)
+  dropJob(id)
   scheduleIdleTeardown()
 }
 
@@ -675,12 +698,12 @@ function clearAll() {
   if (reprocessTimer) clearTimeout(reprocessTimer)
   if (sampleChangeTimer) clearTimeout(sampleChangeTimer)
   cancelAllEstimates()
-  for (const job of jobs.value) {
+  for (const job of listJobs()) {
     nextToken(job.id)
     forgetFile(job.id)
     if (job.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
   }
-  jobs.value = []
+  clearJobs()
   averageRatios.value = []
   sampledIds.value = new Set()
   notice.value = ''
@@ -794,23 +817,19 @@ function PoolMeter() {
 }
 
 interface JobRowProps {
-  job: BatchJob
-  current: boolean
-  label: string
-  busy: boolean
+  id: string
   onRemove: (id: string) => void
   onDownload: (job: BatchJob) => void
 }
 
-// Memoized so an update to one job does not re-render every other row.
-const JobRow = memo(function JobRow({
-  job,
-  current,
-  label,
-  busy,
-  onRemove,
-  onDownload,
-}: JobRowProps) {
+// Reads its own job signal, so a completion re-renders only this row. Memoized
+// on the stable id/callbacks so list re-renders (add/remove) skip unchanged rows.
+const JobRow = memo(function JobRow({ id, onRemove, onDownload }: JobRowProps) {
+  const job = jobStore.get(id)?.value
+  if (!job) return null
+  const current = isCurrent(job)
+  const label = statusLabel(job)
+  const isBusy = busy.value
   return (
     <li class="job">
       <div class="job__thumb">
@@ -855,7 +874,7 @@ const JobRow = memo(function JobRow({
           <button
             type="button"
             class="button button--small"
-            disabled={busy}
+            disabled={isBusy}
             onClick={() => onDownload(job)}
           >
             Download
@@ -866,7 +885,7 @@ const JobRow = memo(function JobRow({
           class="icon-button"
           title="Remove"
           aria-label={`Remove ${job.name}`}
-          disabled={busy}
+          disabled={isBusy}
           onClick={() => onRemove(job.id)}
         >
           ×
@@ -875,6 +894,197 @@ const JobRow = memo(function JobRow({
     </li>
   )
 })
+
+// Reads only `jobIds`, so job completions never re-render the list container.
+function JobList() {
+  return (
+    <ul class="jobs">
+      {jobIds.value.map((id) => (
+        <JobRow
+          key={id}
+          id={id}
+          onRemove={removeJob}
+          onDownload={downloadJob}
+        />
+      ))}
+    </ul>
+  )
+}
+
+// The panel reads the aggregate computeds, isolating those re-renders from the
+// list and the app shell.
+function Panel({ onAddImages }: { onAddImages: () => void }) {
+  return (
+    <section class="panel">
+      <label class="field">
+        <span class="field__label">Output format</span>
+        <select
+          class="select"
+          value={targetFormat.value}
+          disabled={busy.value}
+          onChange={(event) =>
+            changeFormat(event.currentTarget.value as OutputFormat)
+          }
+        >
+          {FORMAT_ORDER.map((format) => (
+            <option value={format} key={format}>
+              {FORMAT_SPECS[format].label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {activeControls.value.map((control) => (
+        <div class="field" key={control.key}>
+          <span class="field__label">
+            {control.label}
+            {control.kind === 'range' ? `: ${settings.value[control.key]}` : ''}
+          </span>
+          {control.kind === 'range' ? (
+            <input
+              type="range"
+              aria-label={control.label}
+              min={control.min}
+              max={control.max}
+              step={control.step}
+              value={settings.value[control.key]}
+              disabled={busy.value}
+              onInput={(event) =>
+                changeControl(control.key, Number(event.currentTarget.value))
+              }
+            />
+          ) : (
+            <select
+              class="select"
+              aria-label={control.label}
+              value={String(settings.value[control.key])}
+              disabled={busy.value}
+              onChange={(event) =>
+                changeControl(control.key, Number(event.currentTarget.value))
+              }
+            >
+              {control.options.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {controlHint(control, settings.value[control.key]) && (
+            <span class="field__hint">
+              {controlHint(control, settings.value[control.key])}
+            </span>
+          )}
+        </div>
+      ))}
+
+      <label class="field">
+        <span class="field__label">Resize — max long edge (px)</span>
+        <input
+          class="input"
+          type="number"
+          min={0}
+          placeholder="original"
+          value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
+          disabled={busy.value}
+          onChange={(event) => changeResize(Number(event.currentTarget.value))}
+        />
+      </label>
+
+      <div class="progress" aria-hidden="true">
+        <div
+          class="progress__bar"
+          style={{ width: `${phasePercent.value}%` }}
+        />
+      </div>
+
+      {settingsWarning.value && (
+        <p class="field__warning" role="alert">
+          {settingsWarning.value}
+        </p>
+      )}
+
+      <div class="panel__row">
+        <span class="panel__label">{phaseLabel.value}</span>
+        <PoolMeter />
+      </div>
+
+      {batchMode.value && total.value > 0 && (
+        <div class="panel__row">
+          <span class="panel__label">Estimated file size</span>
+          <span class="panel__value">
+            {estimatePhase.value ? (
+              'Calculating…'
+            ) : (
+              <>
+                {needsCompress.value ? '~' : ''}
+                {formatBytes(batchEstimate.value)}
+                {originalTotal.value > 0
+                  ? ` (${savingsLabel(originalTotal.value, batchEstimate.value)})`
+                  : ''}
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
+      {needsCompress.value && (
+        <button
+          type="button"
+          class="button button--primary"
+          disabled={busy.value}
+          onClick={compressAll}
+        >
+          Compress {total.value > 1 ? `all ${total.value} images` : 'image'}
+        </button>
+      )}
+
+      <div class="panel__actions">
+        <button
+          type="button"
+          class="button"
+          disabled={busy.value}
+          onClick={onAddImages}
+        >
+          Add images
+        </button>
+
+        {canDownloadAll.value && (
+          <button
+            type="button"
+            class="button button--primary"
+            onClick={downloadAll}
+            disabled={zipping.value || busy.value}
+          >
+            {zipping.value
+              ? 'Building zip…'
+              : `Download all (${downloadable.value.length}) as zip`}
+          </button>
+        )}
+
+        {canDownloadAll.value && supportsDirectoryPicker && (
+          <button
+            type="button"
+            class="button"
+            disabled={busy.value}
+            onClick={saveToFolder}
+          >
+            Save to folder…
+          </button>
+        )}
+
+        <button
+          type="button"
+          class="button"
+          disabled={busy.value}
+          onClick={clearAll}
+        >
+          Clear all
+        </button>
+      </div>
+    </section>
+  )
+}
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -910,11 +1120,7 @@ export function App() {
     isDragging.value = true
   }
 
-  const jobList = jobs.value
-  const originalTotal = jobList.reduce(
-    (sum, job) => (job.status === 'error' ? sum : sum + job.originalSize),
-    0,
-  )
+  const jobCount = jobIds.value.length
 
   return (
     <main
@@ -961,7 +1167,7 @@ export function App() {
         </p>
       </header>
 
-      {jobList.length === 0 && (
+      {jobCount === 0 && (
         <button
           type="button"
           class={`dropzone${isDragging.value ? ' dropzone--active' : ''}`}
@@ -984,205 +1190,14 @@ export function App() {
         onChange={onInputChange}
       />
 
-      {jobList.length > 0 && (
+      {jobCount > 0 && (
         <>
-          <section class="panel">
-            <label class="field">
-              <span class="field__label">Output format</span>
-              <select
-                class="select"
-                value={targetFormat.value}
-                disabled={busy.value}
-                onChange={(event) =>
-                  changeFormat(event.currentTarget.value as OutputFormat)
-                }
-              >
-                {FORMAT_ORDER.map((format) => (
-                  <option value={format} key={format}>
-                    {FORMAT_SPECS[format].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {activeControls.value.map((control) => (
-              <div class="field" key={control.key}>
-                <span class="field__label">
-                  {control.label}
-                  {control.kind === 'range'
-                    ? `: ${settings.value[control.key]}`
-                    : ''}
-                </span>
-                {control.kind === 'range' ? (
-                  <input
-                    type="range"
-                    aria-label={control.label}
-                    min={control.min}
-                    max={control.max}
-                    step={control.step}
-                    value={settings.value[control.key]}
-                    disabled={busy.value}
-                    onInput={(event) =>
-                      changeControl(
-                        control.key,
-                        Number(event.currentTarget.value),
-                      )
-                    }
-                  />
-                ) : (
-                  <select
-                    class="select"
-                    aria-label={control.label}
-                    value={String(settings.value[control.key])}
-                    disabled={busy.value}
-                    onChange={(event) =>
-                      changeControl(
-                        control.key,
-                        Number(event.currentTarget.value),
-                      )
-                    }
-                  >
-                    {control.options.map((option) => (
-                      <option value={option.value} key={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {controlHint(control, settings.value[control.key]) && (
-                  <span class="field__hint">
-                    {controlHint(control, settings.value[control.key])}
-                  </span>
-                )}
-              </div>
-            ))}
-
-            <label class="field">
-              <span class="field__label">Resize — max long edge (px)</span>
-              <input
-                class="input"
-                type="number"
-                min={0}
-                placeholder="original"
-                value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
-                disabled={busy.value}
-                onChange={(event) =>
-                  changeResize(Number(event.currentTarget.value))
-                }
-              />
-            </label>
-
-            <div class="progress" aria-hidden="true">
-              <div
-                class="progress__bar"
-                style={{ width: `${phasePercent.value}%` }}
-              />
-            </div>
-
-            {settingsWarning.value && (
-              <p class="field__warning" role="alert">
-                {settingsWarning.value}
-              </p>
-            )}
-
-            <div class="panel__row">
-              <span class="panel__label">{phaseLabel.value}</span>
-              <PoolMeter />
-            </div>
-
-            {batchMode.value && total.value > 0 && (
-              <div class="panel__row">
-                <span class="panel__label">Estimated file size</span>
-                <span class="panel__value">
-                  {estimatePhase.value ? (
-                    'Calculating…'
-                  ) : (
-                    <>
-                      {needsCompress.value ? '~' : ''}
-                      {formatBytes(batchEstimate.value)}
-                      {originalTotal > 0
-                        ? ` (${savingsLabel(originalTotal, batchEstimate.value)})`
-                        : ''}
-                    </>
-                  )}
-                </span>
-              </div>
-            )}
-
-            {needsCompress.value && (
-              <button
-                type="button"
-                class="button button--primary"
-                disabled={busy.value}
-                onClick={compressAll}
-              >
-                Compress{' '}
-                {jobList.length > 1 ? `all ${jobList.length} images` : 'image'}
-              </button>
-            )}
-
-            <div class="panel__actions">
-              <button
-                type="button"
-                class="button"
-                disabled={busy.value}
-                onClick={() => inputRef.current?.click()}
-              >
-                Add images
-              </button>
-
-              {canDownloadAll.value && (
-                <button
-                  type="button"
-                  class="button button--primary"
-                  onClick={downloadAll}
-                  disabled={zipping.value || busy.value}
-                >
-                  {zipping.value
-                    ? 'Building zip…'
-                    : `Download all (${downloadable.value.length}) as zip`}
-                </button>
-              )}
-
-              {canDownloadAll.value && supportsDirectoryPicker && (
-                <button
-                  type="button"
-                  class="button"
-                  disabled={busy.value}
-                  onClick={saveToFolder}
-                >
-                  Save to folder…
-                </button>
-              )}
-
-              <button
-                type="button"
-                class="button"
-                disabled={busy.value}
-                onClick={clearAll}
-              >
-                Clear all
-              </button>
-            </div>
-          </section>
-
-          <ul class="jobs">
-            {jobList.map((job) => (
-              <JobRow
-                key={job.id}
-                job={job}
-                current={isCurrent(job)}
-                label={statusLabel(job)}
-                busy={busy.value}
-                onRemove={removeJob}
-                onDownload={downloadJob}
-              />
-            ))}
-          </ul>
+          <Panel onAddImages={() => inputRef.current?.click()} />
+          <JobList />
         </>
       )}
 
-      {jobList.length > 0 && batchMode.value && (
+      {jobCount > 0 && batchMode.value && (
         <p class="footnote">
           Batch mode: change the settings as much as you like — sizes update
           from cached estimates instantly. Nothing is encoded until you press
