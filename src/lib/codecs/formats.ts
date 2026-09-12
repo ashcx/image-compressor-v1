@@ -39,13 +39,7 @@ export interface FormatSpec {
   controls: FormatControl[]
 }
 
-export const FORMAT_ORDER: OutputFormat[] = [
-  'jpeg',
-  'png',
-  'webp',
-  'avif',
-  'jxl',
-]
+export const FORMAT_ORDER: OutputFormat[] = ['jpeg', 'png', 'webp', 'avif']
 
 const QUALITY_PRESETS: SelectControl = {
   kind: 'select',
@@ -143,38 +137,20 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
       },
     ],
   },
-  jxl: {
-    format: 'jxl',
-    label: 'JPEG XL (slower)',
-    mimeType: 'image/jxl',
-    extension: 'jxl',
-    lossless: false,
-    controls: [
-      {
-        kind: 'range',
-        key: 'quality',
-        label: 'Quality',
-        min: 1,
-        max: 100,
-        step: 1,
-        default: 75,
-      },
-      {
-        kind: 'select',
-        key: 'effort',
-        label: 'Effort',
-        default: 5,
-        hint: 'Higher effort compresses more but can exhaust memory on big batches.',
-        options: [
-          { label: 'Slow', value: 7 },
-          { label: 'Balanced', value: 5 },
-          { label: 'Fast', value: 3 },
-        ],
-      },
-    ],
-  },
 }
 
 export function formatSpec(format: OutputFormat): FormatSpec {
   return FORMAT_SPECS[format]
+}
+
+/**
+ * Heavy codecs keep a large WASM heap and decoded canvas per worker, so they
+ * run on a reduced (halved) worker pool. AVIF always qualifies; PNG qualifies
+ * for both compressed modes (oxipng lossless and quantised lossy) but not the
+ * native uncompressed path.
+ */
+export function isHeavyFormat(format: OutputFormat, mode: number): boolean {
+  if (format === 'avif') return true
+  if (format === 'png') return mode >= 1
+  return false
 }

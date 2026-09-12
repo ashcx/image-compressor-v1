@@ -134,7 +134,7 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
 }
 
 /**
- * Heavy codecs (AVIF, JXL, lossy PNG) keep large WASM heaps and decoded
+ * Heavy codecs (AVIF, compressed PNG) keep large WASM heaps and decoded
  * canvases per worker, so they run with half the standard pool, rounded to the
  * nearest whole worker (floored at 1).
  */

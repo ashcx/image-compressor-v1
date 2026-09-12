@@ -42,20 +42,6 @@ describe('detectFormat', () => {
     ).toBe('avif')
   })
 
-  it('detects JPEG XL from a raw codestream', () => {
-    expect(detectFormat(bytes(0xff, 0x0a, 0x00))).toBe('jxl')
-  })
-
-  it('detects JPEG XL from the container signature', () => {
-    expect(
-      detectFormat(
-        withHeader([
-          0, 0, 0, 0x0c, 0x4a, 0x58, 0x4c, 0x20, 0x0d, 0x0a, 0x87, 0x0a,
-        ]),
-      ),
-    ).toBe('jxl')
-  })
-
   it('returns null for unknown data', () => {
     expect(detectFormat(bytes(0x47, 0x49, 0x46, 0x38))).toBeNull()
     expect(detectFormat(bytes(0x00))).toBeNull()

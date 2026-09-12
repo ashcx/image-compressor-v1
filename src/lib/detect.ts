@@ -29,12 +29,6 @@ export function detectFormat(buffer: ArrayBuffer): OutputFormat | null {
   if (matches(data, 4, [0x66, 0x74, 0x79, 0x70])) {
     const brand = String.fromCharCode(...data.slice(8, 12))
     if (brand === 'avif' || brand === 'avis') return 'avif'
-    if (brand === 'jxl ') return 'jxl'
-  }
-  // JPEG XL: raw codestream (FF 0A) or ISO BMFF container ("\0\0\0\x0CJXL ").
-  if (matches(data, 0, [0xff, 0x0a])) return 'jxl'
-  if (matches(data, 0, [0x00, 0x00, 0x00, 0x0c, 0x4a, 0x58, 0x4c, 0x20])) {
-    return 'jxl'
   }
 
   return null

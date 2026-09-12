@@ -9,7 +9,6 @@ const EXPECTED: Record<OutputFormat, { mimeType: string; extension: string }> =
     png: { mimeType: 'image/png', extension: 'png' },
     webp: { mimeType: 'image/webp', extension: 'webp' },
     avif: { mimeType: 'image/avif', extension: 'avif' },
-    jxl: { mimeType: 'image/jxl', extension: 'jxl' },
   }
 
 describe('codec registry', () => {

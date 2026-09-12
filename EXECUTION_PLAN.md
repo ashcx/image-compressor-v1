@@ -10,7 +10,7 @@ concurrently).
 ## 1. Product Goal
 
 **Ship a static, backend-free web app on GitHub Pages that lets anyone drop in a batch of
-images and convert/compress them to JPEG, PNG, WebP, AVIF, or JPEG XL entirely in the
+images and convert/compress them to JPEG, PNG, WebP, or AVIF entirely in the
 browser, processing multiple images concurrently across a pool of Web Workers, and download
 the results as a single zip — verified working on desktop and mobile browsers.**
 
@@ -101,7 +101,7 @@ Priority: `P0` = required for the first build (S1–S8). `P1` and `P2` items are
 ### Epic E5 — Format Coverage & Options (P0) — 19 pts
 | ID | Story | Pts |
 |---|---|---|
-| S5.1 | Add `@jsquash/{jpeg,avif,jxl,png,oxipng}` codecs | 5 |
+| S5.1 | Add `@jsquash/{jpeg,avif,png,oxipng}` codecs | 5 |
 | S5.2 | Per-format quality/effort controls wired through to codecs | 5 |
 | S5.3 | Optional resize step via `@jsquash/resize` | 3 |
 | S5.4 | Format auto-detection by file signature | 3 |
@@ -234,5 +234,5 @@ Expected near-critical-path duration: **~6 weeks** vs. ~8 weeks strictly sequent
 | Vite/jsquash bundling friction delays S1/S2 | Budgeted as S2.4; verify with one codec before adding the rest. |
 | Worker pool memory blowup on mobile | Cap workers at 8; tune down in S7.2 based on measured device behavior. |
 | Parallel agents create merge conflicts | Interface-freeze discipline (§6.2) + one owner per interface file. |
-| AVIF/JXL encode slowness undermines "speedup" claim | Measure honestly (S4.6); set UI expectations rather than over-promise. |
+| AVIF encode slowness undermines "speedup" claim | Measure honestly (S4.6); set UI expectations rather than over-promise. |
 | Safari/iOS worker/WASM quirks | Dedicated Sprint 8; do not assume desktop testing generalizes. |

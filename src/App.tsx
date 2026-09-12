@@ -7,6 +7,7 @@ import {
   FORMAT_ORDER,
   FORMAT_SPECS,
   type FormatControl,
+  isHeavyFormat,
 } from './lib/codecs/formats'
 import { describeRenderer, preloadCodec } from './lib/codecs/registry'
 import type { OutputFormat } from './lib/codecs/types'
@@ -186,13 +187,7 @@ const settingsWarning = computed(() => {
   if (total.value > 5 && format === 'avif' && values.speed <= 6) {
     return 'AVIF below speed 7 can take a very long time and may hit memory errors on large batches. Use speed 7 or higher for big batches.'
   }
-  if (total.value > 5 && format === 'jxl' && values.quality >= 90) {
-    return 'High JPEG XL quality can take a very long time and may hit memory errors on large batches. Lower the quality for big batches.'
-  }
-  const heavy =
-    format === 'avif' ||
-    format === 'jxl' ||
-    (format === 'png' && values.mode === 2)
+  const heavy = isHeavyFormat(format, values.mode)
   if (total.value > 50 && heavy) {
     return 'Large batches of this format can use a lot of memory. Consider compressing in smaller groups.'
   }
@@ -302,10 +297,7 @@ function updateJob(id: string, patch: Partial<BatchJob>) {
 function applyWorkerBudget() {
   const base = getDeviceProfile().workerCount
   const format = targetFormat.value
-  const heavy =
-    format === 'avif' ||
-    format === 'jxl' ||
-    (format === 'png' && settings.value.mode === 2)
+  const heavy = isHeavyFormat(format, settings.value.mode)
   configureWorkers(heavy ? heavyWorkerCount(base) : base)
 }
 
@@ -632,9 +624,9 @@ function changeFormat(format: OutputFormat) {
   settings.value = defaultSettings(format)
   applyWorkerBudget()
   void refreshRenderer()
-  // Warm the WASM codec while the user dials in settings, so selecting
-  // AVIF/JXL does not stall on the first encode.
-  if (format === 'avif' || format === 'jxl') void preloadCodec(format)
+  // Warm the WASM codec while the user dials in settings, so selecting AVIF
+  // does not stall on the first encode.
+  if (format === 'avif') void preloadCodec(format)
   scheduleSampleReestimate()
 }
 
@@ -975,7 +967,7 @@ export function App() {
         >
           <span class="dropzone__title">Drop images here</span>
           <span class="dropzone__hint">
-            or click to choose files (JPEG, PNG, WebP, AVIF, JXL). Single images
+            or click to choose files (JPEG, PNG, WebP, AVIF). Single images
             compress immediately; batches are estimated first.
           </span>
         </button>

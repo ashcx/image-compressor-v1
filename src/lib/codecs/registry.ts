@@ -55,7 +55,7 @@ function wrap(buffer: ArrayBuffer, type: string): Blob {
 // JPEG and WebP use the browser's native encoder when it is available, so no
 // codec package is fetched for them on Chromium/Firefox. Safari has no native
 // WebP encoder, so the WASM encoder is imported lazily only in that case.
-// AVIF/JXL (and the PNG compression modes) pull their WASM in lazily too.
+// AVIF (and the PNG compression modes) pull their WASM in lazily too.
 const loaders: Record<OutputFormat, CodecLoader> = {
   jpeg: async () => ({
     format: 'jpeg',
@@ -140,23 +140,6 @@ const loaders: Record<OutputFormat, CodecLoader> = {
       },
     }
   },
-  jxl: async () => {
-    const { encode, decode } = await import('@jsquash/jxl')
-    return {
-      format: 'jxl',
-      mimeType: 'image/jxl',
-      extension: 'jxl',
-      encode: async (source, options) =>
-        wrap(
-          await encode(toImageData(source), {
-            ...(options?.quality != null ? { quality: options.quality } : {}),
-            ...(options?.effort != null ? { effort: options.effort } : {}),
-          }),
-          'image/jxl',
-        ),
-      decode: (buffer) => decode(buffer),
-    }
-  },
 }
 
 export function isFormatSupported(format: OutputFormat): boolean {
@@ -173,7 +156,7 @@ export async function getCodec(format: OutputFormat): Promise<Codec> {
 
 /**
  * Warms a codec's module (and WASM) so the first encode of a WASM format does
- * not stall the user. Call when AVIF/JXL is selected.
+ * not stall the user. Call when AVIF is selected.
  */
 export async function preloadCodec(format: OutputFormat): Promise<void> {
   await getCodec(format)
@@ -201,7 +184,5 @@ export async function describeRenderer(
       return (mode ?? 0) === 1 ? 'WASM · oxipng' : 'WASM · libimagequant'
     case 'avif':
       return 'WASM · avif'
-    case 'jxl':
-      return 'WASM · jxl'
   }
 }
