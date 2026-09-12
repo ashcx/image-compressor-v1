@@ -1,4 +1,5 @@
-import type { ResizeOptions } from './codecs/types'
+import { context2d, createCanvas } from './canvas'
+import type { ImageSource, ResizeOptions } from './codecs/types'
 
 export interface ResolvedSize {
   width: number
@@ -42,20 +43,17 @@ export function resolveResize(
   return fitWithin(width, height, maxWidth, maxHeight)
 }
 
-export async function resizeImageData(
-  imageData: ImageData,
+export function resizeImage(
+  source: ImageSource,
   resize: ResizeOptions | undefined,
-): Promise<ImageData> {
-  const size = resolveResize(imageData.width, imageData.height, resize)
-  if (!size) return imageData
+): ImageSource {
+  const size = resolveResize(source.width, source.height, resize)
+  if (!size) return source
 
-  const { default: resizeWasm } = await import('@jsquash/resize')
-  return resizeWasm(imageData, {
-    width: size.width,
-    height: size.height,
-    method: 'lanczos3',
-    fitMethod: 'stretch',
-    premultiply: false,
-    linearRGB: false,
-  })
+  const canvas = createCanvas(size.width, size.height)
+  const context = context2d(canvas)
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(source.canvas, 0, 0, size.width, size.height)
+  return { width: size.width, height: size.height, canvas }
 }

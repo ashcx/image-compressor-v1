@@ -34,12 +34,9 @@ export default defineConfig(() => {
     optimizeDeps: {
       exclude: [
         '@jsquash/avif',
-        '@jsquash/jpeg',
         '@jsquash/jxl',
         '@jsquash/oxipng',
         '@jsquash/png',
-        '@jsquash/resize',
-        '@jsquash/webp',
         'imagequant',
       ],
     },

@@ -20,7 +20,7 @@ export type WorkerRequest = ProcessRequest
 export interface ResultResponse {
   type: 'result'
   jobId: string
-  outputBuffer: ArrayBuffer
+  outputBlob: Blob
   outputSize: number
   width: number
   height: number

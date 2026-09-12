@@ -27,7 +27,12 @@ describe('codec registry', () => {
       expect(codec.mimeType).toBe(EXPECTED[format].mimeType)
       expect(codec.extension).toBe(EXPECTED[format].extension)
       expect(typeof codec.encode).toBe('function')
-      expect(typeof codec.decode).toBe('function')
+      if (format === 'jpeg' || format === 'webp') {
+        // Native-only formats have no WASM decode fallback.
+        expect(codec.decode).toBeUndefined()
+      } else {
+        expect(typeof codec.decode).toBe('function')
+      }
     },
   )
 })

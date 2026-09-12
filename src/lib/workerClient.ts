@@ -65,7 +65,8 @@ export function getPoolStats(): PoolStats {
 }
 
 export interface ProcessJobOptions {
-  readFile: () => Promise<ArrayBuffer>
+  /** Resolves the source bytes; `consume` hands over ownership for transfer. */
+  readFile: (consume: boolean) => Promise<ArrayBuffer>
   targetFormat: OutputFormat
   quality?: number
   effort?: number
@@ -74,6 +75,11 @@ export interface ProcessJobOptions {
   resize?: ResizeOptions
   buildEstimate?: boolean
   estimateOnly?: boolean
+  /**
+   * Transfer the input buffer instead of cloning it. Use only when the buffer
+   * will not be read again (not for estimate passes that compression reuses).
+   */
+  consumeInput?: boolean
   priority?: PoolPriority
   signal?: AbortSignal
 }
@@ -89,10 +95,12 @@ export function processImage(options: ProcessJobOptions): {
       jobId,
       signal: options.signal,
       prepare: async () => {
-        // The buffer is read eagerly at selection time (see fileBufferStore) and
-        // cached per job; it is cloned rather than transferred so the same job
-        // can reuse it for both size estimation and compression.
-        const fileBuffer = await options.readFile()
+        // Source bytes are read eagerly at selection time (fileBufferStore). The
+        // buffer is transferred when the job will not need it again, saving a
+        // full-buffer copy; otherwise it is cloned so a later compression can
+        // reuse the same estimate input.
+        const consume = options.consumeInput === true
+        const fileBuffer = await options.readFile(consume)
         const message: ProcessRequest = {
           type: 'process',
           jobId,
@@ -106,7 +114,7 @@ export function processImage(options: ProcessJobOptions): {
           buildEstimate: options.buildEstimate,
           estimateOnly: options.estimateOnly,
         }
-        return { message }
+        return consume ? { message, transfer: [fileBuffer] } : { message }
       },
     },
     options.priority ?? 'high',

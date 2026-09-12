@@ -1,4 +1,4 @@
-import { encodeImageData } from '../lib/convert'
+import { encodeImageSource } from '../lib/convert'
 import { detectFormat } from '../lib/detect'
 import { buildEstimateSamples } from '../lib/estimate'
 import { decodeImageData } from '../lib/image'
@@ -8,11 +8,11 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from '../lib/protocol'
-import { resizeImageData } from '../lib/resize'
+import { resizeImage } from '../lib/resize'
 
 interface WorkerScope {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null
-  postMessage(message: WorkerResponse, transfer?: Transferable[]): void
+  postMessage(message: WorkerResponse): void
 }
 
 const scope = globalThis as unknown as WorkerScope
@@ -24,26 +24,26 @@ scope.onmessage = async (event) => {
   try {
     const sourceFormat = detectFormat(request.fileBuffer)
     const decoded = await decodeImageData(request.fileBuffer, sourceFormat)
-    const imageData = await resizeImageData(decoded, request.resize)
+    const source = resizeImage(decoded, request.resize)
 
     if (request.estimateOnly) {
-      const samples = await buildEstimateSamples(
-        imageData,
-        request.targetFormat,
-        { effort: request.effort, speed: request.speed, mode: request.mode },
-      )
+      const samples = await buildEstimateSamples(source, request.targetFormat, {
+        effort: request.effort,
+        speed: request.speed,
+        mode: request.mode,
+      })
       const response: EstimateResponse = {
         type: 'estimate',
         jobId: request.jobId,
-        width: imageData.width,
-        height: imageData.height,
+        width: source.width,
+        height: source.height,
         samples,
       }
       scope.postMessage(response)
       return
     }
 
-    const encoded = await encodeImageData(imageData, request.targetFormat, {
+    const encoded = await encodeImageSource(source, request.targetFormat, {
       quality: request.quality,
       effort: request.effort,
       speed: request.speed,
@@ -53,8 +53,8 @@ scope.onmessage = async (event) => {
     const response: ResultResponse = {
       type: 'result',
       jobId: request.jobId,
-      outputBuffer: encoded.buffer,
-      outputSize: encoded.buffer.byteLength,
+      outputBlob: encoded.blob,
+      outputSize: encoded.blob.size,
       width: encoded.width,
       height: encoded.height,
       format: encoded.format,
@@ -64,13 +64,13 @@ scope.onmessage = async (event) => {
 
     if (request.buildEstimate) {
       response.samples = await buildEstimateSamples(
-        imageData,
+        source,
         request.targetFormat,
         { effort: request.effort, speed: request.speed, mode: request.mode },
       )
     }
 
-    scope.postMessage(response, [response.outputBuffer])
+    scope.postMessage(response)
   } catch (error) {
     scope.postMessage({
       type: 'error',
