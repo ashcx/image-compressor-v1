@@ -94,14 +94,23 @@ export function registerFile(id: string, file: File): void {
 /**
  * Resolves the source bytes for a job. Starts a read on demand if the eager
  * read had not run yet (e.g. the batch exceeded the memory cap) or its buffer
- * was released.
+ * was released. With `consume`, ownership is handed to the caller (the buffer
+ * will be transferred) and the cached bytes are dropped.
  */
-export function acquireFileBuffer(id: string): Promise<ArrayBuffer> {
+export function acquireFileBuffer(
+  id: string,
+  consume = false,
+): Promise<ArrayBuffer> {
   const entry = entries.get(id)
   if (!entry) {
     return Promise.reject(new Error('The file is no longer available'))
   }
-  return resolveBuffer(entry, id)
+  const buffer = resolveBuffer(entry, id)
+  if (!consume) return buffer
+  return buffer.then((data) => {
+    releaseFileBuffer(id)
+    return data
+  })
 }
 
 /**

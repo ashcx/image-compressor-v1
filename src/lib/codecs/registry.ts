@@ -1,11 +1,12 @@
-import type { Codec, OutputFormat } from './types'
+import { toImageData } from '../canvas'
+import type { Codec, ImageSource, OutputFormat } from './types'
 
 type CodecLoader = () => Promise<Codec>
 
 // `OffscreenCanvas.convertToBlob` exists in Safari but silently ignores types it
 // cannot actually encode (notably image/webp), returning a PNG instead. Probing
-// the real output MIME once per type and caching it stops us from shipping a
-// PNG-sized file under a .webp name. Falls back to the WASM encoder otherwise.
+// the real output MIME once per type stops us from shipping a PNG-sized file
+// under a .webp name, and lets JPEG/WebP run with no WASM loaded at all.
 const nativeSupport = new Map<string, Promise<boolean>>()
 
 function canEncodeNatively(type: string): Promise<boolean> {
@@ -34,100 +35,90 @@ function canEncodeNatively(type: string): Promise<boolean> {
   return probe
 }
 
-async function encodeWithCanvas(
-  imageData: ImageData,
+async function encodeCanvas(
+  source: ImageSource,
   type: string,
   quality?: number,
-): Promise<ArrayBuffer> {
-  const canvas = new OffscreenCanvas(imageData.width, imageData.height)
-  const context = canvas.getContext('2d')
-  if (!context) throw new Error('Canvas 2D context is unavailable')
-  context.putImageData(imageData, 0, 0)
-  const blob = await canvas.convertToBlob(
-    quality != null ? { type, quality } : { type },
-  )
-  return blob.arrayBuffer()
+): Promise<Blob> {
+  const options = quality != null ? { type, quality } : { type }
+  const blob = await source.canvas.convertToBlob(options)
+  if (blob.type !== type) {
+    throw new Error(`This browser cannot encode ${type}`)
+  }
+  return blob
 }
 
-// JPEG and WebP prefer the browser's native encoder (OffscreenCanvas.convertToBlob),
-// which is much faster and avoids the WASM/ImageData copies. jsquash remains the
-// fallback for browsers without real support and covers AVIF/JXL/PNG.
+function wrap(buffer: ArrayBuffer, type: string): Blob {
+  return new Blob([buffer], { type })
+}
+
+// JPEG and WebP are encoded exclusively with the browser's native encoder, so
+// no codec package is fetched or instantiated for them. AVIF/JXL (and the PNG
+// compression modes) pull their WASM in lazily, only when selected.
 const loaders: Record<OutputFormat, CodecLoader> = {
-  jpeg: async () => {
-    const { encode: jsquashEncode, decode } = await import('@jsquash/jpeg')
-    return {
-      format: 'jpeg',
-      mimeType: 'image/jpeg',
-      extension: 'jpg',
-      encode: async (imageData, options) => {
-        if (await canEncodeNatively('image/jpeg')) {
-          return encodeWithCanvas(
-            imageData,
-            'image/jpeg',
-            (options?.quality ?? 75) / 100,
-          )
-        }
-        return jsquashEncode(
-          imageData,
-          options?.quality != null ? { quality: options.quality } : {},
-        )
-      },
-      decode: (buffer) => decode(buffer),
-    }
-  },
-  png: async () => {
-    const { encode: pngEncode, decode } = await import('@jsquash/png')
-    const { optimise } = await import('@jsquash/oxipng')
-    const { encodeImagequant } = await import('./imagequant')
-    return {
-      format: 'png',
-      mimeType: 'image/png',
-      extension: 'png',
-      encode: async (imageData, options) => {
-        const mode = options?.mode ?? 0
-        if (mode === 2) return encodeImagequant(imageData)
-        const encoded = await pngEncode(imageData)
-        if (mode === 1) return optimise(encoded, { level: 0 })
-        if (await canEncodeNatively('image/png'))
-          return encodeWithCanvas(imageData, 'image/png')
-        return encoded
-      },
-      decode: (buffer) => decode(buffer),
-    }
-  },
-  webp: async () => {
-    const { encode: jsquashEncode, decode } = await import('@jsquash/webp')
-    return {
-      format: 'webp',
-      mimeType: 'image/webp',
-      extension: 'webp',
-      encode: async (imageData, options) => {
-        if (await canEncodeNatively('image/webp')) {
-          return encodeWithCanvas(
-            imageData,
-            'image/webp',
-            (options?.quality ?? 75) / 100,
-          )
-        }
-        return jsquashEncode(
-          imageData,
-          options?.quality != null ? { quality: options.quality } : {},
-        )
-      },
-      decode: (buffer) => decode(buffer),
-    }
-  },
+  jpeg: async () => ({
+    format: 'jpeg',
+    mimeType: 'image/jpeg',
+    extension: 'jpg',
+    encode: async (source, options) => {
+      if (!(await canEncodeNatively('image/jpeg'))) {
+        throw new Error('JPEG encoding is not supported in this browser')
+      }
+      return encodeCanvas(source, 'image/jpeg', (options?.quality ?? 75) / 100)
+    },
+  }),
+  png: async () => ({
+    format: 'png',
+    mimeType: 'image/png',
+    extension: 'png',
+    encode: async (source, options) => {
+      const mode = options?.mode ?? 0
+      if (mode === 2) {
+        const { encodeImagequant } = await import('./imagequant')
+        return wrap(await encodeImagequant(toImageData(source)), 'image/png')
+      }
+      if (mode === 1) {
+        const { encode: pngEncode } = await import('@jsquash/png')
+        const { optimise } = await import('@jsquash/oxipng')
+        const encoded = await pngEncode(toImageData(source))
+        return wrap(await optimise(encoded, { level: 0 }), 'image/png')
+      }
+      if (await canEncodeNatively('image/png')) {
+        return encodeCanvas(source, 'image/png')
+      }
+      const { encode: pngEncode } = await import('@jsquash/png')
+      return wrap(await pngEncode(toImageData(source)), 'image/png')
+    },
+    decode: async (buffer) => {
+      const { decode } = await import('@jsquash/png')
+      return decode(buffer)
+    },
+  }),
+  webp: async () => ({
+    format: 'webp',
+    mimeType: 'image/webp',
+    extension: 'webp',
+    encode: async (source, options) => {
+      if (!(await canEncodeNatively('image/webp'))) {
+        throw new Error('WebP encoding is not supported in this browser')
+      }
+      return encodeCanvas(source, 'image/webp', (options?.quality ?? 75) / 100)
+    },
+  }),
   avif: async () => {
     const { encode, decode } = await import('@jsquash/avif')
     return {
       format: 'avif',
       mimeType: 'image/avif',
       extension: 'avif',
-      encode: (imageData, options) =>
-        encode(imageData, {
-          ...(options?.quality != null ? { quality: options.quality } : {}),
-          ...(options?.speed != null ? { speed: options.speed } : {}),
-        }),
+      encode: async (source, options) =>
+        wrap(
+          await encode(toImageData(source), {
+            ...(options?.quality != null ? { quality: options.quality } : {}),
+            ...(options?.speed != null ? { speed: options.speed } : {}),
+          }),
+          'image/avif',
+        ),
       decode: async (buffer) => {
         const decoded = await decode(buffer)
         if (!decoded) throw new Error('Failed to decode AVIF image')
@@ -141,11 +132,14 @@ const loaders: Record<OutputFormat, CodecLoader> = {
       format: 'jxl',
       mimeType: 'image/jxl',
       extension: 'jxl',
-      encode: (imageData, options) =>
-        encode(imageData, {
-          ...(options?.quality != null ? { quality: options.quality } : {}),
-          ...(options?.effort != null ? { effort: options.effort } : {}),
-        }),
+      encode: async (source, options) =>
+        wrap(
+          await encode(toImageData(source), {
+            ...(options?.quality != null ? { quality: options.quality } : {}),
+            ...(options?.effort != null ? { effort: options.effort } : {}),
+          }),
+          'image/jxl',
+        ),
       decode: (buffer) => decode(buffer),
     }
   },
@@ -161,4 +155,12 @@ export async function getCodec(format: OutputFormat): Promise<Codec> {
     throw new Error(`No codec available for format: ${format}`)
   }
   return loader()
+}
+
+/**
+ * Warms a codec's module (and WASM) so the first encode of a WASM format does
+ * not stall the user. Call when AVIF/JXL is selected.
+ */
+export async function preloadCodec(format: OutputFormat): Promise<void> {
+  await getCodec(format)
 }

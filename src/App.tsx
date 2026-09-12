@@ -7,6 +7,7 @@ import {
   FORMAT_SPECS,
   type FormatControl,
 } from './lib/codecs/formats'
+import { preloadCodec } from './lib/codecs/registry'
 import type { OutputFormat } from './lib/codecs/types'
 import { getDeviceProfile, heavyWorkerCount } from './lib/device'
 import {
@@ -117,8 +118,8 @@ function controlHint(control: FormatControl, value: number): string {
 }
 
 const jobs = signal<BatchJob[]>([])
-const targetFormat = signal<OutputFormat>('webp')
-const settings = signal<Settings>(defaultSettings('webp'))
+const targetFormat = signal<OutputFormat>('jpeg')
+const settings = signal<Settings>(defaultSettings('jpeg'))
 const maxLongEdge = signal(0)
 const isDragging = signal(false)
 const poolStats = signal(getPoolStats())
@@ -351,7 +352,7 @@ async function estimateJob(id: string) {
 
   try {
     const { response } = processImage({
-      readFile: () => acquireFileBuffer(id),
+      readFile: (consume) => acquireFileBuffer(id, consume),
       targetFormat: format,
       effort: current.effort,
       speed: current.speed,
@@ -404,7 +405,7 @@ async function compressJob(id: string) {
 
   try {
     const { response } = processImage({
-      readFile: () => acquireFileBuffer(id),
+      readFile: (consume) => acquireFileBuffer(id, consume),
       targetFormat: format,
       quality: current.quality,
       effort: current.effort,
@@ -412,13 +413,14 @@ async function compressJob(id: string) {
       mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       buildEstimate: false,
+      consumeInput: true,
       priority: 'high',
     })
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'result') return
 
     const previousUrl = job.outputUrl
-    const blob = new Blob([result.outputBuffer], { type: result.mimeType })
+    const blob = result.outputBlob
     const url = URL.createObjectURL(blob)
     updateJob(id, {
       status: 'done',
@@ -573,6 +575,9 @@ function changeFormat(format: OutputFormat) {
   targetFormat.value = format
   settings.value = defaultSettings(format)
   applyWorkerBudget()
+  // Warm the WASM codec while the user dials in settings, so selecting
+  // AVIF/JXL does not stall on the first encode.
+  if (format === 'avif' || format === 'jxl') void preloadCodec(format)
   scheduleSampleReestimate()
 }
 

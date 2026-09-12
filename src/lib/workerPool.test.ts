@@ -6,7 +6,7 @@ function resultFor(jobId: string): ResultResponse {
   return {
     type: 'result',
     jobId,
-    outputBuffer: new ArrayBuffer(1),
+    outputBlob: new Blob([new ArrayBuffer(1)]),
     outputSize: 1,
     width: 1,
     height: 1,

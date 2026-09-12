@@ -1,9 +1,8 @@
 import { getCodec } from './codecs/registry'
-import type { EncodeOptions, OutputFormat } from './codecs/types'
-import { resizeImageData } from './resize'
+import type { EncodeOptions, ImageSource, OutputFormat } from './codecs/types'
 
 export interface EncodeResult {
-  buffer: ArrayBuffer
+  blob: Blob
   width: number
   height: number
   format: OutputFormat
@@ -11,19 +10,23 @@ export interface EncodeResult {
   mimeType: string
 }
 
-export async function encodeImageData(
-  imageData: ImageData,
+/**
+ * Encodes an already-decoded (and optionally resized) source. The codec is
+ * resolved lazily, so WASM codecs only load when a format that needs them is
+ * actually used.
+ */
+export async function encodeImageSource(
+  source: ImageSource,
   format: OutputFormat,
   options: EncodeOptions = {},
 ): Promise<EncodeResult> {
   const codec = await getCodec(format)
-  const resized = await resizeImageData(imageData, options.resize)
-  const buffer = await codec.encode(resized, options)
+  const blob = await codec.encode(source, options)
 
   return {
-    buffer,
-    width: resized.width,
-    height: resized.height,
+    blob,
+    width: source.width,
+    height: source.height,
     format: codec.format,
     extension: codec.extension,
     mimeType: codec.mimeType,

@@ -15,10 +15,21 @@ export interface EncodeOptions {
   resize?: ResizeOptions
 }
 
+/**
+ * Decoded pixels held on a canvas. The native encoder consumes the canvas
+ * directly, so the pipeline never round-trips through `ImageData` unless a
+ * WASM codec explicitly needs it.
+ */
+export interface ImageSource {
+  readonly width: number
+  readonly height: number
+  readonly canvas: OffscreenCanvas
+}
+
 export interface Codec {
   readonly format: OutputFormat
   readonly mimeType: string
   readonly extension: string
-  encode(imageData: ImageData, options?: EncodeOptions): Promise<ArrayBuffer>
+  encode(source: ImageSource, options?: EncodeOptions): Promise<Blob>
   decode?(buffer: ArrayBuffer): Promise<ImageData>
 }

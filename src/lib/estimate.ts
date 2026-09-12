@@ -1,7 +1,7 @@
+import { scaleImage } from './canvas'
 import { FORMAT_SPECS } from './codecs/formats'
-import type { OutputFormat } from './codecs/types'
-import { encodeImageData } from './convert'
-import { downscaleImageData } from './image'
+import type { ImageSource, OutputFormat } from './codecs/types'
+import { encodeImageSource } from './convert'
 
 const SAMPLE_QUALITIES = [10, 30, 50, 70, 90, 100]
 const SMALL_LONG_EDGE = 192
@@ -59,26 +59,26 @@ export interface EstimateOptions {
 }
 
 export async function buildEstimateSamples(
-  imageData: ImageData,
+  source: ImageSource,
   format: OutputFormat,
   options: EstimateOptions = {},
 ): Promise<EstimateSample[]> {
-  const small = downscaleImageData(imageData, SMALL_LONG_EDGE)
-  const large = downscaleImageData(imageData, LARGE_LONG_EDGE)
+  const small = scaleImage(source, SMALL_LONG_EDGE)
+  const large = scaleImage(source, LARGE_LONG_EDGE)
 
   const smallPixels = small.width * small.height
   const largePixels = large.width * large.height
-  const fullPixels = imageData.width * imageData.height
+  const fullPixels = source.width * source.height
 
-  const measure = async (data: ImageData, quality: number) =>
+  const measure = async (data: ImageSource, quality: number) =>
     (
-      await encodeImageData(data, format, {
+      await encodeImageSource(data, format, {
         quality,
         effort: options.effort,
         speed: options.speed,
         mode: options.mode,
       })
-    ).buffer.byteLength
+    ).blob.size
 
   // Lossless formats (PNG) ignore quality, so one measurement per thumbnail is
   // enough; expose it across the whole quality range so interpolation works.
