@@ -45,6 +45,10 @@ fastest web tool. That claim should be made only after testing representative im
 the target browsers and devices. Codec implementations, worker startup costs, thermal
 throttling, and device memory can all change the result.
 
+The concrete numbers behind these choices — encode times, output sizes, the per-worker
+memory model, and device worker budgets — are in the
+[Performance](./PERFORMANCE.md) document.
+
 ## Architectural choices
 
 ### Browser-only processing

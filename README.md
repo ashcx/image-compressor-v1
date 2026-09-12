@@ -109,7 +109,9 @@ The main source areas are:
 - `src/lib/*.test.ts` — unit tests for the non-UI modules
 
 The detailed pipeline and the reasons behind the main architecture decisions are in
-[Architecture](./docs/ARCHITECTURE.md).
+[Architecture](./docs/ARCHITECTURE.md). The measured encode times, output sizes,
+memory model, and device worker-scaling data are in
+[Performance](./docs/PERFORMANCE.md).
 
 ## Current validation status
 
