@@ -3,60 +3,146 @@ import { FORMAT_SPECS } from './codecs/formats'
 import type { ImageSource, OutputFormat } from './codecs/types'
 import { encodeImageSource } from './convert'
 
-const SAMPLE_QUALITIES = [10, 30, 50, 70, 90, 100]
-const SMALL_LONG_EDGE = 192
-const LARGE_LONG_EDGE = 448
+// JPEG/WebP quality is a small fixed set, so we sample exactly those values:
+// no quality interpolation is needed and every preset estimate is direct.
+const SAMPLE_QUALITIES = [50, 75, 85, 94]
+const SMALL_LONG_EDGE = 384
+const LARGE_LONG_EDGE = 896
 
-// Encoded size does not scale linearly with pixel count: smaller images carry
-// relatively more per-pixel overhead, so a naive "thumbnail bytes x pixel ratio"
-// overestimates badly (worse at high quality and large sizes). Instead we sample
-// two downscaled sizes at each quality and fit a power law bytes = k * pixels^beta,
-// then extrapolate to the full resolution.
-const MIN_BETA = 0.35
-const MAX_BETA = 0.8
+// Exponent bounds keep pathological inputs from producing wild sizes.
+const MIN_EXPONENT = 0.2
+const MAX_EXPONENT = 1.6
 
-// Residual calibration on top of the power-law fit, tuned against real photos
-// (estimate/exact geometric mean ~= 1.0). This is a deliberately rough estimate
-// that the exact encode replaces within the debounce window.
-const SIZE_CALIBRATION = 1.25
-
-export interface EstimateSample {
-  quality: number
-  bytes: number
+// Calibration fitted on a 25-image corpus (photographs from 0.3-26 MP plus UI
+// screenshots, scanned text, flat graphics, gradients, noise and alpha images)
+// using the estimate decode cap (<=2048px) and 384/896 sample encodes.
+//
+// Encoded size does not scale linearly with pixel count: downscaled samples
+// lose high-frequency detail, so a naive pixel-ratio overestimates. We sample
+// two downscaled sizes and derive the local scaling exponent
+//   beta = ln(largeBytes / smallBytes) / ln(largePixels / smallPixels),
+// then fit the full-resolution exponent as e = a + b * beta. The estimate is
+//   bytes = exp(lnCal) * largeBytes * (fullPixels / largePixels) ** e.
+// Each row is [a, b, lnCal].
+const LIGHT_CALIBRATION: Record<
+  'jpeg' | 'webp',
+  Record<number, readonly [number, number, number]>
+> = {
+  jpeg: {
+    50: [0.1995, 0.7919, -0.001],
+    75: [0.0967, 0.8512, -0.0063],
+    85: [0.1753, 0.7315, -0.0437],
+    94: [0.2068, 0.5969, -0.0644],
+  },
+  webp: {
+    50: [0.2067, 0.696, 0.05],
+    75: [0.1305, 0.775, 0.0736],
+    85: [0.1188, 0.7708, 0.0837],
+    94: [0.196, 0.6236, 0.0673],
+  },
 }
 
-export function scaleToFullSize(
+// PNG is lossless, so calibration depends only on the compression mode.
+const PNG_CALIBRATION: Record<number, readonly [number, number, number]> = {
+  0: [-0.2048, 1.0887, 0.0483],
+  1: [-0.3829, 1.3154, 0.0167],
+  2: [-0.1992, 1.1411, 0.0363],
+}
+
+// AVIF quality is continuous and the speed setting shifts the size:
+// e = a + b * beta + g * quality/100 + h * speed/10.
+const AVIF_CALIBRATION: readonly [number, number, number, number, number] = [
+  0.3285, 0.5225, -0.0697, 0.0182, 0.0383,
+]
+
+function clampExponent(value: number): number {
+  return Math.min(MAX_EXPONENT, Math.max(MIN_EXPONENT, value))
+}
+
+function lightRow(
+  format: 'jpeg' | 'webp',
+  quality: number,
+): readonly [number, number, number] {
+  const table = LIGHT_CALIBRATION[format]
+  if (table[quality]) return table[quality]
+  let best = SAMPLE_QUALITIES[0]
+  for (const q of SAMPLE_QUALITIES) {
+    if (Math.abs(q - quality) < Math.abs(best - quality)) best = q
+  }
+  return table[best]
+}
+
+export function sampleBeta(
+  largeBytes: number,
+  largePixels: number,
+  smallBytes: number,
+  smallPixels: number,
+): number {
+  if (
+    smallBytes <= 0 ||
+    largeBytes <= 0 ||
+    smallPixels <= 0 ||
+    largePixels <= smallPixels
+  ) {
+    return 0
+  }
+  return Math.log(largeBytes / smallBytes) / Math.log(largePixels / smallPixels)
+}
+
+export interface EstimateTarget {
+  quality?: number
+  speed?: number
+  mode?: number
+}
+
+/**
+ * Extrapolates a sample encode to the full pixel count using the per-codec
+ * calibrated exponent. Returns the sample size directly when the sample is
+ * already at (or above) the full resolution.
+ */
+export function estimateFullBytes(
+  format: OutputFormat,
+  target: EstimateTarget,
   largeBytes: number,
   largePixels: number,
   smallBytes: number,
   smallPixels: number,
   fullPixels: number,
 ): number {
-  if (
-    largePixels >= fullPixels ||
-    smallBytes <= 0 ||
-    largeBytes <= 0 ||
-    smallPixels >= largePixels
-  ) {
-    return Math.round(largeBytes * (fullPixels / largePixels))
+  if (largePixels >= fullPixels) return Math.round(largeBytes)
+
+  const beta = sampleBeta(largeBytes, largePixels, smallBytes, smallPixels)
+
+  let exponent: number
+  let correction: number
+  if (format === 'png') {
+    const row = PNG_CALIBRATION[target.mode ?? 0] ?? PNG_CALIBRATION[0]
+    exponent = clampExponent(row[0] + row[1] * beta)
+    correction = row[2]
+  } else if (format === 'avif') {
+    const [a, b, g, h, lnCal] = AVIF_CALIBRATION
+    const quality = (target.quality ?? 50) / 100
+    const speed = (target.speed ?? 8) / 10
+    exponent = clampExponent(a + b * beta + g * quality + h * speed)
+    correction = lnCal
+  } else {
+    const row = lightRow(format, target.quality ?? 75)
+    exponent = clampExponent(row[0] + row[1] * beta)
+    correction = row[2]
   }
 
-  const beta = Math.min(
-    MAX_BETA,
-    Math.max(
-      MIN_BETA,
-      Math.log(largeBytes / smallBytes) / Math.log(largePixels / smallPixels),
-    ),
+  return Math.round(
+    Math.exp(correction) * largeBytes * (fullPixels / largePixels) ** exponent,
   )
-
-  return Math.round(largeBytes * (fullPixels / largePixels) ** beta)
 }
 
-export interface EstimateOptions {
-  quality?: number
+export interface EstimateSample {
+  quality: number
+  bytes: number
+}
+
+export interface EstimateOptions extends EstimateTarget {
   effort?: number
-  speed?: number
-  mode?: number
   /** True pixel size of the image being estimated. Estimates may run on a
    * scaled decode, so the decoded `source` size must not be used here. */
   fullWidth?: number
@@ -88,61 +174,41 @@ export async function buildEstimateSamples(
       })
     ).blob.size
 
+  const estimate = async (quality: number) => {
+    const smallBytes = await measure(small, quality)
+    const largeBytes = await measure(large, quality)
+    return estimateFullBytes(
+      format,
+      { quality, speed: options.speed, mode: options.mode },
+      largeBytes,
+      largePixels,
+      smallBytes,
+      smallPixels,
+      fullPixels,
+    )
+  }
+
   // Lossless formats (PNG) ignore quality, so one measurement per thumbnail is
   // enough; expose it across the whole quality range so interpolation works.
   if (FORMAT_SPECS[format].lossless) {
-    const smallBytes = await measure(small, 100)
-    const largeBytes = await measure(large, 100)
-    const bytes = Math.round(
-      scaleToFullSize(
-        largeBytes,
-        largePixels,
-        smallBytes,
-        smallPixels,
-        fullPixels,
-      ) * SIZE_CALIBRATION,
-    )
+    const bytes = await estimate(100)
     return [
       { quality: 0, bytes },
       { quality: 100, bytes },
     ]
   }
 
-  // AVIF/JXL are expensive to estimate across the whole quality range, so
-  // measure only the currently selected quality and re-estimate (debounced)
-  // when the user moves the slider.
+  // AVIF is expensive to estimate across the whole quality range, so measure
+  // only the currently selected quality and re-estimate when the user moves
+  // the slider.
   if (format === 'avif') {
     const quality = options.quality ?? 50
-    const smallBytes = await measure(small, quality)
-    const largeBytes = await measure(large, quality)
-    const bytes = Math.round(
-      scaleToFullSize(
-        largeBytes,
-        largePixels,
-        smallBytes,
-        smallPixels,
-        fullPixels,
-      ) * SIZE_CALIBRATION,
-    )
-    return [{ quality, bytes }]
+    return [{ quality, bytes: await estimate(quality) }]
   }
 
   const samples: EstimateSample[] = []
   for (const quality of SAMPLE_QUALITIES) {
-    const smallBytes = await measure(small, quality)
-    const largeBytes = await measure(large, quality)
-    samples.push({
-      quality,
-      bytes: Math.round(
-        scaleToFullSize(
-          largeBytes,
-          largePixels,
-          smallBytes,
-          smallPixels,
-          fullPixels,
-        ) * SIZE_CALIBRATION,
-      ),
-    })
+    samples.push({ quality, bytes: await estimate(quality) })
   }
 
   return samples

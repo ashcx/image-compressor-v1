@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   averageRatioSamples,
   deriveEstimate,
+  estimateFullBytes,
   interpolate,
+  sampleBeta,
   sampleSize,
-  scaleToFullSize,
 } from './estimate'
 
 const samples = [
@@ -42,24 +43,100 @@ describe('interpolate', () => {
   })
 })
 
-describe('scaleToFullSize', () => {
-  it('extrapolates with a sub-linear power law', () => {
-    // beta = ln(1000/400) / ln(4000/1000) ~= 0.661, estimate ~= 2500
-    expect(scaleToFullSize(1000, 4000, 400, 1000, 16000)).toBe(2500)
+describe('sampleBeta', () => {
+  it('derives the local scaling exponent from two samples', () => {
+    expect(sampleBeta(1000, 4000, 400, 1000)).toBeCloseTo(0.661, 2)
   })
 
-  it('falls back to linear scaling when there is no smaller sample', () => {
-    expect(scaleToFullSize(1000, 4000, 500, 4000, 4000)).toBe(1000)
+  it('returns zero for degenerate samples', () => {
+    expect(sampleBeta(0, 4000, 400, 1000)).toBe(0)
+    expect(sampleBeta(1000, 1000, 400, 1000)).toBe(0)
+  })
+})
+
+describe('estimateFullBytes', () => {
+  it('returns the sample size once it covers the full resolution', () => {
+    expect(
+      estimateFullBytes('jpeg', { quality: 75 }, 1000, 4000, 500, 4000, 4000),
+    ).toBe(1000)
   })
 
-  it('clamps an aggressive exponent to the maximum', () => {
-    // raw beta ~= 1.66 -> clamped to 0.8 -> 1000 * 4^0.8 ~= 3031
-    expect(scaleToFullSize(1000, 4000, 100, 1000, 16000)).toBe(3031)
+  it('extrapolates jpeg within a sane range', () => {
+    const bytes = estimateFullBytes(
+      'jpeg',
+      { quality: 75 },
+      1000,
+      4000,
+      400,
+      1000,
+      16000,
+    )
+    expect(bytes).toBeGreaterThan(1000)
+    expect(bytes).toBeLessThan(20000)
   })
 
-  it('clamps a near-flat exponent to the minimum', () => {
-    // raw beta ~= 0 -> clamped to 0.35 -> 1000 * 4^0.35 ~= 1625
-    expect(scaleToFullSize(1000, 4000, 999, 1000, 16000)).toBe(1625)
+  it('uses per-codec calibration', () => {
+    const jpeg = estimateFullBytes(
+      'jpeg',
+      { quality: 75 },
+      1000,
+      4000,
+      400,
+      1000,
+      16000,
+    )
+    const webp = estimateFullBytes(
+      'webp',
+      { quality: 75 },
+      1000,
+      4000,
+      400,
+      1000,
+      16000,
+    )
+    expect(jpeg).not.toBe(webp)
+  })
+
+  it('grows with quality and varies with png mode', () => {
+    const low = estimateFullBytes(
+      'jpeg',
+      { quality: 50 },
+      1000,
+      4000,
+      400,
+      1000,
+      16000,
+    )
+    const high = estimateFullBytes(
+      'jpeg',
+      { quality: 94 },
+      2000,
+      4000,
+      800,
+      1000,
+      16000,
+    )
+    expect(high).toBeGreaterThan(low)
+
+    const m0 = estimateFullBytes(
+      'png',
+      { mode: 0 },
+      1000,
+      4000,
+      400,
+      1000,
+      16000,
+    )
+    const m1 = estimateFullBytes(
+      'png',
+      { mode: 1 },
+      1000,
+      4000,
+      400,
+      1000,
+      16000,
+    )
+    expect(m0).not.toBe(m1)
   })
 })
 

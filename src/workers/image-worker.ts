@@ -19,8 +19,9 @@ interface WorkerScope {
 
 const scope = globalThis as unknown as WorkerScope
 
-// Estimates only need the 448px sample and a 96px thumbnail, so decode small.
-const ESTIMATE_DECODE_EDGE = 512
+// Estimates sample at 384/896px; decoding up to 2048px keeps those samples
+// representative without decoding tens of megapixels into a large canvas.
+const ESTIMATE_DECODE_EDGE = 2048
 
 scope.onmessage = async (event) => {
   const request = event.data
@@ -28,17 +29,29 @@ scope.onmessage = async (event) => {
 
   try {
     const sourceFormat = detectFormat(request.fileBuffer)
+    // Read the true dimensions first: estimates run on a capped decode and
+    // small images must not be upscaled.
+    const dimensions = request.estimateOnly
+      ? parseDimensions(request.fileBuffer)
+      : null
+    const longEdge = dimensions
+      ? Math.max(dimensions.width, dimensions.height)
+      : null
+    const maxEdge =
+      request.estimateOnly &&
+      (longEdge == null || longEdge > ESTIMATE_DECODE_EDGE)
+        ? ESTIMATE_DECODE_EDGE
+        : undefined
     const decoded = await decodeImageData(
       request.fileBuffer,
       sourceFormat,
-      request.estimateOnly ? ESTIMATE_DECODE_EDGE : undefined,
+      maxEdge,
     )
     const source = resizeImage(decoded, request.resize)
 
     if (request.estimateOnly) {
-      // The estimate runs on a scaled decode, so read the true dimensions from
+      // The estimate runs on a scaled decode, so use the true dimensions from
       // the file header and (if resizing) the resolved target size.
-      const dimensions = parseDimensions(request.fileBuffer)
       let fullWidth = dimensions?.width ?? source.width
       let fullHeight = dimensions?.height ?? source.height
       const target = resolveResize(fullWidth, fullHeight, request.resize)
