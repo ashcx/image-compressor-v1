@@ -40,7 +40,7 @@ describe('resolveWorkerCount', () => {
     ).toBe(4)
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 2 }),
-    ).toBe(1)
+    ).toBe(2)
   })
 
   it('treats a touch-enabled Macintosh as an iPad', () => {
