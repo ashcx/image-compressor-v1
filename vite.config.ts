@@ -34,7 +34,6 @@ export default defineConfig(() => {
     optimizeDeps: {
       exclude: [
         '@jsquash/avif',
-        '@jsquash/jxl',
         '@jsquash/oxipng',
         '@jsquash/png',
         '@jsquash/webp',

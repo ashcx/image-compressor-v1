@@ -179,8 +179,4 @@ describe('parseDimensions', () => {
     ).toBeNull()
     expect(parseDimensions(bytes(0x00, 0x01, 0x02, 0x03))).toBeNull()
   })
-
-  it('returns null for JPEG XL', () => {
-    expect(parseDimensions(bytes(0xff, 0x0a, 0x00, 0x00))).toBeNull()
-  })
 })

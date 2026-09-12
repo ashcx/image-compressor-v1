@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-A browser-based tool that compresses and converts images (JPEG, PNG, WebP, AVIF, JPEG XL)
+A browser-based tool that compresses and converts images (JPEG, PNG, WebP, AVIF)
 entirely client-side — no server, no upload, no backend. Users drop in one or many images,
 pick an output format and quality, and the tool processes them in parallel across CPU cores
 using a Web Worker pool wrapping `jsquash` WASM codecs. Results are downloadable individually
@@ -21,7 +21,7 @@ logic, no build step beyond static asset generation.
 
 ## 2. Goals
 
-- Convert between JPEG, PNG, WebP, AVIF, and JPEG XL, client-side, in-browser.
+- Convert between JPEG, PNG, WebP, and AVIF, client-side, in-browser.
 - Process a batch of images with true multi-image parallelism (one image per worker,
   many workers running concurrently).
 - Work on desktop, tablet, and phone browsers (Chrome, Firefox, Safari — recent versions).
@@ -87,7 +87,7 @@ static-hosted tool.
 |---|---|---|
 | Language | TypeScript (strict) | Shared message types for the worker protocol in §6 |
 | UI framework | Preact + `@preact/signals` (`@preact/preset-vite`) | ~4 KB runtime, TSX; signals update individual progress rows without re-rendering the batch list |
-| Codecs | `@jsquash/jpeg` (MozJPEG), `@jsquash/webp`, `@jsquash/avif`, `@jsquash/jxl`, `@jsquash/png`, `@jsquash/oxipng`, `@jsquash/resize` | All WASM, browser + worker targeted |
+| Codecs | `@jsquash/jpeg` (MozJPEG), `@jsquash/webp`, `@jsquash/avif`, `@jsquash/png`, `@jsquash/oxipng`, `@jsquash/resize` | All WASM, browser + worker targeted |
 | Bundler | Vite | Handles WASM asset copying; requires `optimizeDeps.exclude` for jsquash (below) |
 | Parallelism | Native `Worker` API, `type: 'module'` | No threading libraries needed |
 | Zipping | `fflate` | Client-side, no server round-trip. Lighter and faster than JSZip (~12 KB gzip vs ~28 KB); chosen now, used from Sprint 7. |
@@ -120,10 +120,10 @@ paradigm for marginal gain.
 pre-bundler; the fix (documented by the jSquash maintainers) is to exclude them:
 
 ```ts
-optimizeDeps: { exclude: ['@jsquash/avif', '@jsquash/jpeg', '@jsquash/jxl', '@jsquash/png', '@jsquash/webp'] }
+optimizeDeps: { exclude: ['@jsquash/avif', '@jsquash/jpeg', '@jsquash/png', '@jsquash/webp'] }
 ```
 
-Note: `@jsquash/avif`, `@jsquash/jxl`, and `@jsquash/oxipng` ship nested workers that hit a
+Note: `@jsquash/avif` and `@jsquash/oxipng` ship nested workers that hit a
 Vite production-build bug; if this surfaces in Sprint 6, use their
 `*-single-thread-only` builds.
 
@@ -162,7 +162,7 @@ can be handed to any worker in the pool without shared state.
   type: 'process',
   jobId: string,
   fileBuffer: ArrayBuffer,   // transferred, not copied
-  targetFormat: 'jpeg' | 'png' | 'webp' | 'avif' | 'jxl',
+  targetFormat: 'jpeg' | 'png' | 'webp' | 'avif',
   quality?: number,          // encoder-specific
   buildEstimate?: boolean    // if true, also return the size-estimate curve
   // resize?: { width?: number; height?: number }  // Sprint 6
@@ -180,7 +180,7 @@ can be handed to any worker in the pool without shared state.
   outputSize?: number,
   width?: number,
   height?: number,
-  format?: 'jpeg' | 'png' | 'webp' | 'avif' | 'jxl',
+  format?: 'jpeg' | 'png' | 'webp' | 'avif',
   extension?: string,
   mimeType?: string,
   samples?: Array<{ quality: number; bytes: number }>,  // when buildEstimate
@@ -282,7 +282,7 @@ or "my worker pool" — this phase isolates the former.
 
 **Work:**
 - Per-format quality controls (JPEG/WebP/AVIF quality sliders; PNG via `oxipng` effort
-  level; JXL quality/effort).
+  level).
 - Optional resize step (`@jsquash/resize`) before encode.
 - Format auto-detection from file signature, not just file extension.
 
@@ -392,11 +392,11 @@ encode deliberately use different libraries:
 
 | Risk | Notes |
 |---|---|
-| Over-parallelizing on mobile | High worker counts + memory-hungry AVIF/JXL WASM instances could thrash on phones. Cap worker count; consider lowering it further on detected low-core-count devices. |
+| Over-parallelizing on mobile | High worker counts + memory-hungry AVIF WASM instances could thrash on phones. Cap worker count; consider lowering it further on detected low-core-count devices. |
 | Vite/jsquash bundler friction | Documented issue with wasm-pack-generated glue code; needs `optimizeDeps.exclude` for at least `@jsquash/png`. Budget time for this in Phase 0/1, not as a surprise later. |
 | GitHub Pages base-path bugs | Works locally, breaks on deploy if `base` isn't set correctly. Catch this in Phase 0. |
 | Safari/iOS quirks | Historically the least predictable target for WASM + Worker combos. Don't assume desktop testing generalizes — Phase 6 exists specifically to catch this. |
-| AVIF/JXL encode speed | Both are CPU-heavy regardless of parallelism; large batches in these formats may be slow even with a full worker pool. Set realistic user expectations in the UI (progress bar, estimated time) rather than over-promising speed. |
+| AVIF encode speed | It is CPU-heavy regardless of parallelism; large batches in this format may be slow even with a full worker pool. Set realistic user expectations in the UI (progress bar, estimated time) rather than over-promising speed. |
 | jsquash lacks Jpegli | Currently only MozJPEG is available via jsquash for JPEG output. Jpegli is a possible future upgrade but isn't a ready-made drop-in today (see Appendix B). |
 
 ---
@@ -413,7 +413,7 @@ from public documentation.
 
 | Tool | Scope | Open Source | Parallelism model (as documented) | Formats | Notes vs. our design |
 |---|---|---|---|---|---|
-| **Squoosh** (official, squoosh.app) | Single-image compressor/converter | Yes (Apache-2.0, GoogleChromeLabs) | N/A — no batch support at all | JPEG, PNG, WebP, AVIF, JXL | The reference implementation for the codecs we're using, but doesn't meet the "batch" requirement out of the box. CLI/library maintenance was deprioritized in 2023; the hosted web app continues to be supported. |
+| **Squoosh** (official, squoosh.app) | Single-image compressor/converter | Yes (Apache-2.0, GoogleChromeLabs) | N/A — no batch support at all | JPEG, PNG, WebP, AVIF | The reference implementation for the codecs we're using, but doesn't meet the "batch" requirement out of the box. CLI/library maintenance was deprioritized in 2023; the hosted web app continues to be supported. |
 | **Allless/compressor** ("Lessly") | Small hobby/indie in-browser utility | Yes (public GitHub repo) | Not documented — README describes "drop images → compress → download/zip" with no mention of a worker pool or concurrency count | JPEG, PNG, WebP, AVIF, HEIC, GIF | Closest in stack to our design (jsquash + Preact + Vite + client-zip). Broader format support (HEIC, GIF) than our v1 scope. No stated resize step yet (on their own roadmap). Whether batch is processed in parallel or sequentially isn't stated — this is exactly the ambiguity our Phase 3 "Definition of Done" (measured wall-clock speedup) is designed to avoid leaving unverified. |
 | **reserban/filefork** | Broad multi-media tool (images, video, audio, PDF) | Yes (public GitHub repo, states "Open source") | Not documented for images specifically; video/audio explicitly use FFmpeg WASM, images use "canvas-based encoders" (not clearly jsquash) | Images: JPG/PNG/WebP/AVIF/GIF/HEIC/TIFF/BMP/SVG, plus video/audio/PDF | Much larger scope than our project (video, audio, PDF). Batch + ZIP for up to 500 files claimed. Because it spans several media types, its per-image parallelism strategy isn't a focus of its own documentation. |
 | **david02324/webtools** | Small SEO-oriented multi-page tool site (format converters + metadata analyzer) | Yes (public GitHub repo) | Explicitly states conversion "runs in **a** Web Worker" (singular) using jsquash | WebP, AVIF (conversion targets); broader read support | Batch + ZIP supported, but the singular-worker phrasing suggests one job processed at a time rather than a sized worker pool — i.e., background-thread-safe, but not necessarily multi-image-parallel in the way our design specifies. |
@@ -421,7 +421,7 @@ from public documentation.
 | **Zapixal** (via dev.to writeup) | Personal project, blog-announced | Not stated/unclear | "Web Workers" (plural) mentioned generally; no explicit worker-pool/job-queue design described | HEIC, PNG, JPG, WebP, AVIF | Meets the batch + multi-format + free criteria on paper, but there's no public repo link confirmed in what I found, and no architecture detail beyond "Web Workers" — can't verify the parallelism claim beyond the author's description. |
 | **z0b1/starconvert** | Media converter (images + video audio extraction) | Yes (public GitHub repo) | Uses `SharedArrayBuffer`-dependent WASM (ffmpeg.wasm), requiring COOP/COEP headers — the exact complexity our design deliberately avoided (see Appendix A) | HEIC, JPEG, PNG, WebP (+ MP4 audio extraction) | Notable as a real-world example of the header-dependent approach requiring active server configuration (their README explicitly walks through setting COOP/COEP in `next.config.js`) — this isn't GitHub-Pages-deployable without extra tooling, unlike our design. |
 | **Bulk Resize Photos** (bulkresizephotos.com) | Established consumer product (browser extension + web tool) | No — proprietary | Not documented; likely sequential given quoted throughput (~150 photos/minute ≈ 2.5 images/sec, not obviously parallel-across-cores) | Resize + format/quality conversion | The most mature/polished of the tools found, with real user base (10k+ extension installs). Closed-source, so implementation can't be verified either way — included as the "best established competitor" benchmark rather than an architectural reference. |
-| **Mass Image Compressor** | Native Windows desktop app (not web-based) | Yes, per listing | Advertised "fast parallel encoding" (native, not WASM) | JPEG, PNG, WebP, AVIF, JPEG XL, **Jpegli** | Doesn't meet the "web-based" filter, included for context since it already ships the Jpegli support flagged as a future upgrade in Appendix B. Native parallelism will outperform any WASM-based approach, consistent with the Caesium comparison. |
+| **Mass Image Compressor** | Native Windows desktop app (not web-based) | Yes, per listing | Advertised "fast parallel encoding" (native, not WASM) | JPEG, PNG, WebP, AVIF, **Jpegli** | Doesn't meet the "web-based" filter, included for context since it already ships the Jpegli support flagged as a future upgrade in Appendix B. Native parallelism will outperform any WASM-based approach, consistent with the Caesium comparison. |
 
 ### Takeaways for this project
 
@@ -465,7 +465,7 @@ Google's Jpegli JPEG encoder (announced April 2024) outperforms MozJPEG in indep
 human-rated comparisons at comparable quality, while remaining a standard, fully
 interoperable JPEG file. However, no browser-ready WASM package (e.g. a `jsquash`-style
 npm package) was found to exist as of this writing — it currently lives as a C++ library
-inside the `libjxl` repository, intended for native/server use. Adopting it here would
+intended for native/server use. Adopting it here would
 require compiling it to WASM in-house (via Emscripten), which is materially more work than
 using the existing `@jsquash/jpeg` (MozJPEG) package. Treated as a future upgrade path, not
 a v1 requirement.

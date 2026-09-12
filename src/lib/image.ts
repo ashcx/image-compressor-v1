@@ -16,8 +16,8 @@ async function decodeWithBitmap(buffer: ArrayBuffer): Promise<ImageSource> {
 
 /**
  * Decodes to a canvas-backed source. Native decoding is tried first; browsers
- * that cannot decode a format (notably JPEG XL) fall back to the matching WASM
- * decoder when one exists.
+ * that cannot decode a format fall back to the matching WASM decoder when one
+ * exists.
  */
 export async function decodeImageData(
   buffer: ArrayBuffer,

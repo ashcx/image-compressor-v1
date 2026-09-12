@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { FORMAT_ORDER, FORMAT_SPECS, type FormatControl } from './formats'
+import {
+  FORMAT_ORDER,
+  FORMAT_SPECS,
+  type FormatControl,
+  isHeavyFormat,
+} from './formats'
 
 const ALL_KEYS = ['quality', 'effort', 'speed', 'mode'] as const
 
@@ -41,7 +46,15 @@ describe('format specs', () => {
 
   it('labels the slow codecs', () => {
     expect(FORMAT_SPECS.avif.label).toBe('AVIF (slower)')
-    expect(FORMAT_SPECS.jxl.label).toBe('JPEG XL (slower)')
+  })
+
+  it('classifies heavy codecs for the reduced worker pool', () => {
+    expect(isHeavyFormat('avif', 0)).toBe(true)
+    expect(isHeavyFormat('png', 0)).toBe(false)
+    expect(isHeavyFormat('png', 1)).toBe(true)
+    expect(isHeavyFormat('png', 2)).toBe(true)
+    expect(isHeavyFormat('jpeg', 0)).toBe(false)
+    expect(isHeavyFormat('webp', 0)).toBe(false)
   })
 
   it('uses the agreed preset values', () => {
@@ -57,19 +70,6 @@ describe('format specs', () => {
       avifSpeed?.kind === 'select' ? avifSpeed.options.map((o) => o.label) : [],
     ).toEqual(['Slow', 'Balanced', 'Fast'])
     expect(avifSpeed?.default).toBe(8)
-
-    const jxlQuality = byKey(FORMAT_SPECS.jxl.controls, 'quality')
-    expect(jxlQuality).toMatchObject({
-      kind: 'range',
-      min: 1,
-      max: 100,
-      default: 75,
-    })
-
-    const jxlEffort = byKey(FORMAT_SPECS.jxl.controls, 'effort')
-    expect(
-      jxlEffort?.kind === 'select' ? jxlEffort.options.map((o) => o.value) : [],
-    ).toEqual([7, 5, 3])
 
     const pngMode = byKey(FORMAT_SPECS.png.controls, 'mode')
     expect(

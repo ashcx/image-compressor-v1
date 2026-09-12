@@ -1,6 +1,6 @@
 # Client-Side Parallel Image Compressor
 
-Browser-based batch image compression/conversion — JPEG, PNG, WebP, AVIF, JPEG XL —
+Browser-based batch image compression/conversion — JPEG, PNG, WebP, AVIF —
 entirely client-side (no server, no upload). See [DESIGN.md](./DESIGN.md) for the design and
 [EXECUTION_PLAN.md](./EXECUTION_PLAN.md) for the delivery plan.
 

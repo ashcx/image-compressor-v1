@@ -205,7 +205,7 @@ function parseAvif(view: DataView): Dimensions | null {
 export function parseDimensions(buffer: ArrayBuffer): Dimensions | null {
   if (!(buffer instanceof ArrayBuffer)) return null
   const format = detectFormat(buffer)
-  if (format === null || format === 'jxl') return null
+  if (format === null) return null
 
   try {
     const view = new DataView(buffer)
