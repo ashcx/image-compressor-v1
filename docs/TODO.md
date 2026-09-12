@@ -561,6 +561,54 @@ codec adapter. QA should begin HEIC-11 during Sprint 7 with candidate builds.
 PERF-13, BUILD-01, DOC-01, and REL-01 can run in parallel. REL-01 should remain the final
 release gate and must consume the outputs of the other three workstreams.
 
+## HEIC browser-engine support matrix
+
+**Checked:** 2026-09-13. Browser release numbers move frequently; re-run this matrix against the
+release candidates before shipping. The table distinguishes native browser behavior from the
+application's planned WebAssembly path.
+
+| Rendering engine | Current stable representatives | Native HEIC decoding/display | Native HEIC encoding from web APIs | Application target after HEIC work |
+| --- | --- | --- | --- | --- |
+| **Blink** | Chrome 153, Edge 152, Chromium-based Opera, Android Chromium/WebView | **No reliable cross-browser baseline.** Treat HEIC as unsupported unless a real decode probe succeeds. Chromium's file picker MIME list may include `image/heic`/`image/heif`, but that is not proof of pixel decoding. | **No reliable portable baseline.** Do not depend on `canvas.toBlob()` or other browser APIs to produce `image/heic`. | Decode and encode through the worker-hosted libheif WASM adapter. |
+| **WebKit** | Safari 26.6, Safari View Controller, WKWebView on current Apple OS releases | **Yes for supported Safari/WebKit releases.** Safari 17 added HEIC image support for Safari, Safari View Controller, and WKWebView. Still retain fallback handling for older OS versions and unusual HEIF variants. | **Not a portable web-API guarantee.** Native display/import support must not be interpreted as a deterministic `image/heic` encoder contract. Use the app encoder for consistent output. | Prefer a native decode probe when it is materially faster, with libheif WASM as the compatibility path; use the WASM encoder. |
+| **Gecko** | Firefox 155 desktop and Android | **No reliable cross-browser baseline.** Treat HEIC as unsupported unless a real decode probe succeeds. | **No reliable portable baseline.** Use the application encoder. | Decode and encode through the worker-hosted libheif WASM adapter. |
+
+### How to interpret the matrix
+
+- **Native decoding** means that the actual HEIC bytes can be decoded to pixels by the browser's
+  image pipeline (`HTMLImageElement`, `createImageBitmap`, or `ImageDecoder` where available). A
+  file chooser accepting `.heic` is not sufficient.
+- **Native encoding** means that a web API reliably returns a valid HEIC file with the requested
+  quality. OS-level photo export or share conversion does not count.
+- **Application target** means the planned codec implementation, not a capability that exists in
+  the current application. Until HEIC-06 and HEIC-07 are complete, HEIC input and output remain
+  unsupported by this project.
+- Input selection should explicitly include `.heic`, `.heif`, `image/heic`, and `image/heif`; it
+  must not rely only on `accept="image/*"` because picker behavior and decode capability are
+  separate concerns.
+
+### Required browser verification
+
+- Test a corpus containing ordinary 8-bit HEIC, 10-bit/HDR HEIC where available, orientation and
+  color-profile metadata, thumbnails, and multi-image files.
+- Record the exact browser build, OS, device class, and result for native decode, native encode,
+  WASM decode, and WASM encode. Do not infer support from the user-agent string.
+- Probe native decode with real bytes and verify dimensions and rendered pixels. Probe encoding by
+  checking that the returned Blob has the requested MIME type and can be decoded back.
+- Run the same corpus through the worker path at 1, 100, 500, and 1,000 files, recording first
+  result, completion time, long tasks, peak memory, failures, and cancellation behavior.
+
+### Matrix references
+
+- [WebKit Safari 17 HEIC announcement](https://webkit.org/blog/14445/webkit-features-in-safari-17-0/)
+- [Safari 26.6 release context](https://webkit.org/blog/18178/webkit-features-for-safari-26-6/)
+- [Chrome 153 stable release notes](https://developer.chrome.com/release-notes/153)
+- [Microsoft Edge release schedule](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-release-schedule)
+- [Firefox 155 release notes](https://www.firefox.com/en-US/firefox/155.0/releasenotes/)
+- [MDN image format guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Image_types)
+- [Chromium MIME-picker change for HEIC/HEIF](https://chromium.googlesource.com/chromium/src.git/%2B/8bc39c9f42b2413af14e177f0c29cfeaebd2d6b7)
+- [libheif decoder and encoder documentation](https://github.com/strukturag/libheif)
+
 ## HEIC decision notes
 
 HEIC decoding and encoding should use the existing codec abstraction and worker pipeline rather
