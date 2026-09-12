@@ -39,13 +39,19 @@ describe('resolveWorkerCount', () => {
     expect(resolveWorkerCount({ userAgent: IPHONE_UA })).toBe(1)
   })
 
-  it('uses the standard budget (cores - 1) for iPads', () => {
+  it('uses the desktop tier for 7+ core iPads and the phone tier below', () => {
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 8 }),
     ).toBe(7)
     expect(
+      resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 7 }),
+    ).toBe(6)
+    expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 6 }),
-    ).toBe(5)
+    ).toBe(3)
+    expect(
+      resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 4 }),
+    ).toBe(2)
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 2 }),
     ).toBe(1)

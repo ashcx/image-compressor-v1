@@ -65,12 +65,9 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
 
   if (ua.includes('iPhone')) {
     // Safari exposes no RAM signal, so core count stands in for device class.
-    // Phones stay conservative, but newer 4-/6-core iPhones get 2-3 light
-    // workers (heavy codecs still halve via heavyWorkerCount()).
-    const reported = signals.hardwareConcurrency ?? 0
-    const workerCount = reported >= 6 ? 3 : reported >= 4 ? 2 : 1
+    // Phones stay conservative (heavy codecs still halve via heavyWorkerCount).
     return {
-      workerCount,
+      workerCount: phoneWorkerCount(signals.hardwareConcurrency ?? 0),
       constrained: true,
       maxZipBytes: IPHONE_MAX_ZIP_BYTES,
     }
@@ -80,8 +77,15 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
     ua.includes('iPad') ||
     (ua.includes('Macintosh') && (signals.maxTouchPoints ?? 0) >= 2)
   ) {
+    // Low-core iPads are treated like phones (conservative); 7+ reported cores
+    // is Pro-class and follows the desktop standard.
+    const reported = signals.hardwareConcurrency ?? 0
+    const workerCount =
+      reported >= 7
+        ? Math.min(standardWorkerCount(cores), MAX_WORKERS)
+        : phoneWorkerCount(reported)
     return {
-      workerCount: Math.min(standardWorkerCount(cores), MAX_WORKERS),
+      workerCount,
       constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
@@ -141,6 +145,15 @@ export function heavyWorkerCount(workerCount: number): number {
 /** Standard pool size: hardwareConcurrency - 1, leaving a core for the UI. */
 function standardWorkerCount(cores: number): number {
   return Math.max(1, cores - 1)
+}
+
+/**
+ * Conservative phone-class budget. Safari exposes no RAM signal, so reported
+ * cores proxy the device class: 6+ cores → 3, 4-5 → 2, 2 or fewer (or no API)
+ * → 1.
+ */
+function phoneWorkerCount(reported: number): number {
+  return reported >= 6 ? 3 : reported >= 4 ? 2 : 1
 }
 
 function readWorkerOverride(): number | undefined {
