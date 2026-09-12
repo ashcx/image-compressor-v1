@@ -9,6 +9,7 @@ import type {
   WorkerResponse,
 } from '../lib/protocol'
 import { resizeImage } from '../lib/resize'
+import { createThumbnail } from '../lib/thumbnail'
 
 interface WorkerScope {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null
@@ -17,27 +18,39 @@ interface WorkerScope {
 
 const scope = globalThis as unknown as WorkerScope
 
+// Estimates only need the 448px sample and a 96px thumbnail, so decode small.
+const ESTIMATE_DECODE_EDGE = 512
+
 scope.onmessage = async (event) => {
   const request = event.data
   if (request?.type !== 'process') return
 
   try {
     const sourceFormat = detectFormat(request.fileBuffer)
-    const decoded = await decodeImageData(request.fileBuffer, sourceFormat)
+    const decoded = await decodeImageData(
+      request.fileBuffer,
+      sourceFormat,
+      request.estimateOnly ? ESTIMATE_DECODE_EDGE : undefined,
+    )
     const source = resizeImage(decoded, request.resize)
 
     if (request.estimateOnly) {
-      const samples = await buildEstimateSamples(source, request.targetFormat, {
-        effort: request.effort,
-        speed: request.speed,
-        mode: request.mode,
-      })
+      const [samples, thumbnailBlob] = await Promise.all([
+        buildEstimateSamples(source, request.targetFormat, {
+          quality: request.quality,
+          effort: request.effort,
+          speed: request.speed,
+          mode: request.mode,
+        }),
+        createThumbnail(source),
+      ])
       const response: EstimateResponse = {
         type: 'estimate',
         jobId: request.jobId,
         width: source.width,
         height: source.height,
         samples,
+        thumbnailBlob,
       }
       scope.postMessage(response)
       return
@@ -50,10 +63,13 @@ scope.onmessage = async (event) => {
       mode: request.mode,
     })
 
+    const thumbnailBlob = await createThumbnail(source)
+
     const response: ResultResponse = {
       type: 'result',
       jobId: request.jobId,
       outputBlob: encoded.blob,
+      thumbnailBlob,
       outputSize: encoded.blob.size,
       width: encoded.width,
       height: encoded.height,
@@ -66,7 +82,12 @@ scope.onmessage = async (event) => {
       response.samples = await buildEstimateSamples(
         source,
         request.targetFormat,
-        { effort: request.effort, speed: request.speed, mode: request.mode },
+        {
+          quality: request.quality,
+          effort: request.effort,
+          speed: request.speed,
+          mode: request.mode,
+        },
       )
     }
 

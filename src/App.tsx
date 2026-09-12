@@ -56,7 +56,7 @@ interface BatchJob {
   file: File
   originalSize: number
   status: JobStatus
-  outputUrl: string
+  thumbnailUrl: string
   outputBlob: Blob | null
   outputExtension: string
   outputSize: number
@@ -164,18 +164,12 @@ const pendingEstimate = computed(
 const estimatePhase = computed(
   () => batchMode.value && pendingEstimate.value > 0,
 )
-const phasePercent = computed(() => {
-  if (total.value === 0) return 0
-  if (estimatePhase.value)
-    return Math.round(
-      ((total.value - pendingEstimate.value) / total.value) * 100,
-    )
-  return progressPercent.value
-})
-const phaseLabel = computed(() =>
-  estimatePhase.value
-    ? `Estimating sizes… ${total.value - pendingEstimate.value} / ${total.value}`
-    : `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}`,
+// The bar only reflects compression; estimates happen quietly in the
+// background so the app looks ready to compress immediately.
+const phasePercent = computed(() => progressPercent.value)
+const phaseLabel = computed(
+  () =>
+    `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}`,
 )
 
 const activeControls = computed(() => FORMAT_SPECS[targetFormat.value].controls)
@@ -218,8 +212,8 @@ const isCurrent = (job: BatchJob) =>
 const needsCompress = computed(() =>
   jobs.value.some(
     (job) =>
-      job.status === 'estimated' ||
-      (job.status === 'done' && job.outputKey !== outputKey.value),
+      job.status !== 'error' &&
+      !(job.status === 'done' && job.outputKey === outputKey.value),
   ),
 )
 
@@ -259,17 +253,16 @@ function nextToken(id: string): number {
 }
 
 let pendingPatches = new Map<string, Partial<BatchJob>>()
-let flushHandle: number | null = null
+let flushHandle: ReturnType<typeof setTimeout> | null = null
 
-// Coalesces per-result job updates so a burst of worker completions causes one
-// render per frame instead of N full-list renders.
+// Coalesce per-result job updates to ~5 Hz. Re-rendering a large list at frame
+// rate is the main source of main-thread work during compression; the progress
+// bar still moves smoothly via a CSS transition.
+const JOB_UPDATE_INTERVAL = 200
+
 function flushJobPatches() {
   if (flushHandle !== null) {
-    if (typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(flushHandle)
-    } else {
-      clearTimeout(flushHandle)
-    }
+    clearTimeout(flushHandle)
     flushHandle = null
   }
   if (pendingPatches.size === 0) return
@@ -284,14 +277,10 @@ function flushJobPatches() {
 function updateJob(id: string, patch: Partial<BatchJob>) {
   pendingPatches.set(id, { ...pendingPatches.get(id), ...patch })
   if (flushHandle !== null) return
-  const run = () => {
+  flushHandle = setTimeout(() => {
     flushHandle = null
     flushJobPatches()
-  }
-  flushHandle =
-    typeof requestAnimationFrame === 'function'
-      ? requestAnimationFrame(run)
-      : (setTimeout(run, 0) as unknown as number)
+  }, JOB_UPDATE_INTERVAL)
 }
 
 function applyWorkerBudget() {
@@ -395,6 +384,7 @@ async function estimateJob(id: string) {
     const { response } = processImage({
       readFile: (consume) => acquireFileBuffer(id, consume),
       targetFormat: format,
+      quality: current.quality,
       effort: current.effort,
       speed: current.speed,
       mode: current.mode,
@@ -406,13 +396,17 @@ async function estimateJob(id: string) {
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'estimate') return
 
+    const previousThumb = job.thumbnailUrl
+    const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     updateJob(id, {
       status: 'estimated',
+      thumbnailUrl,
       samples: result.samples,
       outputSize: interpolate(result.samples, current.quality),
       sizeIsExact: false,
       sampleKey: key,
     })
+    if (previousThumb) URL.revokeObjectURL(previousThumb)
     updateAverageRatios()
     refreshEstimates()
   } catch (error) {
@@ -462,13 +456,12 @@ async function compressJob(id: string) {
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'result') return
 
-    const previousUrl = job.outputUrl
-    const blob = result.outputBlob
-    const url = URL.createObjectURL(blob)
+    const previousThumb = job.thumbnailUrl
+    const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     updateJob(id, {
       status: 'done',
-      outputUrl: url,
-      outputBlob: blob,
+      thumbnailUrl,
+      outputBlob: result.outputBlob,
       outputExtension: result.extension,
       outputSize: result.outputSize,
       sizeIsExact: true,
@@ -476,7 +469,7 @@ async function compressJob(id: string) {
       sampleKey: samplesKey,
       ...(result.samples ? { samples: result.samples } : {}),
     })
-    if (previousUrl) URL.revokeObjectURL(previousUrl)
+    if (previousThumb) URL.revokeObjectURL(previousThumb)
     if (result.samples) {
       updateAverageRatios()
       refreshEstimates()
@@ -498,7 +491,10 @@ function updateSampling(): Set<string> {
   const ids = jobs.value
     .filter((job) => job.status !== 'error')
     .map((job) => job.id)
-  const limit = sampleSize(ids.length)
+  const limit = sampleSize(
+    ids.length,
+    isHeavyFormat(targetFormat.value, settings.value.mode),
+  )
   const existing = new Set(
     [...sampledIds.value].filter((id) => ids.includes(id)),
   )
@@ -532,7 +528,7 @@ function addFiles(fileList: FileList | File[] | null) {
     file,
     originalSize: file.size,
     status: 'queued',
-    outputUrl: '',
+    thumbnailUrl: '',
     outputBlob: null,
     outputExtension: FORMAT_SPECS[targetFormat.value].extension,
     outputSize: 0,
@@ -634,8 +630,14 @@ function changeControl(key: ControlKey, value: number) {
   if (busy.value || settings.value[key] === value) return
   settings.value = { ...settings.value, [key]: value }
   if (key === 'quality') {
-    refreshEstimates()
-    if (!batchMode.value) recompressSingle()
+    // Heavy codecs estimate only the current quality, so a quality change needs
+    // a fresh (debounced) estimate; light codecs interpolate from the curve.
+    if (isHeavyFormat(targetFormat.value, settings.value.mode)) {
+      scheduleSampleReestimate()
+    } else {
+      refreshEstimates()
+      if (!batchMode.value) recompressSingle()
+    }
   } else {
     applyWorkerBudget()
     void refreshRenderer()
@@ -668,7 +670,7 @@ function removeJob(id: string) {
   nextToken(id)
   forgetFile(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
-  if (job?.outputUrl) URL.revokeObjectURL(job.outputUrl)
+  if (job?.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
   jobs.value = jobs.value.filter((candidate) => candidate.id !== id)
   scheduleIdleTeardown()
 }
@@ -680,7 +682,7 @@ function clearAll() {
   for (const job of jobs.value) {
     nextToken(job.id)
     forgetFile(job.id)
-    if (job.outputUrl) URL.revokeObjectURL(job.outputUrl)
+    if (job.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
   }
   jobs.value = []
   averageRatios.value = []
@@ -698,6 +700,16 @@ function triggerDownload(blob: Blob, name: string) {
   anchor.download = name
   anchor.click()
   URL.revokeObjectURL(url)
+}
+
+// The full-resolution output URL is only materialized on demand, so rows never
+// hold (or decode) a multi-megapixel blob.
+function downloadJob(job: BatchJob) {
+  if (!job.outputBlob) return
+  triggerDownload(
+    job.outputBlob,
+    replaceExtension(job.name, job.outputExtension),
+  )
 }
 
 async function downloadAll() {
@@ -761,9 +773,8 @@ function savingsLabel(originalSize: number, outputSize: number): string {
 function statusLabel(job: BatchJob): string {
   switch (job.status) {
     case 'queued':
-      return 'queued'
     case 'estimating':
-      return 'estimating…'
+      return ''
     case 'estimated':
       return 'not compressed yet'
     case 'processing':
@@ -792,6 +803,7 @@ interface JobRowProps {
   label: string
   busy: boolean
   onRemove: (id: string) => void
+  onDownload: (job: BatchJob) => void
 }
 
 // Memoized so an update to one job does not re-render every other row.
@@ -801,6 +813,7 @@ const JobRow = memo(function JobRow({
   label,
   busy,
   onRemove,
+  onDownload,
 }: JobRowProps) {
   return (
     <li class="job">
@@ -809,16 +822,14 @@ const JobRow = memo(function JobRow({
           <span class="job__spinner" />
         ) : job.status === 'error' ? (
           <span class="job__icon job__icon--error">!</span>
-        ) : job.outputUrl ? (
+        ) : job.thumbnailUrl ? (
           <img
             class={current ? '' : 'job__thumb--stale'}
-            src={job.outputUrl}
+            src={job.thumbnailUrl}
             alt=""
             loading="lazy"
             decoding="async"
           />
-        ) : job.status === 'estimated' ? (
-          <span class="job__icon job__icon--ready">≈</span>
         ) : (
           <span class="job__icon job__icon--idle">…</span>
         )}
@@ -844,20 +855,15 @@ const JobRow = memo(function JobRow({
         </span>
       </div>
       <div class="job__actions">
-        {current && job.outputUrl ? (
-          busy ? (
-            <button type="button" class="button button--small" disabled>
-              Download
-            </button>
-          ) : (
-            <a
-              class="button button--small"
-              href={job.outputUrl}
-              download={replaceExtension(job.name, job.outputExtension)}
-            >
-              Download
-            </a>
-          )
+        {current && job.outputBlob ? (
+          <button
+            type="button"
+            class="button button--small"
+            disabled={busy}
+            onClick={() => onDownload(job)}
+          >
+            Download
+          </button>
         ) : null}
         <button
           type="button"
@@ -1090,10 +1096,10 @@ export function App() {
 
             {batchMode.value && total.value > 0 && (
               <div class="panel__row">
-                <span class="panel__label">Batch estimate</span>
+                <span class="panel__label">Estimated file size</span>
                 <span class="panel__value">
                   {estimatePhase.value ? (
-                    'calculating…'
+                    'Calculating…'
                   ) : (
                     <>
                       {needsCompress.value ? '~' : ''}
@@ -1173,6 +1179,7 @@ export function App() {
                 label={statusLabel(job)}
                 busy={busy.value}
                 onRemove={removeJob}
+                onDownload={downloadJob}
               />
             ))}
           </ul>

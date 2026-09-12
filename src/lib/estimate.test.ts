@@ -64,16 +64,25 @@ describe('scaleToFullSize', () => {
 })
 
 describe('sampleSize', () => {
-  it('measures every image in small batches', () => {
+  it('measures small batches fully', () => {
     expect(sampleSize(1)).toBe(1)
-    expect(sampleSize(30)).toBe(30)
+    expect(sampleSize(3)).toBe(3)
+    expect(sampleSize(5)).toBe(5)
   })
 
-  it('caps large batches at 20 samples, with a floor of 5', () => {
-    expect(sampleSize(31)).toBe(5)
+  it('measures half of a 6-10 image batch', () => {
+    expect(sampleSize(6)).toBe(3)
+    expect(sampleSize(7)).toBe(4)
+    expect(sampleSize(10)).toBe(5)
+  })
+
+  it('caps large batches at 10 (light) or 5 (heavy)', () => {
+    expect(sampleSize(11)).toBe(10)
     expect(sampleSize(100)).toBe(10)
-    expect(sampleSize(200)).toBe(20)
-    expect(sampleSize(10_000)).toBe(20)
+    expect(sampleSize(10_000)).toBe(10)
+    expect(sampleSize(11, true)).toBe(5)
+    expect(sampleSize(100, true)).toBe(5)
+    expect(sampleSize(10_000, true)).toBe(5)
   })
 })
 
