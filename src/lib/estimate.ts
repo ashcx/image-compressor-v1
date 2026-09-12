@@ -53,6 +53,7 @@ export function scaleToFullSize(
 }
 
 export interface EstimateOptions {
+  quality?: number
   effort?: number
   speed?: number
   mode?: number
@@ -98,6 +99,25 @@ export async function buildEstimateSamples(
       { quality: 0, bytes },
       { quality: 100, bytes },
     ]
+  }
+
+  // AVIF/JXL are expensive to estimate across the whole quality range, so
+  // measure only the currently selected quality and re-estimate (debounced)
+  // when the user moves the slider.
+  if (format === 'avif') {
+    const quality = options.quality ?? 50
+    const smallBytes = await measure(small, quality)
+    const largeBytes = await measure(large, quality)
+    const bytes = Math.round(
+      scaleToFullSize(
+        largeBytes,
+        largePixels,
+        smallBytes,
+        smallPixels,
+        fullPixels,
+      ) * SIZE_CALIBRATION,
+    )
+    return [{ quality, bytes }]
   }
 
   const samples: EstimateSample[] = []
@@ -146,17 +166,20 @@ export function interpolate(
   return Math.round(interpolateRaw(samples, quality))
 }
 
-const FULL_ESTIMATE_LIMIT = 30
-const MAX_SAMPLES = 20
-const MIN_SAMPLES = 5
+const SMALL_BATCH = 5
+const HALF_BATCH_LIMIT = 10
+const LIGHT_SAMPLE_CAP = 10
+const HEAVY_SAMPLE_CAP = 5
 
 /**
- * For large batches we only measure a sample of images and extrapolate, so the
- * estimate cost stays bounded regardless of batch size.
+ * Bounded sampling so estimate cost does not grow with batch size:
+ * ≤5 images estimate all; 6-10 estimate half; larger batches estimate 10
+ * (light codecs) or 5 (heavy codecs) and extrapolate the rest.
  */
-export function sampleSize(total: number): number {
-  if (total <= FULL_ESTIMATE_LIMIT) return total
-  return Math.min(MAX_SAMPLES, Math.max(MIN_SAMPLES, Math.round(total * 0.1)))
+export function sampleSize(total: number, heavy = false): number {
+  if (total <= SMALL_BATCH) return total
+  if (total <= HALF_BATCH_LIMIT) return Math.ceil(total / 2)
+  return heavy ? HEAVY_SAMPLE_CAP : LIGHT_SAMPLE_CAP
 }
 
 export interface CurveSample {

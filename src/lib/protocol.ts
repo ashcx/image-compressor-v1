@@ -21,6 +21,7 @@ export interface ResultResponse {
   type: 'result'
   jobId: string
   outputBlob: Blob
+  thumbnailBlob: Blob
   outputSize: number
   width: number
   height: number
@@ -36,6 +37,7 @@ export interface EstimateResponse {
   width: number
   height: number
   samples: EstimateSample[]
+  thumbnailBlob: Blob
 }
 
 export interface ErrorResponse {

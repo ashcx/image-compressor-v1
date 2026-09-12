@@ -7,6 +7,7 @@ function resultFor(jobId: string): ResultResponse {
     type: 'result',
     jobId,
     outputBlob: new Blob([new ArrayBuffer(1)]),
+    thumbnailBlob: new Blob([new ArrayBuffer(1)]),
     outputSize: 1,
     width: 1,
     height: 1,
@@ -182,6 +183,7 @@ describe('WorkerPool', () => {
             width: 2,
             height: 2,
             samples: [{ quality: 50, bytes: 10 }],
+            thumbnailBlob: new Blob([new ArrayBuffer(1)]),
           }),
         ),
     })
