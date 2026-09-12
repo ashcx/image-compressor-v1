@@ -43,6 +43,19 @@ function getPool(): WorkerPool {
   return pool
 }
 
+/**
+ * Terminates the pool when it is idle, releasing the worker isolates, WASM
+ * heaps and decoded canvases they hold. The pool is recreated lazily on the
+ * next job. Safe to call spuriously: it no-ops while any task is in flight.
+ */
+export function disposePool(): void {
+  if (!pool) return
+  if (pool.busyCount > 0 || pool.queuedCount > 0) return
+  pool.terminate()
+  pool = null
+  for (const listener of listeners) listener()
+}
+
 export function subscribeToPool(listener: () => void): () => void {
   listeners.add(listener)
   return () => {

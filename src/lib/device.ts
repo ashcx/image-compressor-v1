@@ -64,8 +64,10 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
   const memory = signals.deviceMemory
 
   if (ua.includes('iPhone')) {
+    // Safari exposes no RAM signal, so core count stands in for device class.
+    // Phones stay conservative (heavy codecs still halve via heavyWorkerCount).
     return {
-      workerCount: 1,
+      workerCount: phoneWorkerCount(signals.hardwareConcurrency ?? 0),
       constrained: true,
       maxZipBytes: IPHONE_MAX_ZIP_BYTES,
     }
@@ -75,14 +77,13 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
     ua.includes('iPad') ||
     (ua.includes('Macintosh') && (signals.maxTouchPoints ?? 0) >= 2)
   ) {
-    // Temporary tier until Sprint 8.1 identifies iPad Pro models directly:
-    // 6 cores or fewer is treated as a base iPad, more than 6 as an M-series
-    // iPad Pro. iPads get the full core budget for light codecs (no reserved
-    // core) because Safari often reports only the active cores, and
-    // `cores - 1` collapses a 2-core report to a single worker. Heavy codecs
-    // still run at half via heavyWorkerCount().
-    const cap = cores > 6 ? MAX_WORKERS : 4
-    const workerCount = Math.max(1, Math.min(cores, cap))
+    // Low-core iPads are treated like phones (conservative); 7+ reported cores
+    // is Pro-class and follows the desktop standard.
+    const reported = signals.hardwareConcurrency ?? 0
+    const workerCount =
+      reported >= 7
+        ? Math.min(standardWorkerCount(cores), MAX_WORKERS)
+        : phoneWorkerCount(reported)
     return {
       workerCount,
       constrained: true,
@@ -99,7 +100,7 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
       }
     }
     return {
-      workerCount: Math.max(1, Math.min(cores - 1, 4)),
+      workerCount: Math.min(standardWorkerCount(cores), MAX_WORKERS),
       constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
@@ -108,8 +109,8 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
   if (memory !== undefined && memory >= 8) {
     const workerCount =
       cores >= 16 && memory >= 12
-        ? Math.max(1, Math.min(cores - 1, MAX_WORKERS_HIGH_MEMORY))
-        : Math.max(1, Math.min(cores - 1, MAX_WORKERS))
+        ? Math.min(standardWorkerCount(cores), MAX_WORKERS_HIGH_MEMORY)
+        : Math.min(standardWorkerCount(cores), MAX_WORKERS)
     return {
       workerCount,
       constrained: false,
@@ -119,14 +120,14 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
 
   if (memory !== undefined && memory < 8) {
     return {
-      workerCount: Math.max(1, Math.min(cores - 1, 6)),
+      workerCount: Math.min(standardWorkerCount(cores), 6),
       constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
   }
 
   return {
-    workerCount: Math.max(1, Math.min(cores - 1, MAX_WORKERS)),
+    workerCount: Math.min(standardWorkerCount(cores), MAX_WORKERS),
     constrained: false,
     maxZipBytes: DESKTOP_MAX_ZIP_BYTES,
   }
@@ -134,10 +135,25 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
 
 /**
  * Heavy codecs (AVIF, JXL, lossy PNG) keep large WASM heaps and decoded
- * canvases per worker, so they run with half the pool to bound peak memory.
+ * canvases per worker, so they run with half the standard pool, rounded to the
+ * nearest whole worker (floored at 1).
  */
 export function heavyWorkerCount(workerCount: number): number {
-  return Math.max(1, Math.floor(workerCount / 2))
+  return Math.max(1, Math.round(workerCount / 2))
+}
+
+/** Standard pool size: hardwareConcurrency - 1, leaving a core for the UI. */
+function standardWorkerCount(cores: number): number {
+  return Math.max(1, cores - 1)
+}
+
+/**
+ * Conservative phone-class budget. Safari exposes no RAM signal, so reported
+ * cores proxy the device class: 6+ cores → 3, 4-5 → 2, 2 or fewer (or no API)
+ * → 1.
+ */
+function phoneWorkerCount(reported: number): number {
+  return reported >= 6 ? 3 : reported >= 4 ? 2 : 1
 }
 
 function readWorkerOverride(): number | undefined {

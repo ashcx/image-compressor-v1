@@ -35,6 +35,19 @@ function getWorker(): Worker {
 }
 
 /**
+ * Terminates the metadata worker when the app is idle. Dimensions for later
+ * files recreate it on demand.
+ */
+export function disposeMetadataWorker(): void {
+  if (!worker) return
+  const active = worker
+  worker = null
+  active.terminate()
+  for (const resolve of pending.values()) resolve(null)
+  pending.clear()
+}
+
+/**
  * Reads the header dimensions for a file on a dedicated worker, separate from
  * the codec pool so it never contends with size estimation or compression.
  * Resolves `null` when the format cannot be parsed without decoding.

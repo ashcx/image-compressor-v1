@@ -8,7 +8,7 @@ import {
   FORMAT_SPECS,
   type FormatControl,
 } from './lib/codecs/formats'
-import { preloadCodec } from './lib/codecs/registry'
+import { describeRenderer, preloadCodec } from './lib/codecs/registry'
 import type { OutputFormat } from './lib/codecs/types'
 import { getDeviceProfile, heavyWorkerCount } from './lib/device'
 import {
@@ -26,10 +26,11 @@ import {
   releaseFileBuffer,
 } from './lib/fileBufferStore'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
-import { readDimensions } from './lib/metadataClient'
+import { disposeMetadataWorker, readDimensions } from './lib/metadataClient'
 import { appVersion, watchForUpdates } from './lib/version'
 import {
   configureWorkers,
+  disposePool,
   getPoolStats,
   processImage,
   subscribeToPool,
@@ -124,6 +125,7 @@ const settings = signal<Settings>(defaultSettings('jpeg'))
 const maxLongEdge = signal(0)
 const isDragging = signal(false)
 const poolStats = signal(getPoolStats())
+const renderer = signal('')
 const newVersion = signal('')
 const notice = signal('')
 const zipping = signal(false)
@@ -307,6 +309,45 @@ function applyWorkerBudget() {
   configureWorkers(heavy ? heavyWorkerCount(base) : base)
 }
 
+let rendererToken = 0
+
+async function refreshRenderer() {
+  const token = ++rendererToken
+  const label = await describeRenderer(targetFormat.value, settings.value.mode)
+  if (token === rendererToken) renderer.value = label
+}
+
+let idleTeardownTimer: ReturnType<typeof setTimeout> | undefined
+
+function cancelIdleTeardown() {
+  if (idleTeardownTimer) {
+    clearTimeout(idleTeardownTimer)
+    idleTeardownTimer = undefined
+  }
+}
+
+/**
+ * Terminates the worker pool (and metadata worker) a short while after all
+ * encoding stops. Idle workers keep their WASM heaps and decoded canvases
+ * alive, which leaves the tab bloated until a reload. The pool is recreated
+ * lazily on the next job.
+ */
+function scheduleIdleTeardown() {
+  cancelIdleTeardown()
+  idleTeardownTimer = setTimeout(() => {
+    idleTeardownTimer = undefined
+    const active = jobs.value.some(
+      (job) =>
+        job.status === 'processing' ||
+        job.status === 'estimating' ||
+        job.status === 'queued',
+    )
+    if (active || zipping.value) return
+    disposePool()
+    disposeMetadataWorker()
+  }, 2000)
+}
+
 function cancelEstimate(id: string) {
   estimateControllers.get(id)?.abort()
   estimateControllers.delete(id)
@@ -342,6 +383,7 @@ function refreshEstimates() {
 
 async function estimateJob(id: string) {
   flushJobPatches()
+  cancelIdleTeardown()
   const token = nextToken(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
@@ -391,11 +433,13 @@ async function estimateJob(id: string) {
     if (estimateControllers.get(id) === controller) {
       estimateControllers.delete(id)
     }
+    scheduleIdleTeardown()
   }
 }
 
 async function compressJob(id: string) {
   flushJobPatches()
+  cancelIdleTeardown()
   const token = nextToken(id)
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (!job) return
@@ -453,6 +497,7 @@ async function compressJob(id: string) {
     })
   } finally {
     releaseFileBuffer(id)
+    scheduleIdleTeardown()
   }
 }
 
@@ -579,9 +624,14 @@ function scheduleSampleReestimate() {
 
 function changeFormat(format: OutputFormat) {
   if (busy.value || format === targetFormat.value) return
+  // Drop the current workers so the previous codec's WASM heap/canvases are
+  // released before we warm and use the new format.
+  cancelIdleTeardown()
+  disposePool()
   targetFormat.value = format
   settings.value = defaultSettings(format)
   applyWorkerBudget()
+  void refreshRenderer()
   // Warm the WASM codec while the user dials in settings, so selecting
   // AVIF/JXL does not stall on the first encode.
   if (format === 'avif' || format === 'jxl') void preloadCodec(format)
@@ -596,6 +646,7 @@ function changeControl(key: ControlKey, value: number) {
     if (!batchMode.value) recompressSingle()
   } else {
     applyWorkerBudget()
+    void refreshRenderer()
     scheduleSampleReestimate()
   }
 }
@@ -627,6 +678,7 @@ function removeJob(id: string) {
   const job = jobs.value.find((candidate) => candidate.id === id)
   if (job?.outputUrl) URL.revokeObjectURL(job.outputUrl)
   jobs.value = jobs.value.filter((candidate) => candidate.id !== id)
+  scheduleIdleTeardown()
 }
 
 function clearAll() {
@@ -642,6 +694,9 @@ function clearAll() {
   averageRatios.value = []
   sampledIds.value = new Set()
   notice.value = ''
+  cancelIdleTeardown()
+  disposePool()
+  disposeMetadataWorker()
 }
 
 function triggerDownload(blob: Blob, name: string) {
@@ -728,12 +783,13 @@ function statusLabel(job: BatchJob): string {
   }
 }
 
-// Reads poolStats itself so frequent pool notifications re-render only this
-// meter, not the whole job list.
+// Reads poolStats/renderer itself so frequent pool notifications re-render only
+// this meter, not the whole job list.
 function PoolMeter() {
   return (
-    <span class="panel__value">
-      workers busy: {poolStats.value.busy}/{poolStats.value.size}
+    <span class="panel__value" title="Encoder backend and worker pool">
+      {renderer.value ? `${renderer.value} · ` : ''}workers{' '}
+      {poolStats.value.busy}/{poolStats.value.size}
     </span>
   )
 }
@@ -832,6 +888,7 @@ export function App() {
   useEffect(() => {
     applyWorkerBudget()
     configureFileBufferCap(Math.floor(getDeviceProfile().maxZipBytes / 4))
+    void refreshRenderer()
     return subscribeToPool(() => {
       poolStats.value = getPoolStats()
     })
