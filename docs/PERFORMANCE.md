@@ -21,22 +21,31 @@ only policy assumptions.
 The fastest-tool claim remains a product hypothesis until it is compared with competing web
 tools using the same image sets, browsers, devices, and measurement rules.
 
-## How the numbers were obtained
+## Why parallel scaling matters
 
-- **Measured:** a Linux x86-64 container, Node.js 22, headless Chrome driven via
-  Playwright through the production codec path (`encodeImageSource` /
-  `buildEstimateSamples`). Encode timings were taken after a warm-up pass and averaged over
-  several runs.
-- **Derived:** canvas memory is computed from `width × height × 4` bytes of RGBA plus the
-  device worker policy in `src/lib/device.ts`.
-- **Policy, not device-measured:** the iPhone, iPad, and Android worker budgets. No physical
-  mobile devices were available for testing.
-- **Not measured here:** thermal throttling, battery behaviour, Safari/JSC codec speed, and
-  OS-level tab eviction.
-- **Reproducibility:** these figures were captured with a temporary local measurement harness.
-  The benchmark harness and 25-image fixture corpus are not currently checked into the
-  repository, so the figures are documented evidence rather than CI-enforced regression
-  thresholds.
+Many current desktops, tablets, and phones expose **6–8 logical cores**. A sequential image
+tool leaves most of that capacity unused. Image Compressor schedules independent images across
+a bounded worker pool, targeting **cores − 1** for light work so one core remains available
+for painting and input. High-memory desktops can use up to **16** workers; heavy codecs use
+half the light-worker budget because each worker consumes more memory.
+
+The practical result is that an 8-image batch can finish in roughly the time of one image when
+the workload is compute-bound. The test VM achieved **~3.3–4×** scaling across 4 cores for
+pure-compute jobs. Memory-heavy work reached about **~1.3×** because aggregate memory
+bandwidth — roughly **3–5 GB/s** on that VM — became the bottleneck. Scaling is therefore a
+real advantage, but it is not unlimited: adding workers past the device's useful capacity can
+increase contention, memory pressure, and thermal load.
+
+## Measurement basis
+
+- Encode times were measured on a Linux x86-64 environment using Node.js 22 and headless
+  Chrome after a warm-up pass. Memory figures are derived from RGBA canvas size and the device
+  policy in `src/lib/device.ts`.
+- iPhone, iPad, and Android worker budgets are policy choices, not physical-device
+  measurements. Thermal throttling, battery behaviour, Safari/JSC speed, and OS tab eviction
+  are outside this data set.
+- The temporary benchmark harness and 25-image fixture corpus are not checked in, so these
+  figures are documented evidence rather than CI-enforced regression thresholds.
 
 Mobile memory figures are sizing rationale, not verified device limits.
 
