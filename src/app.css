@@ -7,7 +7,6 @@
   --muted: #a8b0ba;
   --accent: #6ea8fe;
   --accent-strong: #4c8dff;
-  --good: #7ee787;
   --bad: #ff7b72;
   --radius: 10px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -104,14 +103,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 60%;
-}
-
-.panel__value--good {
-  color: var(--good);
-}
-
-.panel__value--bad {
-  color: var(--bad);
 }
 
 .field {
@@ -286,11 +277,6 @@ input[type="range"]:disabled {
   color: var(--muted);
   border: 2px dashed var(--panel-border);
   border-radius: 50%;
-}
-
-.job__icon--ready {
-  color: var(--muted);
-  font-size: 1.1rem;
 }
 
 .job__icon--error {

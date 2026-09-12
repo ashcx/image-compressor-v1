@@ -1,4 +1,4 @@
-export const MAX_WORKERS = 8
+const MAX_WORKERS = 8
 export const MAX_WORKERS_HIGH_MEMORY = 16
 
 export interface DeviceSignals {
@@ -10,7 +10,6 @@ export interface DeviceSignals {
 
 export interface DeviceProfile {
   workerCount: number
-  constrained: boolean
   maxZipBytes: number
 }
 
@@ -68,7 +67,6 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
     // Phones stay conservative (heavy codecs still halve via heavyWorkerCount).
     return {
       workerCount: phoneWorkerCount(signals.hardwareConcurrency ?? 0),
-      constrained: true,
       maxZipBytes: IPHONE_MAX_ZIP_BYTES,
     }
   }
@@ -86,7 +84,6 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
         : phoneWorkerCount(reported)
     return {
       workerCount,
-      constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
   }
@@ -95,13 +92,11 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
     if (memory === undefined || memory < 6) {
       return {
         workerCount: 1,
-        constrained: true,
         maxZipBytes: ANDROID_LOW_MEMORY_MAX_ZIP_BYTES,
       }
     }
     return {
       workerCount: Math.min(standardWorkerCount(cores), MAX_WORKERS),
-      constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
   }
@@ -113,7 +108,6 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
         : Math.min(standardWorkerCount(cores), MAX_WORKERS)
     return {
       workerCount,
-      constrained: false,
       maxZipBytes: DESKTOP_MAX_ZIP_BYTES,
     }
   }
@@ -121,14 +115,12 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
   if (memory !== undefined && memory < 8) {
     return {
       workerCount: Math.min(standardWorkerCount(cores), 6),
-      constrained: true,
       maxZipBytes: TABLET_MAX_ZIP_BYTES,
     }
   }
 
   return {
     workerCount: Math.min(standardWorkerCount(cores), MAX_WORKERS),
-    constrained: false,
     maxZipBytes: DESKTOP_MAX_ZIP_BYTES,
   }
 }
