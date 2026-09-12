@@ -195,13 +195,14 @@ point; the worker budget is a balance between throughput and responsiveness.
   on download.
 - Idle teardown terminates the worker pool and metadata worker about **two seconds** after
   becoming idle, and immediately on format change or clearing the list.
-- Per-device ZIP size caps prevent buffering very large archives.
+- Per-device ZIP size caps prevent the app from attempting very large archives without an
+  explicit device policy.
 
 ### Device worker scaling
 
 Worker budgets are defined in `src/lib/device.ts`.
 
-| Device | Light pool | Heavy pool | Maximum ZIP |
+| Device | Light pool | Heavy pool | Current app ZIP cap |
 | --- | --- | --- | --- |
 | iPhone (no RAM API) | cores ≥ 6 → 3, 4–5 → 2, otherwise 1 | 3→2, 2→1, 1→1 | 512 MB |
 | iPad, reported cores < 7 | phone tier | halved | 1 GB |
@@ -211,6 +212,13 @@ Worker budgets are defined in `src/lib/device.ts`.
 | Desktop, `deviceMemory` ≥ 8 | `min(cores − 1, 8)`; cores ≥ 16 and RAM ≥ 12 GB → up to **16** | halved | 2 GB |
 | Desktop, `deviceMemory` < 8 | `min(cores − 1, 6)` | halved | 1 GB |
 | `?workers=N` override | N capped at 16 | — | — |
+
+These ZIP values are **conservative application caps**, not browser or device maximums. A
+mobile browser may be able to create a larger archive, especially when the Origin Private
+File System (OPFS) is available and the device has sufficient free storage. The practical
+limit varies with browser quota, free disk space, memory pressure, and whether the app falls
+back to holding the archive in JavaScript memory. The caps should therefore be treated as
+initial safety policy and revisited after real-device ZIP testing.
 
 In memory terms, for approximately 12 MP — about **48 MB decoded + ~15 MB estimate + heap
 per worker**:
