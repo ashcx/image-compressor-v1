@@ -64,8 +64,13 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
   const memory = signals.deviceMemory
 
   if (ua.includes('iPhone')) {
+    // Safari exposes no RAM signal, so core count stands in for device class.
+    // Phones stay conservative, but newer 4-/6-core iPhones get 2-3 light
+    // workers (heavy codecs still halve via heavyWorkerCount()).
+    const reported = signals.hardwareConcurrency ?? 0
+    const workerCount = reported >= 6 ? 3 : reported >= 4 ? 2 : 1
     return {
-      workerCount: 1,
+      workerCount,
       constrained: true,
       maxZipBytes: IPHONE_MAX_ZIP_BYTES,
     }

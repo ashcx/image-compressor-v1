@@ -25,10 +25,18 @@ describe('resolveWorkerCount', () => {
     expect(resolveWorkerCount({}, 99)).toBe(MAX_WORKERS_HIGH_MEMORY)
   })
 
-  it('returns 1 for iPhone', () => {
+  it('tiers iPhone workers conservatively by reported cores', () => {
     expect(
-      resolveWorkerCount({ userAgent: IPHONE_UA, hardwareConcurrency: 8 }),
+      resolveWorkerCount({ userAgent: IPHONE_UA, hardwareConcurrency: 6 }),
+    ).toBe(3)
+    expect(
+      resolveWorkerCount({ userAgent: IPHONE_UA, hardwareConcurrency: 4 }),
+    ).toBe(2)
+    expect(
+      resolveWorkerCount({ userAgent: IPHONE_UA, hardwareConcurrency: 2 }),
     ).toBe(1)
+    // Old WebKit without the API stays at the safe floor.
+    expect(resolveWorkerCount({ userAgent: IPHONE_UA })).toBe(1)
   })
 
   it('uses the standard budget (cores - 1) for iPads', () => {
@@ -99,7 +107,7 @@ describe('profileFromSignals', () => {
       userAgent: IPHONE_UA,
       hardwareConcurrency: 8,
     })
-    expect(profile.workerCount).toBe(1)
+    expect(profile.workerCount).toBe(3)
     expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(512 * 1024 * 1024)
   })
