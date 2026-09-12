@@ -6,6 +6,37 @@ not uploaded to an application server.
 
 [Open the live app](https://ashcx.github.io/image-compressor-v1/)
 
+## Key features
+
+### Built for speed
+
+Image Compressor is designed to be one of the fastest image-processing tools available in
+the browser. It uses the browser's native encoders for common formats where available,
+including JPEG, WebP, and the fast default PNG mode, then processes independent images in
+parallel background workers.
+
+The worker pool adapts to the device's available hardware instead of processing a batch one
+image at a time. This keeps the interface responsive while making better use of modern
+multi-core devices. The fastest-tool claim is the product goal and will be confirmed with
+real-world benchmarks across browsers and devices.
+
+### No upload, no waiting on a server
+
+Images stay on your device. There is no upload step, no server queue, and no network transfer
+of the image data. This improves privacy and can be faster for large batches or slower
+connections.
+
+### Control over the result
+
+Choose the output format, quality, compression mode, and maximum image size. You can decide
+whether the priority is smaller files, higher visual quality, lossless output, or speed.
+
+### Serious batch processing
+
+Add several images and process them together through the parallel pipeline. Each image is
+tracked separately, estimates are shown before processing, and the completed files can be
+downloaded individually, as a ZIP, or directly into a folder where supported.
+
 ## What it does
 
 - Accepts common image files selected from your device or dropped onto the page.

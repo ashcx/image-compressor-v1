@@ -26,6 +26,25 @@ The UI owns application state and presentation. Image processing is isolated in 
 The worker returns a `Blob` and metadata for each completed job; the UI does not need to
 understand codec internals.
 
+## Performance position
+
+The central product hypothesis is that a browser image tool can be faster when it avoids
+uploading files and gives the browser enough independent work to run in parallel. The
+implementation is built around that hypothesis:
+
+- Common formats prefer native browser encoding, avoiding WebAssembly startup where the
+  browser already has a capable encoder.
+- Independent images are scheduled across a device-aware worker pool rather than handled
+  sequentially on the UI thread.
+- Inputs are transferred to workers where possible, reducing large buffer copies.
+- The default PNG path is the fast native lossless mode; slower PNG optimisation modes are
+  opt-in.
+
+This explains the intended speed advantage, but it is not proof that the application is the
+fastest web tool. That claim should be made only after testing representative image sets on
+the target browsers and devices. Codec implementations, worker startup costs, thermal
+throttling, and device memory can all change the result.
+
 ## Architectural choices
 
 ### Browser-only processing
@@ -56,9 +75,11 @@ own worker protocol.
 ### Lazy codec loading and native-first encoding
 
 Codec modules are loaded only when a format needs them. JPEG and WebP use native browser
-encoding when the browser can provide it; WebAssembly codecs are used when native support
-is unavailable or when a format-specific mode requires them. This keeps the first page
-load small and avoids paying AVIF or PNG-WASM startup cost when it is not needed.
+encoding when the browser can provide it. The default PNG mode also uses the native browser
+encoder; slower lossless optimisation and lossy palette modes use their format-specific
+WebAssembly or native libraries. WebAssembly codecs are used when native support is
+unavailable or when a format-specific mode requires them. This keeps the first page load
+small and avoids paying AVIF or PNG-WASM startup cost when it is not needed.
 
 The cost is a noticeable first-use delay for some formats. AVIF is intentionally labelled
 as slower in the UI because its encoding work is heavier on many devices.
