@@ -142,10 +142,6 @@ const loaders: Record<OutputFormat, CodecLoader> = {
   },
 }
 
-export function isFormatSupported(format: OutputFormat): boolean {
-  return format in loaders
-}
-
 export async function getCodec(format: OutputFormat): Promise<Codec> {
   const loader = loaders[format]
   if (!loader) {

@@ -104,19 +104,6 @@ scope.onmessage = async (event) => {
       mimeType: encoded.mimeType,
     }
 
-    if (request.buildEstimate) {
-      response.samples = await buildEstimateSamples(
-        source,
-        request.targetFormat,
-        {
-          quality: request.quality,
-          effort: request.effort,
-          speed: request.speed,
-          mode: request.mode,
-        },
-      )
-    }
-
     scope.postMessage(response)
   } catch (error) {
     scope.postMessage({

@@ -8,7 +8,7 @@ let desiredSize = getDeviceProfile().workerCount
 let counter = 0
 const listeners = new Set<() => void>()
 
-export function resolvePoolSize(): number {
+function resolvePoolSize(): number {
   return desiredSize
 }
 
@@ -65,14 +65,12 @@ export function subscribeToPool(listener: () => void): () => void {
 
 export interface PoolStats {
   busy: number
-  workers: number
   size: number
 }
 
 export function getPoolStats(): PoolStats {
   return {
     busy: pool?.busyCount ?? 0,
-    workers: pool?.workerCount ?? 0,
     size: resolvePoolSize(),
   }
 }
@@ -86,7 +84,6 @@ export interface ProcessJobOptions {
   speed?: number
   mode?: number
   resize?: ResizeOptions
-  buildEstimate?: boolean
   estimateOnly?: boolean
   /**
    * Transfer the input buffer instead of cloning it. Use only when the buffer
@@ -124,7 +121,6 @@ export function processImage(options: ProcessJobOptions): {
           speed: options.speed,
           mode: options.mode,
           resize: options.resize,
-          buildEstimate: options.buildEstimate,
           estimateOnly: options.estimateOnly,
         }
         return consume ? { message, transfer: [fileBuffer] } : { message }

@@ -11,7 +11,7 @@ export interface PoolWorker {
   terminate(): void
 }
 
-export interface PreparedTask {
+interface PreparedTask {
   message: WorkerRequest
   transfer?: Transferable[]
 }
@@ -33,7 +33,7 @@ interface QueuedTask extends PoolTask {
   settled: boolean
 }
 
-export interface WorkerPoolOptions {
+interface WorkerPoolOptions {
   size: number
   createWorker: () => PoolWorker
   onChange?: () => void

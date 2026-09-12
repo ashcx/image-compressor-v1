@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FORMAT_ORDER } from './formats'
-import { getCodec, isFormatSupported } from './registry'
+import { getCodec } from './registry'
 import type { OutputFormat } from './types'
 
 const EXPECTED: Record<OutputFormat, { mimeType: string; extension: string }> =
@@ -12,12 +12,6 @@ const EXPECTED: Record<OutputFormat, { mimeType: string; extension: string }> =
   }
 
 describe('codec registry', () => {
-  it('supports every output format', () => {
-    for (const format of FORMAT_ORDER) {
-      expect(isFormatSupported(format)).toBe(true)
-    }
-  })
-
   it.each(FORMAT_ORDER)(
     'loads the %s codec with the right metadata and functions',
     async (format) => {

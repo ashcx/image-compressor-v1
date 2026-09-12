@@ -108,60 +108,54 @@ describe('resolveWorkerCount', () => {
 })
 
 describe('profileFromSignals', () => {
-  it('marks iPhone as constrained', () => {
+  it('gives iPhone the phone worker budget and 512 MiB zip cap', () => {
     const profile = profileFromSignals({
       userAgent: IPHONE_UA,
       hardwareConcurrency: 8,
     })
     expect(profile.workerCount).toBe(3)
-    expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(512 * 1024 * 1024)
   })
 
-  it('marks iPad as constrained with a 1 GiB zip budget', () => {
+  it('gives iPad the tablet worker tier and 1 GiB zip budget', () => {
     const profile = profileFromSignals({
       userAgent: IPAD_UA,
       hardwareConcurrency: 8,
     })
     expect(profile.workerCount).toBe(7)
-    expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(1024 * 1024 * 1024)
   })
 
-  it('marks low-memory Android as constrained', () => {
+  it('gives low-memory Android a single worker and 384 MiB zip cap', () => {
     const profile = profileFromSignals({
       userAgent: ANDROID_UA,
       deviceMemory: 4,
       hardwareConcurrency: 8,
     })
     expect(profile.workerCount).toBe(1)
-    expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(384 * 1024 * 1024)
   })
 
-  it('treats high-memory desktop as unconstrained', () => {
+  it('gives high-memory desktop the standard budget', () => {
     const profile = profileFromSignals({
       deviceMemory: 8,
       hardwareConcurrency: 8,
     })
     expect(profile.workerCount).toBe(7)
-    expect(profile.constrained).toBe(false)
     expect(profile.maxZipBytes).toBe(2 * 1024 * 1024 * 1024)
   })
 
-  it('treats low-memory desktop as constrained', () => {
+  it('gives low-memory desktop a reduced budget', () => {
     const profile = profileFromSignals({
       deviceMemory: 4,
       hardwareConcurrency: 8,
     })
     expect(profile.workerCount).toBe(6)
-    expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(1024 * 1024 * 1024)
   })
 
   it('applies the override while preserving platform limits', () => {
     const profile = profileFromSignals({ userAgent: IPHONE_UA }, 99)
     expect(profile.workerCount).toBe(MAX_WORKERS_HIGH_MEMORY)
-    expect(profile.constrained).toBe(true)
   })
 })

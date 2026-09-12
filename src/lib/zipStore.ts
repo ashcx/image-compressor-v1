@@ -3,7 +3,7 @@ export interface ZipStore {
   close(): Promise<Blob>
 }
 
-export async function createMemoryStore(): Promise<ZipStore> {
+async function createMemoryStore(): Promise<ZipStore> {
   const parts: Uint8Array[] = []
   return {
     async write(chunk) {

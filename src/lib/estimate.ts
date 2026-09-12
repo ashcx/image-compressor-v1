@@ -141,7 +141,7 @@ export interface EstimateSample {
   bytes: number
 }
 
-export interface EstimateOptions extends EstimateTarget {
+interface EstimateOptions extends EstimateTarget {
   effort?: number
   /** True pixel size of the image being estimated. Estimates may run on a
    * scaled decode, so the decoded `source` size must not be used here. */
@@ -255,7 +255,7 @@ export function sampleSize(total: number, heavy = false): number {
   return heavy ? HEAVY_SAMPLE_CAP : LIGHT_SAMPLE_CAP
 }
 
-export interface CurveSample {
+interface CurveSample {
   samples: EstimateSample[]
   originalSize: number
 }

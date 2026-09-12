@@ -470,7 +470,6 @@ async function compressJob(id: string) {
       speed: current.speed,
       mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
-      buildEstimate: false,
       consumeInput: true,
       priority: 'high',
     })
@@ -488,13 +487,8 @@ async function compressJob(id: string) {
       sizeIsExact: true,
       outputKey: key,
       sampleKey: samplesKey,
-      ...(result.samples ? { samples: result.samples } : {}),
     })
     if (previousThumb) URL.revokeObjectURL(previousThumb)
-    if (result.samples) {
-      updateAverageRatios()
-      refreshEstimates()
-    }
   } catch (error) {
     if (jobTokens.get(id) !== token) return
     updateJob(id, {

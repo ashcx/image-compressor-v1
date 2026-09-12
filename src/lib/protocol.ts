@@ -11,7 +11,6 @@ export interface ProcessRequest {
   speed?: number
   mode?: number
   resize?: ResizeOptions
-  buildEstimate?: boolean
   estimateOnly?: boolean
 }
 
@@ -28,7 +27,6 @@ export interface ResultResponse {
   format: OutputFormat
   extension: string
   mimeType: string
-  samples?: EstimateSample[]
 }
 
 export interface EstimateResponse {

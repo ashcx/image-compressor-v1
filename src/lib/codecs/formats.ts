@@ -139,10 +139,6 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   },
 }
 
-export function formatSpec(format: OutputFormat): FormatSpec {
-  return FORMAT_SPECS[format]
-}
-
 /**
  * Heavy codecs keep a large WASM heap and decoded canvas per worker, so they
  * run on a reduced (halved) worker pool. AVIF always qualifies; PNG qualifies
