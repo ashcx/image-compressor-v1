@@ -31,16 +31,16 @@ describe('resolveWorkerCount', () => {
     ).toBe(1)
   })
 
-  it('tiers iPad workers by core count', () => {
+  it('uses the standard budget (cores - 1) for iPads', () => {
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 8 }),
-    ).toBe(8)
+    ).toBe(7)
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 6 }),
-    ).toBe(4)
+    ).toBe(5)
     expect(
       resolveWorkerCount({ userAgent: IPAD_UA, hardwareConcurrency: 2 }),
-    ).toBe(2)
+    ).toBe(1)
   })
 
   it('treats a touch-enabled Macintosh as an iPad', () => {
@@ -50,7 +50,7 @@ describe('resolveWorkerCount', () => {
         maxTouchPoints: 5,
         hardwareConcurrency: 8,
       }),
-    ).toBe(8)
+    ).toBe(7)
   })
 
   it('returns 1 for low-memory Android', () => {
@@ -63,14 +63,14 @@ describe('resolveWorkerCount', () => {
     ).toBe(1)
   })
 
-  it('returns min(cores - 1, 4) for high-memory Android', () => {
+  it('uses the standard budget for high-memory Android', () => {
     expect(
       resolveWorkerCount({
         userAgent: ANDROID_UA,
         deviceMemory: 8,
         hardwareConcurrency: 8,
       }),
-    ).toBe(4)
+    ).toBe(7)
   })
 
   it('uses the desktop worker budget, reserving a core', () => {
@@ -88,7 +88,7 @@ describe('resolveWorkerCount', () => {
 
   it('halves workers for heavy codecs but never to zero', () => {
     expect(heavyWorkerCount(8)).toBe(4)
-    expect(heavyWorkerCount(3)).toBe(1)
+    expect(heavyWorkerCount(3)).toBe(2)
     expect(heavyWorkerCount(1)).toBe(1)
   })
 })
@@ -109,7 +109,7 @@ describe('profileFromSignals', () => {
       userAgent: IPAD_UA,
       hardwareConcurrency: 8,
     })
-    expect(profile.workerCount).toBe(8)
+    expect(profile.workerCount).toBe(7)
     expect(profile.constrained).toBe(true)
     expect(profile.maxZipBytes).toBe(1024 * 1024 * 1024)
   })

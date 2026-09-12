@@ -178,3 +178,30 @@ export async function getCodec(format: OutputFormat): Promise<Codec> {
 export async function preloadCodec(format: OutputFormat): Promise<void> {
   await getCodec(format)
 }
+
+/**
+ * Human-readable encoder backend currently in use, for the diagnostics line.
+ * `png` depends on its compression mode; JPEG/WebP report native vs WASM.
+ */
+export async function describeRenderer(
+  format: OutputFormat,
+  mode?: number,
+): Promise<string> {
+  switch (format) {
+    case 'jpeg':
+      return (await canEncodeNatively('image/jpeg')) ? 'native' : 'unsupported'
+    case 'webp':
+      return (await canEncodeNatively('image/webp'))
+        ? 'native'
+        : 'WASM · libwebp'
+    case 'png':
+      if ((mode ?? 0) === 0) {
+        return (await canEncodeNatively('image/png')) ? 'native' : 'WASM · png'
+      }
+      return (mode ?? 0) === 1 ? 'WASM · oxipng' : 'WASM · libimagequant'
+    case 'avif':
+      return 'WASM · avif'
+    case 'jxl':
+      return 'WASM · jxl'
+  }
+}
