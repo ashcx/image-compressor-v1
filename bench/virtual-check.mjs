@@ -51,19 +51,16 @@ try {
     input.dispatchEvent(new Event('change', { bubbles: true }))
   }, COUNT)
 
-  // Wait until the queue has registered every file (the panel summary shows
-  // the total) and at least one row is mounted.
+  // Wait until the queue has registered every file (the first mounted row
+  // reports the full set size) and at least one row is mounted.
   await page.waitForFunction(
-    () => {
-      const summary = [...document.querySelectorAll('.panel__label')]
-        .map((element) => element.textContent ?? '')
-        .join(' ')
+    (count) => {
+      const first = document.querySelector('.job')
       return (
-        document.querySelectorAll('.job').length > 0 &&
-        /\b1000 files\b/.test(summary)
+        first !== null && first.getAttribute('aria-setsize') === String(count)
       )
     },
-    undefined,
+    COUNT,
     { timeout: 60_000 },
   )
 

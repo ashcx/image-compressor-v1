@@ -35,7 +35,11 @@ import {
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { validateFiles } from './lib/intake'
 import { createJobStore } from './lib/jobStore'
-import { disposeMetadataWorker, readDimensions } from './lib/metadataClient'
+import {
+  disposeMetadataWorker,
+  readDimensions,
+  readThumbnail,
+} from './lib/metadataClient'
 import {
   createOutputStore,
   type OutputStore,
@@ -405,6 +409,33 @@ function cancelAllEstimates() {
   estimateControllers.clear()
 }
 
+// Preview requests that are in flight or already resolved for a row. Bounded to
+// the virtualized rows that have actually scrolled into view.
+const previewRequests = new Set<string>()
+
+/**
+ * Lazily generates a preview for an estimated row that has none. Only called
+ * for visible rows, so a large batch pays for previews the user actually sees
+ * rather than decoding every file up front.
+ */
+async function loadThumbnail(id: string) {
+  const job = getJob(id)
+  if (!job || job.thumbnailUrl || job.status !== 'estimated') return
+  if (previewRequests.has(id)) return
+  previewRequests.add(id)
+  cancelIdleTeardown()
+  try {
+    const blob = await readThumbnail(job.file)
+    if (!blob) return
+    const current = getJob(id)
+    if (!current || current.thumbnailUrl || current.status === 'error') return
+    updateJob(id, { thumbnailUrl: URL.createObjectURL(blob) })
+  } finally {
+    previewRequests.delete(id)
+    scheduleIdleTeardown()
+  }
+}
+
 function updateAverageRatios() {
   const curves = listJobs()
     .filter(
@@ -461,7 +492,7 @@ async function estimateJob(id: string) {
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'estimate') return
 
-    const previousThumb = job.thumbnailUrl
+    const previousThumb = getJob(id)?.thumbnailUrl
     const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     updateJob(id, {
       status: 'estimated',
@@ -530,7 +561,7 @@ async function compressJob(id: string) {
       return
     }
 
-    const previousThumb = job.thumbnailUrl
+    const previousThumb = getJob(id)?.thumbnailUrl
     const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     const store = await getOutputStore()
     await store.put(id, result.outputBlob)
@@ -977,6 +1008,7 @@ interface JobRowProps {
   top: number
   onRemove: (id: string) => void
   onDownload: (job: BatchJob) => void
+  onThumbnail: (id: string) => void
 }
 
 // Reads its own job signal, so a completion re-renders only this row. Memoized
@@ -988,8 +1020,13 @@ const JobRow = memo(function JobRow({
   top,
   onRemove,
   onDownload,
+  onThumbnail,
 }: JobRowProps) {
   const job = jobStore.signalFor(id)?.value
+  // Request a preview only once the row is mounted (i.e. scrolled into view).
+  useEffect(() => {
+    if (job && !job.thumbnailUrl && job.status === 'estimated') onThumbnail(id)
+  }, [id, job?.thumbnailUrl, job?.status, onThumbnail])
   if (!job) return null
   const current = isCurrent(job)
   const label = statusLabel(job)
@@ -1121,6 +1158,7 @@ function JobList() {
               top={rowOffset(index, DEFAULT_ROW_HEIGHT, DEFAULT_ROW_GAP)}
               onRemove={removeJob}
               onDownload={downloadJob}
+              onThumbnail={loadThumbnail}
             />
           )
         })}
@@ -1208,17 +1246,6 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
           onChange={(event) => changeResize(Number(event.currentTarget.value))}
         />
       </label>
-
-      <div class="panel__row">
-        <span class="panel__label">
-          {importing.value
-            ? 'Checking files…'
-            : `${total.value} file${total.value === 1 ? '' : 's'}`}
-        </span>
-        <span class="panel__value">
-          {formatBytes(originalTotal.value)} input
-        </span>
-      </div>
 
       <div class="progress" aria-hidden="true">
         <div
@@ -1466,14 +1493,6 @@ export function App() {
           <Panel onAddImages={() => inputRef.current?.click()} />
           <JobList />
         </>
-      )}
-
-      {jobCount > 0 && batchMode.value && (
-        <p class="footnote">
-          Batch mode: change the settings as much as you like — sizes update
-          from cached estimates instantly. Nothing is encoded until you press
-          Compress.
-        </p>
       )}
 
       <footer class="app__footer">v{appVersion}</footer>
