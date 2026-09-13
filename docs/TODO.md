@@ -197,6 +197,9 @@ Delivered:
   jpeg-mixed showed long tasks (2).
 - `npm run test:browser` injects 1,000 files and asserts the mounted-row bound at the top,
   middle, and bottom of the scroll range; it runs as a CI job.
+- Completed outputs persist to OPFS and are read back for downloads, so the queue no longer
+  holds full-resolution Blobs; **Clear all** deletes every app OPFS directory and reloads,
+  returning the tab to a clean document (PERF-10 pulled forward).
 - Remaining: fold 500/1,000 into PERF-13 (Sprint 9) regression thresholds.
 
 ### Parallel work
