@@ -227,16 +227,18 @@ describe('canvas memory budget', () => {
     })
     expect(profile.workerCount).toBe(7)
     expect(profile.canvasMemoryBudget).toBe(1024 * MIB)
-    expect(profile.heavyWorkerCount).toBe(1)
+    // Pro-class iPads unlock the normal halved heavy pool.
+    expect(profile.heavyWorkerCount).toBe(4)
   })
 
-  it('gives lower-core iPads a 512 MiB budget', () => {
+  it('gives lower-core iPads a 512 MiB budget and one heavy worker', () => {
     const profile = profileFromSignals({
       userAgent: IPAD_UA,
       hardwareConcurrency: 6,
     })
     expect(profile.workerCount).toBe(3)
     expect(profile.canvasMemoryBudget).toBe(512 * MIB)
+    expect(profile.heavyWorkerCount).toBe(1)
   })
 
   it('scales Android memory above 8 GB and floors the rest at 512 MiB', () => {
