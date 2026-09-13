@@ -12,11 +12,7 @@ import {
 } from './lib/codecs/formats'
 import { describeRenderer, preloadCodec } from './lib/codecs/registry'
 import type { OutputFormat } from './lib/codecs/types'
-import {
-  getDeviceProfile,
-  heavyWorkerCount,
-  pixelBudgetFor,
-} from './lib/device'
+import { getDeviceProfile, heavyWorkerCount } from './lib/device'
 import {
   averageRatioSamples,
   deriveEstimate,
@@ -55,7 +51,6 @@ import {
   rowOffset,
 } from './lib/virtual'
 import {
-  configurePixelBudget,
   configureWorkers,
   disposePool,
   getPoolStats,
@@ -294,11 +289,6 @@ function estimateFor(job: BatchJob, quality: number): number {
   return deriveEstimate(job.originalSize, averageRatios.value, quality)
 }
 
-/** Decoded-pixel cost used by the worker pool's pixel budget. */
-function jobPixels(job: BatchJob): number {
-  return job.width > 0 && job.height > 0 ? job.width * job.height : 0
-}
-
 // Batch size estimate, rebuilt at most once per frame as jobs change.
 const batchEstimate = signal(0)
 let estimateFrame = 0
@@ -485,7 +475,6 @@ async function estimateJob(id: string) {
       mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       estimateOnly: true,
-      pixels: jobPixels(job),
       priority: 'low',
       signal: controller.signal,
     })
@@ -548,7 +537,6 @@ async function compressJob(id: string) {
       mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       consumeInput: true,
-      pixels: jobPixels(job),
       priority: 'high',
       signal: controller.signal,
     })
@@ -985,18 +973,10 @@ function statusLabel(job: BatchJob): string {
 // this meter, not the whole job list.
 function PoolMeter() {
   const stats = poolStats.value
-  const pixels =
-    stats.pixelBudget > 0
-      ? ` · ${Math.round(stats.pixels / 1e6)}/${Math.round(stats.pixelBudget / 1e6)}MP`
-      : ''
   return (
-    <span
-      class="panel__value"
-      title="Encoder backend, worker pool, and decoded-pixel budget"
-    >
+    <span class="panel__value" title="Encoder backend and worker pool">
       {renderer.value ? `${renderer.value} · ` : ''}workers {stats.busy}/
       {stats.size}
-      {pixels}
     </span>
   )
 }
@@ -1365,7 +1345,6 @@ export function App() {
   useEffect(() => {
     applyWorkerBudget()
     configureFileBufferCap(Math.floor(getDeviceProfile().maxZipBytes / 4))
-    configurePixelBudget(pixelBudgetFor(getDeviceProfile()))
     void refreshRenderer()
     return subscribeToPool(() => {
       poolStats.value = getPoolStats()
