@@ -91,6 +91,13 @@ interface BatchJob {
   capped: boolean
 }
 
+interface DeliveryProgress {
+  kind: 'zip' | 'folder'
+  processed: number
+  total: number
+  bytes: number
+}
+
 interface Settings {
   quality: number
   effort: number
@@ -151,7 +158,13 @@ const poolStats = signal(getPoolStats())
 const renderer = signal('')
 const newVersion = signal('')
 const notice = signal('')
-const zipping = signal(false)
+const OUTPUT_PRESSURE_NOTICE =
+  'Output memory is full for this device. Download or clear completed images to keep compressing.'
+const delivery = signal<DeliveryProgress | null>(null)
+const delivering = computed(() => delivery.value !== null)
+// True when the in-memory output fallback has exceeded its device budget, so
+// no further compression should start until the user downloads or clears.
+const outputPressure = signal(false)
 const batchWarning = signal('')
 const importing = signal(false)
 
@@ -226,11 +239,26 @@ function listJobs(): BatchJob[] {
 }
 
 // Finished outputs go to OPFS (or a memory fallback) instead of accumulating
-// in the queue, so repeated batches in one tab do not grow JS memory.
+// in the queue, so repeated batches in one tab do not grow JS memory. The
+// memory fallback is bounded by the device ZIP budget.
 let outputStorePromise: Promise<OutputStore> | null = null
 function getOutputStore(): Promise<OutputStore> {
-  if (!outputStorePromise) outputStorePromise = createOutputStore()
+  if (!outputStorePromise) {
+    outputStorePromise = createOutputStore({
+      maxMemoryBytes: getDeviceProfile().maxZipBytes,
+    })
+  }
   return outputStorePromise
+}
+
+/** Re-evaluates output backpressure after a store mutation. */
+function syncOutputPressure(store: OutputStore): void {
+  outputPressure.value = store.overBudget
+  if (store.overBudget) {
+    notice.value = OUTPUT_PRESSURE_NOTICE
+  } else if (notice.value === OUTPUT_PRESSURE_NOTICE) {
+    notice.value = ''
+  }
 }
 
 function raf(callback: () => void): number {
@@ -288,7 +316,7 @@ const phaseLabel = computed(
 // Active/ready come straight from the incremental counters, so the Compress
 // button and the busy state are correct without scanning the batch.
 const needsCompress = computed(() => stats.value.active - stats.value.ready > 0)
-const busy = computed(() => zipping.value || stats.value.processing > 0)
+const busy = computed(() => delivering.value || stats.value.processing > 0)
 
 function estimateFor(job: BatchJob, quality: number): number {
   if (job.sampleKey !== sampleKey.value) return 0
@@ -422,7 +450,7 @@ function scheduleIdleTeardown() {
   idleTeardownTimer = setTimeout(() => {
     idleTeardownTimer = undefined
     const active = stats.value.pending + stats.value.processing > 0
-    if (active || zipping.value) return
+    if (active || delivering.value) return
     // Keep a warmed codec pool alive while a batch still needs compressing, so
     // the preload is not thrown away before the user presses Compress.
     if (!isPoolWarm() || stats.value.active <= stats.value.ready) {
@@ -571,6 +599,14 @@ async function compressJob(id: string) {
   const job = getJob(id)
   if (!job) return
 
+  // Output backpressure: stop starting work while the memory fallback is over
+  // budget, so the user can download or clear before more blobs accumulate.
+  if (outputPressure.value) {
+    updateJob(id, { status: 'estimated', error: '' })
+    notice.value = OUTPUT_PRESSURE_NOTICE
+    return
+  }
+
   cancelEstimate(id)
 
   const format = targetFormat.value
@@ -621,8 +657,9 @@ async function compressJob(id: string) {
     const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     const store = await getOutputStore()
     await store.put(id, result.outputBlob)
+    syncOutputPressure(store)
     if (jobTokens.get(id) !== token) {
-      void store.delete(id)
+      void store.delete(id).then(() => syncOutputPressure(store))
       return
     }
     updateJob(id, {
@@ -866,6 +903,10 @@ function changeResize(value: number) {
 
 function compressAll() {
   if (busy.value) return
+  if (outputPressure.value) {
+    notice.value = OUTPUT_PRESSURE_NOTICE
+    return
+  }
   cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   for (const id of jobIds.value) {
@@ -911,7 +952,10 @@ function removeJob(id: string) {
   nextToken(id)
   jobTokens.delete(id)
   forgetFile(id)
-  void getOutputStore().then((store) => store.delete(id))
+  void getOutputStore().then(async (store) => {
+    await store.delete(id)
+    syncOutputPressure(store)
+  })
   const job = getJob(id)
   if (job?.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
   dropJob(id)
@@ -934,6 +978,8 @@ function clearAll() {
   averageRatios.value = []
   sampledIds.value = new Set()
   notice.value = ''
+  outputPressure.value = false
+  delivery.value = null
   cancelIdleTeardown()
   disposePool()
   disposeMetadataWorker()
@@ -960,23 +1006,29 @@ function triggerDownload(blob: Blob, name: string) {
 // hold (or decode) a multi-megapixel blob.
 async function downloadJob(job: BatchJob) {
   if (!job.outputStored) return
-  const store = await getOutputStore()
-  const blob = await store.get(job.id)
-  if (!blob) return
-  triggerDownload(blob, replaceExtension(job.name, job.outputExtension))
+  try {
+    const store = await getOutputStore()
+    const blob = await store.get(job.id)
+    if (!blob) return
+    triggerDownload(blob, replaceExtension(job.name, job.outputExtension))
+  } catch (error) {
+    notice.value =
+      error instanceof Error ? error.message : 'Could not download the image.'
+  }
 }
 
 async function downloadAll() {
-  if (zipping.value) return
+  if (delivering.value) return
   const list = downloadableList()
   if (list.length === 0) return
 
-  zipping.value = true
+  delivery.value = { kind: 'zip', processed: 0, total: list.length, bytes: 0 }
   notice.value = ''
   try {
     const store = await getOutputStore()
     const zip = await createStreamingZip(getDeviceProfile().maxZipBytes)
     const used = new Set<string>()
+    let processed = 0
     for (const job of list) {
       const blob = await store.get(job.id)
       if (!blob) continue
@@ -985,6 +1037,13 @@ async function downloadAll() {
         used,
       )
       await zip.add(name, blob)
+      processed += 1
+      delivery.value = {
+        kind: 'zip',
+        processed,
+        total: list.length,
+        bytes: zip.size,
+      }
     }
     const blob = await zip.finish()
     triggerDownload(blob, 'images.zip')
@@ -994,17 +1053,27 @@ async function downloadAll() {
         ? error.message
         : 'Could not build the zip.'
   } finally {
-    zipping.value = false
+    delivery.value = null
   }
 }
 
 async function saveToFolder() {
-  if (!directoryPicker) return
+  if (!directoryPicker || delivering.value) return
+  const list = downloadableList()
+  if (list.length === 0) return
   try {
     const store = await getOutputStore()
     const directory = await directoryPicker()
+    delivery.value = {
+      kind: 'folder',
+      processed: 0,
+      total: list.length,
+      bytes: 0,
+    }
     const used = new Set<string>()
-    for (const job of downloadableList()) {
+    let processed = 0
+    let bytes = 0
+    for (const job of list) {
       const blob = await store.get(job.id)
       if (!blob) continue
       const name = uniqueEntryName(
@@ -1015,11 +1084,24 @@ async function saveToFolder() {
       const writable = await handle.createWritable()
       await writable.write(blob)
       await writable.close()
+      processed += 1
+      bytes += blob.size
+      delivery.value = {
+        kind: 'folder',
+        processed,
+        total: list.length,
+        bytes,
+      }
     }
   } catch (error) {
     // The user dismissing the picker is not an error worth surfacing.
     if (error instanceof DOMException && error.name === 'AbortError') return
-    throw error
+    notice.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not save to the selected folder.'
+  } finally {
+    delivery.value = null
   }
 }
 
@@ -1363,7 +1445,7 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
         <button
           type="button"
           class="button"
-          disabled={zipping.value}
+          disabled={delivering.value}
           onClick={cancelAllWork}
         >
           Cancel
@@ -1385,10 +1467,10 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
             type="button"
             class="button button--primary"
             onClick={downloadAll}
-            disabled={zipping.value || busy.value}
+            disabled={busy.value}
           >
-            {zipping.value
-              ? 'Building zip…'
+            {delivery.value?.kind === 'zip'
+              ? `Zipping ${delivery.value.processed}/${delivery.value.total}…`
               : `Download all (${readyDownloadable.value}) as zip`}
           </button>
         )}
@@ -1400,7 +1482,9 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
             disabled={busy.value}
             onClick={saveToFolder}
           >
-            Save to folder…
+            {delivery.value?.kind === 'folder'
+              ? `Saving ${delivery.value.processed}/${delivery.value.total}…`
+              : 'Save to folder…'}
           </button>
         )}
 
@@ -1413,6 +1497,16 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
           Clear all
         </button>
       </div>
+
+      {delivery.value && (
+        <p class="panel__progress" role="status" aria-live="polite">
+          {delivery.value.kind === 'zip' ? 'Building zip' : 'Saving to folder'}{' '}
+          {delivery.value.processed}/{delivery.value.total}
+          {delivery.value.bytes > 0
+            ? ` · ${formatBytes(delivery.value.bytes)}`
+            : ''}
+        </p>
+      )}
     </section>
   )
 }

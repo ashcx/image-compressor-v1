@@ -295,19 +295,29 @@ before sprint acceptance.
   - Delivered in `src/lib/outputStore.ts`; downloads (single, ZIP, folder) read back from the
     store, and stale session directories older than 24 h are cleaned on startup.
 
-- [ ] **PERF-11 — Non-OPFS fallback and backpressure (5 points)**
-  - Add a bounded in-memory fallback. *(memory fallback landed with PERF-10; still unbounded)*
+- [x] **PERF-11 — Non-OPFS fallback and backpressure (5 points)**
+  - Add a bounded in-memory fallback.
   - Stop or stage processing when output memory exceeds the device budget.
   - Explain the limitation to the user and provide an actionable download/clear path.
+  - Delivered in `src/lib/outputStore.ts`: the memory fallback tracks retained bytes against
+    `maxZipBytes` and reports `overBudget`; the app stops starting compression and prompts the
+    user to download or clear, rather than growing the tab without bound. OPFS remains the
+    primary path and is unaffected.
 
-- [ ] **PERF-12 — ZIP and folder-save progress (5 points)**
+- [x] **PERF-12 — ZIP and folder-save progress (5 points)**
   - Show files processed, current ZIP size, and completion state.
   - Disable conflicting actions while folder saving is active.
   - Surface permission and quota failures inside the app instead of as unhandled errors.
+  - Delivered via a shared `delivery` progress signal; both ZIP and folder save report
+    `processed/total` and running size, disable conflicting actions, and route failures to the
+    in-app notice (including `saveToFolder`, which previously rethrew).
 
-- [ ] **QA-02 — Storage cleanup and recovery tests (5 points)**
+- [x] **QA-02 — Storage cleanup and recovery tests (5 points)**
   - Test removal, clear-all, cancellation, quota failure, reload, and interrupted delivery.
   - Verify that no stale object URLs or OPFS files remain after cleanup.
+  - Delivered in `src/lib/outputStore.opfs.test.ts` against a fake OPFS: quota-failure
+    fallback, bounded usage, abandoned-session cleanup, and `resetOutputStorage`. Existing
+    browser checks cover the download/ZIP/clear paths.
 
 ### Expected output
 
