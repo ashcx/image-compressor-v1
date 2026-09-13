@@ -72,6 +72,7 @@ per-file processing cost.
 - **Estimate** — injection → compression triggered (batch estimation settled).
 - **Long tasks** — `PerformanceObserver('longtask')` entries inside the run window.
 - **Frame gap** — max / p95 gap between `requestAnimationFrame` callbacks.
+- **Peak rows** — max job rows mounted in the DOM (virtualization check).
 - **Busy/size** — sampled app worker meter (busy workers / pool size).
 - **Heap** — peak `performance.memory.usedJSHeapSize` where available (Chromium).
 

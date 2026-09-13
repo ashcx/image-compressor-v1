@@ -1,7 +1,8 @@
-import { computed, type Signal, signal } from '@preact/signals'
+import { computed, effect, type Signal, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { memo } from 'preact/compat'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
+import type { JobStatus } from './lib/batchStats'
 import {
   type ControlKey,
   FORMAT_ORDER,
@@ -27,8 +28,18 @@ import {
   releaseFileBuffer,
 } from './lib/fileBufferStore'
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
+import { validateFiles } from './lib/intake'
+import { createJobStore } from './lib/jobStore'
 import { disposeMetadataWorker, readDimensions } from './lib/metadataClient'
 import { appVersion, watchForUpdates } from './lib/version'
+import {
+  computeWindow,
+  DEFAULT_OVERSCAN,
+  DEFAULT_ROW_GAP,
+  DEFAULT_ROW_HEIGHT,
+  listHeight,
+  rowOffset,
+} from './lib/virtual'
 import {
   configureWorkers,
   disposePool,
@@ -41,14 +52,6 @@ import {
   uniqueEntryName,
   ZipTooLargeError,
 } from './lib/zip'
-
-type JobStatus =
-  | 'queued'
-  | 'estimating'
-  | 'estimated'
-  | 'processing'
-  | 'done'
-  | 'error'
 
 interface BatchJob {
   id: string
@@ -120,10 +123,7 @@ function controlHint(control: FormatControl, value: number): string {
   return control.hint ?? ''
 }
 
-// Jobs live in a per-id signal so a completion updates only that row; `jobIds`
-// carries order and only changes when the set of jobs changes.
-const jobIds = signal<string[]>([])
-const jobStore = new Map<string, Signal<BatchJob>>()
+// --- Signals -----------------------------------------------------------------
 const targetFormat = signal<OutputFormat>('jpeg')
 const settings = signal<Settings>(defaultSettings('jpeg'))
 const maxLongEdge = signal(0)
@@ -133,6 +133,8 @@ const renderer = signal('')
 const newVersion = signal('')
 const notice = signal('')
 const zipping = signal(false)
+const batchWarning = signal('')
+const importing = signal(false)
 
 // Ratios of estimated output to original size, averaged over the sampled
 // images, used to extrapolate estimates for unmeasured rows in a big batch.
@@ -144,49 +146,6 @@ let reprocessTimer: ReturnType<typeof setTimeout> | undefined
 let sampleChangeTimer: ReturnType<typeof setTimeout> | undefined
 const jobTokens = new Map<string, number>()
 const estimateControllers = new Map<string, AbortController>()
-
-const total = computed(() => jobIds.value.length)
-const batchMode = computed(() => jobIds.value.length > 1)
-
-// Reads every job signal, so aggregates update on any change; used by the panel
-// (never by the list, which is driven by per-job signals).
-const allJobs = computed(() => listJobs())
-
-const originalTotal = computed(() =>
-  allJobs.value.reduce(
-    (sum, job) => (job.status === 'error' ? sum : sum + job.originalSize),
-    0,
-  ),
-)
-
-const finished = computed(
-  () =>
-    allJobs.value.filter(
-      (job) => job.status === 'done' || job.status === 'error',
-    ).length,
-)
-const failed = computed(
-  () => allJobs.value.filter((job) => job.status === 'error').length,
-)
-const progressPercent = computed(() =>
-  total.value === 0 ? 0 : Math.round((finished.value / total.value) * 100),
-)
-const pendingEstimate = computed(
-  () =>
-    allJobs.value.filter(
-      (job) => job.status === 'queued' || job.status === 'estimating',
-    ).length,
-)
-const estimatePhase = computed(
-  () => batchMode.value && pendingEstimate.value > 0,
-)
-// The bar only reflects compression; estimates happen quietly in the
-// background so the app looks ready to compress immediately.
-const phasePercent = computed(() => progressPercent.value)
-const phaseLabel = computed(
-  () =>
-    `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}`,
-)
 
 const activeControls = computed(() => FORMAT_SPECS[targetFormat.value].controls)
 
@@ -221,20 +180,83 @@ const outputKey = computed(
 const isCurrent = (job: BatchJob) =>
   job.status === 'done' && job.outputKey === outputKey.value
 
-const needsCompress = computed(() =>
-  allJobs.value.some(
-    (job) =>
-      job.status !== 'error' &&
-      !(job.status === 'done' && job.outputKey === outputKey.value),
-  ),
+// --- Job store and incremental aggregates ------------------------------------
+// Jobs live in a plain map (cheap full scans) plus a per-id signal so one
+// completion re-renders only its row. Aggregates are maintained incrementally,
+// so a single completion is O(1) instead of re-reducing the whole batch.
+const jobStore = createJobStore<BatchJob>({
+  getOutputKey: () => outputKey.value,
+  toStats: (job) => ({
+    status: job.status,
+    originalSize: job.originalSize,
+    outputSize: job.outputSize,
+    outputKey: job.outputKey,
+    hasBlob: job.outputBlob !== null,
+  }),
+})
+const jobIds = jobStore.order
+const stats = jobStore.stats
+
+function getJob(id: string): BatchJob | undefined {
+  return jobStore.get(id)
+}
+
+function listJobs(): BatchJob[] {
+  return jobStore.list()
+}
+
+function raf(callback: () => void): number {
+  if (typeof requestAnimationFrame === 'function') {
+    return requestAnimationFrame(callback)
+  }
+  return setTimeout(callback, 16) as unknown as number
+}
+
+// The panel reads throttled counters so a burst of completions coalesces into
+// at most one visual update per frame; logic reads `stats` directly.
+function throttleSignal<T>(source: Signal<T>): Signal<T> {
+  const output = signal(source.value)
+  let frame = 0
+  effect(() => {
+    source.value
+    if (frame) return
+    frame = raf(() => {
+      frame = 0
+      output.value = source.value
+    })
+  })
+  return output
+}
+
+const displayStats = throttleSignal(stats)
+
+const total = computed(() => stats.value.total)
+const batchMode = computed(() => stats.value.total > 1)
+const finished = computed(() => displayStats.value.finished)
+const failed = computed(() => displayStats.value.failed)
+const originalTotal = computed(() => displayStats.value.originalBytes)
+const progressPercent = computed(() => {
+  const value = displayStats.value
+  return value.total === 0
+    ? 0
+    : Math.round((value.finished / value.total) * 100)
+})
+const pendingEstimate = computed(() => displayStats.value.pending)
+const estimatePhase = computed(
+  () => batchMode.value && pendingEstimate.value > 0,
+)
+// The bar only reflects compression; estimates happen quietly in the
+// background so the app looks ready to compress immediately.
+const phasePercent = computed(() => progressPercent.value)
+const phaseLabel = computed(
+  () =>
+    `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}`,
 )
 
-// Settings and downloads are frozen while anything is encoding, so the
-// estimate/compress pipeline cannot be mutated mid-flight.
-const busy = computed(
-  () =>
-    zipping.value || allJobs.value.some((job) => job.status === 'processing'),
-)
+// Active/ready come straight from the incremental counters, so the Compress
+// button and the busy state are correct without scanning the batch.
+const needsCompress = computed(() => stats.value.active - stats.value.ready > 0)
+const busy = computed(() => zipping.value || stats.value.processing > 0)
 
 function estimateFor(job: BatchJob, quality: number): number {
   if (job.sampleKey !== sampleKey.value) return 0
@@ -242,22 +264,37 @@ function estimateFor(job: BatchJob, quality: number): number {
   return deriveEstimate(job.originalSize, averageRatios.value, quality)
 }
 
-const batchEstimate = computed(() =>
-  allJobs.value.reduce((sum, job) => {
-    if (job.status === 'error') return sum
-    if (isCurrent(job)) return sum + job.outputSize
-    return sum + estimateFor(job, settings.value.quality)
-  }, 0),
+// Batch size estimate, rebuilt at most once per frame as jobs change.
+const batchEstimate = signal(0)
+let estimateFrame = 0
+effect(() => {
+  jobStore.revision.value
+  if (estimateFrame) return
+  estimateFrame = raf(() => {
+    estimateFrame = 0
+    const key = outputKey.value
+    const quality = settings.value.quality
+    let sum = 0
+    for (const job of listJobs()) {
+      if (job.status === 'error') continue
+      if (job.status === 'done' && job.outputKey === key) sum += job.outputSize
+      else sum += estimateFor(job, quality)
+    }
+    batchEstimate.value = sum
+  })
+})
+
+const readyDownloadable = computed(() => displayStats.value.readyDownloadable)
+const canDownloadAll = computed(
+  () => total.value > 1 && readyDownloadable.value > 0,
 )
 
-const downloadable = computed(() =>
-  allJobs.value.filter(
-    (job) => job.status === 'done' && isCurrent(job) && job.outputBlob,
-  ),
-)
-const canDownloadAll = computed(
-  () => jobIds.value.length > 1 && downloadable.value.length > 0,
-)
+function downloadableList(): BatchJob[] {
+  const key = outputKey.value
+  return listJobs().filter(
+    (job) => job.status === 'done' && job.outputKey === key && job.outputBlob,
+  )
+}
 
 function nextToken(id: string): number {
   const token = (jobTokens.get(id) ?? 0) + 1
@@ -265,46 +302,21 @@ function nextToken(id: string): number {
   return token
 }
 
-// --- Per-job store -----------------------------------------------------------
-// Each job is its own signal, so patching one job re-renders only its row.
-// `jobIds` changes only when jobs are added/removed; the panel reads `allJobs`.
-
-function setJob(job: BatchJob) {
-  const existing = jobStore.get(job.id)
-  if (existing) {
-    existing.value = job
-    return
-  }
-  jobStore.set(job.id, signal(job))
-  jobIds.value = [...jobIds.value, job.id]
+// --- Job mutations -----------------------------------------------------------
+function addJobs(jobs: BatchJob[]) {
+  jobStore.add(jobs)
 }
 
 function updateJob(id: string, patch: Partial<BatchJob>) {
-  const job = jobStore.get(id)
-  if (job) job.value = { ...job.value, ...patch }
-}
-
-function getJob(id: string): BatchJob | undefined {
-  return jobStore.get(id)?.value
+  jobStore.update(id, patch)
 }
 
 function dropJob(id: string) {
-  jobStore.delete(id)
-  jobIds.value = jobIds.value.filter((candidate) => candidate !== id)
+  jobStore.remove(id)
 }
 
 function clearJobs() {
   jobStore.clear()
-  jobIds.value = []
-}
-
-function listJobs(): BatchJob[] {
-  const jobs: BatchJob[] = []
-  for (const id of jobIds.value) {
-    const job = jobStore.get(id)?.value
-    if (job) jobs.push(job)
-  }
-  return jobs
 }
 
 function applyWorkerBudget() {
@@ -341,12 +353,7 @@ function scheduleIdleTeardown() {
   cancelIdleTeardown()
   idleTeardownTimer = setTimeout(() => {
     idleTeardownTimer = undefined
-    const active = allJobs.value.some(
-      (job) =>
-        job.status === 'processing' ||
-        job.status === 'estimating' ||
-        job.status === 'queued',
-    )
+    const active = stats.value.pending + stats.value.processing > 0
     if (active || zipping.value) return
     disposePool()
     disposeMetadataWorker()
@@ -364,7 +371,7 @@ function cancelAllEstimates() {
 }
 
 function updateAverageRatios() {
-  const curves = allJobs.value
+  const curves = listJobs()
     .filter(
       (job) => job.samples.length > 0 && job.sampleKey === sampleKey.value,
     )
@@ -529,53 +536,87 @@ function updateSampling(): Set<string> {
   return existing
 }
 
-function addFiles(fileList: FileList | File[] | null) {
+function batchRiskWarning(count: number, bytes: number): string {
+  const profile = getDeviceProfile()
+  if (bytes > profile.maxZipBytes) {
+    return `This batch is ${formatBytes(bytes)} — above the ${formatBytes(profile.maxZipBytes)} archive budget for this device. Large batches may exhaust memory.`
+  }
+  if (count > 1000) {
+    return `Large batch (${count} files). Processing runs in waves; the list stays usable while it works.`
+  }
+  return ''
+}
+
+async function addFiles(fileList: FileList | File[] | null) {
   if (!fileList) return
   const incoming = Array.from(fileList)
   if (incoming.length === 0) return
 
-  const created: BatchJob[] = incoming.map((file) => ({
-    id: `file-${++idCounter}`,
-    name: file.name,
-    file,
-    originalSize: file.size,
-    status: 'queued',
-    thumbnailUrl: '',
-    outputBlob: null,
-    outputExtension: FORMAT_SPECS[targetFormat.value].extension,
-    outputSize: 0,
-    sizeIsExact: false,
-    outputKey: '',
-    sampleKey: '',
-    width: 0,
-    height: 0,
-    samples: [],
-    error: '',
-  }))
-
-  for (const job of created) setJob(job)
-  const sampled = updateSampling()
-
-  for (const job of created) {
-    registerFile(job.id, job.file)
-    void readDimensions(job.file).then((dimensions) => {
-      if (dimensions) {
-        updateJob(job.id, {
-          width: dimensions.width,
-          height: dimensions.height,
-        })
-      }
-    })
-
-    // A lone image is compressed right away; a batch is only estimated (a
-    // bounded sample for large batches) so settings can be dialled in first.
-    if (jobIds.value.length > 1) {
-      if (sampled.has(job.id)) void estimateJob(job.id)
-      else
-        updateJob(job.id, { status: 'estimated', sampleKey: sampleKey.value })
-    } else {
-      void compressJob(job.id)
+  importing.value = true
+  batchWarning.value = ''
+  notice.value = ''
+  try {
+    const { accepted, rejected } = await validateFiles(incoming)
+    if (rejected.length > 0) {
+      const listed = rejected
+        .slice(0, 3)
+        .map((entry) => entry.name)
+        .join(', ')
+      const extra =
+        rejected.length > 3 ? ` and ${rejected.length - 3} more` : ''
+      notice.value = `Skipped ${rejected.length} unsupported file${rejected.length === 1 ? '' : 's'}: ${listed}${extra}. Supported inputs are JPEG, PNG, WebP, and AVIF.`
     }
+    if (accepted.length === 0) return
+
+    const created: BatchJob[] = accepted.map((file) => ({
+      id: `file-${++idCounter}`,
+      name: file.name,
+      file,
+      originalSize: file.size,
+      status: 'queued',
+      thumbnailUrl: '',
+      outputBlob: null,
+      outputExtension: FORMAT_SPECS[targetFormat.value].extension,
+      outputSize: 0,
+      sizeIsExact: false,
+      outputKey: '',
+      sampleKey: '',
+      width: 0,
+      height: 0,
+      samples: [],
+      error: '',
+    }))
+
+    // One transaction for the whole drop: the id array and aggregates update
+    // once instead of growing by copy per file.
+    addJobs(created)
+    const bytes = created.reduce((sum, job) => sum + job.originalSize, 0)
+    batchWarning.value = batchRiskWarning(created.length, bytes)
+
+    const sampled = updateSampling()
+    for (const job of created) {
+      registerFile(job.id, job.file)
+      void readDimensions(job.file).then((dimensions) => {
+        if (dimensions) {
+          updateJob(job.id, {
+            width: dimensions.width,
+            height: dimensions.height,
+          })
+        }
+      })
+
+      // A lone image is compressed right away; a batch is only estimated (a
+      // bounded sample for large batches) so settings can be dialled in first.
+      if (jobIds.value.length > 1) {
+        if (sampled.has(job.id)) void estimateJob(job.id)
+        else
+          updateJob(job.id, { status: 'estimated', sampleKey: sampleKey.value })
+      } else {
+        void compressJob(job.id)
+      }
+    }
+  } finally {
+    importing.value = false
   }
 }
 
@@ -630,6 +671,7 @@ function changeFormat(format: OutputFormat) {
   disposePool()
   targetFormat.value = format
   settings.value = defaultSettings(format)
+  jobStore.refreshReady()
   applyWorkerBudget()
   void refreshRenderer()
   // Warm the WASM codec while the user dials in settings, so selecting AVIF
@@ -641,6 +683,7 @@ function changeFormat(format: OutputFormat) {
 function changeControl(key: ControlKey, value: number) {
   if (busy.value || settings.value[key] === value) return
   settings.value = { ...settings.value, [key]: value }
+  jobStore.refreshReady()
   if (key === 'quality') {
     // Heavy codecs estimate only the current quality, so a quality change needs
     // a fresh (debounced) estimate; light codecs interpolate from the curve.
@@ -662,6 +705,7 @@ function changeResize(value: number) {
   const next = Number.isFinite(value) && value > 0 ? Math.round(value) : 0
   if (next === maxLongEdge.value) return
   maxLongEdge.value = next
+  jobStore.refreshReady()
   scheduleSampleReestimate()
 }
 
@@ -727,7 +771,7 @@ function downloadJob(job: BatchJob) {
 
 async function downloadAll() {
   if (zipping.value) return
-  const list = downloadable.value
+  const list = downloadableList()
   if (list.length === 0) return
 
   zipping.value = true
@@ -760,7 +804,7 @@ async function saveToFolder() {
   try {
     const directory = await directoryPicker()
     const used = new Set<string>()
-    for (const job of downloadable.value) {
+    for (const job of downloadableList()) {
       if (!job.outputBlob) continue
       const name = uniqueEntryName(
         replaceExtension(job.name, job.outputExtension),
@@ -812,20 +856,35 @@ function PoolMeter() {
 
 interface JobRowProps {
   id: string
+  index: number
+  setSize: number
+  top: number
   onRemove: (id: string) => void
   onDownload: (job: BatchJob) => void
 }
 
 // Reads its own job signal, so a completion re-renders only this row. Memoized
-// on the stable id/callbacks so list re-renders (add/remove) skip unchanged rows.
-const JobRow = memo(function JobRow({ id, onRemove, onDownload }: JobRowProps) {
-  const job = jobStore.get(id)?.value
+// on stable props so scrolling and list changes skip unchanged rows.
+const JobRow = memo(function JobRow({
+  id,
+  index,
+  setSize,
+  top,
+  onRemove,
+  onDownload,
+}: JobRowProps) {
+  const job = jobStore.signalFor(id)?.value
   if (!job) return null
   const current = isCurrent(job)
   const label = statusLabel(job)
   const isBusy = busy.value
   return (
-    <li class="job">
+    <li
+      class="job"
+      style={{ top: `${top}px`, height: `${DEFAULT_ROW_HEIGHT}px` }}
+      aria-posinset={index + 1}
+      aria-setsize={setSize}
+    >
       <div class="job__thumb">
         {job.status === 'processing' ? (
           <span class="job__spinner" />
@@ -889,19 +948,64 @@ const JobRow = memo(function JobRow({ id, onRemove, onDownload }: JobRowProps) {
   )
 })
 
-// Reads only `jobIds`, so job completions never re-render the list container.
+// Virtualized to the visible rows plus a small overscan window. Reads only
+// `jobIds` for order, so completions never re-render the list container.
 function JobList() {
+  const ids = jobIds.value
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const frameRef = useRef(0)
+
+  useEffect(() => {
+    const element = scrollRef.current
+    if (!element) return
+    const update = () => setViewportHeight(element.clientHeight)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  const onScroll = () => {
+    const element = scrollRef.current
+    if (!element || frameRef.current) return
+    frameRef.current = raf(() => {
+      frameRef.current = 0
+      setScrollTop(element.scrollTop)
+    })
+  }
+
+  const { start, end } = computeWindow({
+    count: ids.length,
+    rowHeight: DEFAULT_ROW_HEIGHT,
+    gap: DEFAULT_ROW_GAP,
+    viewportHeight: viewportHeight || DEFAULT_ROW_HEIGHT * 8,
+    scrollTop,
+    overscan: DEFAULT_OVERSCAN,
+  })
+  const height = listHeight(ids.length, DEFAULT_ROW_HEIGHT, DEFAULT_ROW_GAP)
+  const visible = ids.slice(start, end)
+
   return (
-    <ul class="jobs">
-      {jobIds.value.map((id) => (
-        <JobRow
-          key={id}
-          id={id}
-          onRemove={removeJob}
-          onDownload={downloadJob}
-        />
-      ))}
-    </ul>
+    <div class="queue" ref={scrollRef} onScroll={onScroll}>
+      <ul class="jobs" style={{ height: `${height}px` }}>
+        {visible.map((id, offset) => {
+          const index = start + offset
+          return (
+            <JobRow
+              key={id}
+              id={id}
+              index={index}
+              setSize={ids.length}
+              top={rowOffset(index, DEFAULT_ROW_HEIGHT, DEFAULT_ROW_GAP)}
+              onRemove={removeJob}
+              onDownload={downloadJob}
+            />
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
@@ -985,6 +1089,17 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
         />
       </label>
 
+      <div class="panel__row">
+        <span class="panel__label">
+          {importing.value
+            ? 'Checking files…'
+            : `${total.value} file${total.value === 1 ? '' : 's'}`}
+        </span>
+        <span class="panel__value">
+          {formatBytes(originalTotal.value)} input
+        </span>
+      </div>
+
       <div class="progress" aria-hidden="true">
         <div
           class="progress__bar"
@@ -995,6 +1110,12 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
       {settingsWarning.value && (
         <p class="field__warning" role="alert">
           {settingsWarning.value}
+        </p>
+      )}
+
+      {batchWarning.value && (
+        <p class="field__warning" role="alert">
+          {batchWarning.value}
         </p>
       )}
 
@@ -1052,7 +1173,7 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
           >
             {zipping.value
               ? 'Building zip…'
-              : `Download all (${downloadable.value.length}) as zip`}
+              : `Download all (${readyDownloadable.value}) as zip`}
           </button>
         )}
 
@@ -1099,14 +1220,14 @@ export function App() {
   }, [])
 
   function onInputChange(event: JSX.TargetedEvent<HTMLInputElement, Event>) {
-    addFiles(event.currentTarget.files)
+    void addFiles(event.currentTarget.files)
     event.currentTarget.value = ''
   }
 
   function onDrop(event: JSX.TargetedDragEvent<HTMLElement>) {
     event.preventDefault()
     isDragging.value = false
-    addFiles(event.dataTransfer?.files ?? null)
+    void addFiles(event.dataTransfer?.files ?? null)
   }
 
   function onDragOver(event: JSX.TargetedDragEvent<HTMLElement>) {
@@ -1135,6 +1256,12 @@ export function App() {
           >
             Reload
           </button>
+        </div>
+      )}
+
+      {importing.value && (
+        <div class="update-banner" role="status">
+          <span>Checking files…</span>
         </div>
       )}
 

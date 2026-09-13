@@ -132,30 +132,38 @@ must be complete before HEIC encoding is scheduled.
 
 ### TODO
 
-- [ ] **PERF-02 — Batch file ingestion (5 points)**
+- [x] **PERF-02 — Batch file ingestion (5 points)**
   - Create all job records and IDs in one state transaction.
   - Avoid repeatedly copying the growing ID array during a 1,000-file import.
   - Show an immediate import summary while metadata and previews arrive progressively.
   - Preserve ordering and duplicate filenames.
+  - Delivered via `createJobStore` bulk `add` (one id-array write, one aggregate fold) and an
+    async intake path in `App.tsx`; ordering and duplicates covered in `jobStore.test.ts`.
 
-- [ ] **PERF-03 — Incremental aggregate state (5 points)**
+- [x] **PERF-03 — Incremental aggregate state (5 points)**
   - Replace repeated full-batch reductions for completed, failed, pending, and byte totals with
     incremental counters or selectors.
   - Throttle visual progress updates to an appropriate frame rate.
   - Prevent a single row completion from causing unnecessary panel and queue work.
+  - Delivered with the `BatchStats` reducer in `batchStats.ts` and an rAF-throttled panel view;
+    the incremental reducer is tested against a full recompute.
 
-- [ ] **PERF-04 — True virtualized job list (13 points)**
+- [x] **PERF-04 — True virtualized job list (13 points)**
   - Mount only the visible rows plus a small overscan window.
   - Preserve correct scroll height with a spacer or measured row offsets.
   - Support keyboard focus, removal, download, error actions, and screen-reader navigation.
   - Keep row height predictable for the default density.
   - Handle insertion, removal, resize, and orientation changes without scroll jumps.
   - Keep `content-visibility` as a secondary optimization where useful.
+  - Delivered with `computeWindow`/`listHeight` in `virtual.ts` and a scroll-container
+    `JobList`; the baseline mounts 12 rows whether the batch is 25 or 240.
 
-- [ ] **PERF-05 — File validation and intake guardrails (3 points)**
+- [x] **PERF-05 — File validation and intake guardrails (3 points)**
   - Validate supported formats using magic bytes after reading a bounded header.
   - Report unsupported files before they enter the processing queue.
   - Show count, total input size, and device-risk warnings for unusually large batches.
+  - Delivered with bounded-header `validateFiles` in `intake.ts`; unsupported files are skipped
+    with a notice and oversized batches show a device-risk warning.
 
 ### Expected output
 
@@ -172,6 +180,16 @@ must be complete before HEIC encoding is scheduled.
 - Measure DOM row count, script time, scroll frame gaps, and long tasks.
 - Acceptance target: only visible rows plus overscan are mounted at 1,000 files.
 - Run all standard project checks.
+
+Delivered:
+
+- Unit tests: `jobStore.test.ts`, `batchStats.test.ts`, `intake.test.ts`, `virtual.test.ts`
+  (30 cases; 125 total).
+- The harness gained a `Peak rows` column and now reads the panel's aggregate label, so it
+  works against the virtualized list. The committed baseline covers 25/60/240; 500/1,000 run
+  on demand with `node bench/run.mjs --counts 500,1000`.
+- Peak mounted rows stayed at **12** regardless of batch size, with 0 long tasks through 240.
+- Remaining: run the 500/1,000 cohorts as part of PERF-13 (Sprint 9) gating.
 
 ### Parallel work
 

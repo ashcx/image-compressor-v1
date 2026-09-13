@@ -216,16 +216,23 @@ input[type="range"]:disabled {
   transition: width 0.2s ease;
 }
 
+.queue {
+  max-height: min(70vh, 42rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .jobs {
+  position: relative;
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .job {
+  position: absolute;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -235,7 +242,6 @@ input[type="range"]:disabled {
   padding: 0.6rem 0.75rem;
   /* Skip layout/paint for offscreen rows so large batches stay responsive. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 64px;
 }
 
 .job__thumb {
