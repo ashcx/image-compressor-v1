@@ -1,6 +1,13 @@
 import { unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { createStreamingZip, uniqueEntryName, ZipTooLargeError } from './zip'
+import { resetZipStore } from './zipStore'
+
+describe('resetZipStore', () => {
+  it('is a no-op without OPFS', async () => {
+    await expect(resetZipStore()).resolves.toBeUndefined()
+  })
+})
 
 describe('uniqueEntryName', () => {
   it('returns the original name when unused', () => {

@@ -44,8 +44,10 @@ increase contention, memory pressure, and thermal load.
 - iPhone, iPad, and Android worker budgets are policy choices, not physical-device
   measurements. Thermal throttling, battery behaviour, Safari/JSC speed, and OS tab eviction
   are outside this data set.
-- The temporary benchmark harness and 25-image fixture corpus are not checked in, so these
-  figures are documented evidence rather than CI-enforced regression thresholds.
+- The benchmark harness and deterministic fixture generator now live in
+  [`bench/`](../bench/README.md), with a committed reference run in
+  `bench/results/baseline.{json,md}`. They are still a synthetic, headless
+  reference, not CI-enforced thresholds; gates are defined in Sprint 9.
 
 Mobile memory figures are sizing rationale, not verified device limits.
 
@@ -193,6 +195,9 @@ point; the worker budget is a balance between throughput and responsiveness.
   ImageData.
 - Thumbnails are generated in the worker at **96 px**; output object URLs are created lazily
   on download.
+- Completed outputs are written to the Origin Private File System when available and read
+  back on demand for download, so the queue keeps metadata and thumbnails rather than every
+  full-resolution Blob. A memory fallback is used where OPFS is unavailable.
 - Idle teardown terminates the worker pool and metadata worker about **two seconds** after
   becoming idle, and immediately on format change or clearing the list.
 - Per-device ZIP size caps prevent the app from attempting very large archives without an

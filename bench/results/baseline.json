@@ -1,0 +1,723 @@
+{
+  "meta": {
+    "commit": "a7f5a27",
+    "timestamp": "2026-09-13T04:56:33.901Z",
+    "node": "v22.23.2",
+    "chromium": "153.0.8010.12",
+    "counts": [
+      25,
+      60,
+      240
+    ],
+    "seed": 1
+  },
+  "results": [
+    {
+      "scenario": "jpeg-photo",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 996,
+        "firstResultMs": 1051,
+        "completeMs": 1268,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 67,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 6
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-photo-resize",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75,
+        "maxLongEdge": 1024
+      },
+      "metrics": {
+        "estimateMs": 998,
+        "firstResultMs": 1054,
+        "completeMs": 1268,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 67,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 6
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "webp-photo",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "webp",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1231,
+        "firstResultMs": 1345,
+        "completeMs": 2263,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 127,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 25
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 25,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 886,
+        "firstResultMs": 945,
+        "completeMs": 1106,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 63,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 1.8,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 5
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot-lossless",
+      "count": 25,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 1
+      },
+      "metrics": {
+        "estimateMs": 892,
+        "firstResultMs": 999,
+        "completeMs": 2068,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 120,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.5,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 23
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "avif-photo",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "avif",
+      "settings": {
+        "quality": 50,
+        "speed": 8
+      },
+      "metrics": {
+        "estimateMs": 2435,
+        "firstResultMs": 2870,
+        "completeMs": 7381,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 431,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 114
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 25,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 3603,
+        "firstResultMs": 3662,
+        "completeMs": 4428,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 102,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 16
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-photo",
+      "count": 60,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1161,
+        "firstResultMs": 1224,
+        "completeMs": 2357,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 126,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.7,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 22
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-photo-resize",
+      "count": 60,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75,
+        "maxLongEdge": 1024
+      },
+      "metrics": {
+        "estimateMs": 1172,
+        "firstResultMs": 1228,
+        "completeMs": 2226,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 118,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.6,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 20
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "webp-photo",
+      "count": 60,
+      "cohorts": "photo",
+      "format": "webp",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2426,
+        "firstResultMs": 2588,
+        "completeMs": 7452,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 433,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 114
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 60,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 956,
+        "firstResultMs": 1017,
+        "completeMs": 1783,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 102,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.6,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 16
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot-lossless",
+      "count": 60,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 1
+      },
+      "metrics": {
+        "estimateMs": 1662,
+        "firstResultMs": 1820,
+        "completeMs": 6862,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 406,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 103
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 60,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2619,
+        "firstResultMs": 2672,
+        "completeMs": 5488,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 238,
+          "maxGapMs": 33.4,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.7,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 53
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-photo",
+      "count": 240,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 3405,
+        "firstResultMs": 3460,
+        "completeMs": 9279,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 416,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 101
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-photo-resize",
+      "count": 240,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75,
+        "maxLongEdge": 1024
+      },
+      "metrics": {
+        "estimateMs": 1475,
+        "firstResultMs": 1541,
+        "completeMs": 6543,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 373,
+          "maxGapMs": 33.4,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 90
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "webp-photo",
+      "count": 240,
+      "cohorts": "photo",
+      "format": "webp",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2385,
+        "firstResultMs": 2556,
+        "completeMs": 24720,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 1348,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 392
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 240,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 1178,
+        "firstResultMs": 1239,
+        "completeMs": 5093,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 299,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 70
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot-lossless",
+      "count": 240,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 1
+      },
+      "metrics": {
+        "estimateMs": 2010,
+        "firstResultMs": 2340,
+        "completeMs": 25283,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 1379,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 3,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 392
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 240,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2804,
+        "firstResultMs": 2859,
+        "completeMs": 13206,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 728,
+          "maxGapMs": 33.4,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 192
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    }
+  ]
+}

@@ -10,7 +10,11 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "npm run build && node bench/virtual-check.mjs && node bench/output-check.mjs",
+    "benchmark": "npm run build && node bench/run.mjs",
+    "benchmark:quick": "npm run build && node bench/run.mjs --counts 8 --scenarios jpeg-photo,jpeg-photo-resize,webp-photo,png-screenshot --label quick",
+    "benchmark:scale": "npm run build && node bench/run.mjs --counts 500,1000 --scenarios jpeg-photo,png-screenshot,jpeg-mixed --label scale-500-1000 --timeout 600000"
   },
   "dependencies": {
     "@jsquash/avif": "^2.1.1",
@@ -25,6 +29,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
     "@preact/preset-vite": "^2.10.6",
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.0"
