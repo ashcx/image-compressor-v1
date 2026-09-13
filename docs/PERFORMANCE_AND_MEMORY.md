@@ -228,8 +228,9 @@ Concurrent jobs are admitted against a device memory ceiling. A job is charged
 
 The single-job ceiling `maxJobPixels = 0.9 × budget / (4 × weight)` keeps one oversized image
 from exceeding the budget on its own, so the "always admit one" rule cannot blow the ceiling.
-AVIF and compressed PNG are additionally pinned to **one worker on iOS/iPadOS**, because even
-one heavy encode can exhaust a tablet's canvas memory.
+On iOS/iPadOS, heavy codecs are pinned to **one worker on iPhone and non-Pro iPads** because
+even one heavy encode can exhaust their canvas memory; Pro-class iPads (light worker count
+≥ 6) use the normal halved pool and rely on the decoded-memory gate to bound concurrency.
 
 This is the device-level model: iOS/iPadOS canvas memory scales with RAM (WebKit's
 `ramSize() / 4`, reported into the JSC heap), and OS Jetsam can evict a tab before any
@@ -242,9 +243,9 @@ Worker budgets are defined in `src/lib/device.ts`.
 
 | Device | Light pool | Heavy pool | App ZIP cap |
 | --- | --- | --- | --- |
-| iPhone (no RAM API) | cores ≥ 6 → 3, 4–5 → 2, otherwise 1 | 1 on iOS | 512 MB |
-| iPad, reported cores < 7 | phone tier | 1 on iOS | 1 GB |
-| iPad, reported cores ≥ 7 | `min(cores − 1, 8)` | 1 on iOS | 1 GB |
+| iPhone (no RAM API) | cores ≥ 6 → 3, 4–5 → 2, otherwise 1 | 1 | 512 MB |
+| iPad, reported cores < 7 | phone tier | 1 | 1 GB |
+| iPad, reported cores ≥ 7 | `min(cores − 1, 8)` | halved | 1 GB |
 | Android, `deviceMemory` < 6 or unknown | **2** | 1 | 384 MB |
 | Android, ≥ 6 GB | `min(cores − 1, 8)` | halved | 1 GB |
 | Desktop, `deviceMemory` ≥ 8 | `min(cores − 1, 8)`; cores ≥ 16 and RAM ≥ 12 GB → up to **16** | halved | 2 GB |
