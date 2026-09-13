@@ -1,0 +1,231 @@
+{
+  "meta": {
+    "commit": "6b89f7e",
+    "timestamp": "2026-09-13T04:47:32.522Z",
+    "node": "v22.23.2",
+    "chromium": "153.0.8010.12",
+    "counts": [
+      500,
+      1000
+    ],
+    "seed": 1
+  },
+  "results": [
+    {
+      "scenario": "jpeg-photo",
+      "count": 500,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1333,
+        "firstResultMs": 1390,
+        "completeMs": 6016,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 347,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 87
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 500,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 1248,
+        "firstResultMs": 1304,
+        "completeMs": 4659,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 271,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 63
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 500,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1879,
+        "firstResultMs": 1940,
+        "completeMs": 18930,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 971,
+          "maxGapMs": 33.4,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 271
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-photo",
+      "count": 1000,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2757,
+        "firstResultMs": 2826,
+        "completeMs": 27682,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 1506,
+          "maxGapMs": 50.1,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 401
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 1000,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 2019,
+        "firstResultMs": 2090,
+        "completeMs": 18805,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 1110,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 294
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 1000,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 4239,
+        "firstResultMs": 4418,
+        "completeMs": 48487,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 1,
+          "totalMs": 73,
+          "maxMs": 73
+        },
+        "frames": {
+          "frames": 2592,
+          "maxGapMs": 66.7,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 707
+        }
+      },
+      "consoleErrors": []
+    }
+  ]
+}

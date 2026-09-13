@@ -186,10 +186,14 @@ Delivered:
 - Unit tests: `jobStore.test.ts`, `batchStats.test.ts`, `intake.test.ts`, `virtual.test.ts`
   (30 cases; 125 total).
 - The harness gained a `Peak rows` column and now reads the panel's aggregate label, so it
-  works against the virtualized list. The committed baseline covers 25/60/240; 500/1,000 run
-  on demand with `node bench/run.mjs --counts 500,1000`.
-- Peak mounted rows stayed at **12** regardless of batch size, with 0 long tasks through 240.
-- Remaining: run the 500/1,000 cohorts as part of PERF-13 (Sprint 9) gating.
+  works against the virtualized list. The committed baseline covers 25/60/240; the 500/1,000
+  cohorts are committed separately in `bench/results/scale-500-1000.{json,md}` and rerunnable
+  with `npm run benchmark:scale`.
+- Peak mounted rows stayed at **12** at every batch size, including 1,000 — the acceptance
+  target holds.
+- 1,000-file runs: jpeg-photo **27.7 s**, png-screenshot **18.8 s**, jpeg-mixed **48.5 s**, all
+  with 0 errors. jpeg-mixed showed a single 73 ms long task; the rest had none.
+- Remaining: fold 500/1,000 into PERF-13 (Sprint 9) regression thresholds.
 
 ### Parallel work
 

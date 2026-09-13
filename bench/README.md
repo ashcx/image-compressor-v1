@@ -13,6 +13,7 @@ is uploaded; fixtures are generated in-page and handed to the real file input.
 ```sh
 npm run benchmark          # build + counts 25, 60 (default scenarios)
 npm run benchmark:quick    # fast subset at 8 files
+npm run benchmark:scale    # 500 and 1,000-file cohorts (jpeg/png/mixed)
 ```
 
 Pass options through the script:
@@ -79,8 +80,10 @@ per-file processing cost.
 ## Baseline
 
 `bench/results/baseline.{json,md}` is the recorded reference for 25 / 60 / 240
-files. It is a synthetic, headless reference, not a device claim. Compare a new
-run against it by diffing the two JSON files or regenerating the Markdown table.
+files. The 500 / 1,000-file cohorts are recorded in
+`bench/results/scale-500-1000.{json,md}`. They are synthetic, headless
+references, not device claims. Compare a new run against them by diffing the
+JSON files or regenerating the Markdown table.
 
 ## Limitations
 
