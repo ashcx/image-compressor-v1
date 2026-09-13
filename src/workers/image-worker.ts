@@ -11,7 +11,12 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from '../lib/protocol'
-import { resizeImage, resolveDecodeSize, resolveResize } from '../lib/resize'
+import {
+  clampSizeToLimits,
+  resizeImage,
+  resolveDecodeTargetSize,
+  resolveResize,
+} from '../lib/resize'
 import { createThumbnail } from '../lib/thumbnail'
 
 interface WorkerScope {
@@ -72,11 +77,16 @@ scope.onmessage = async (event) => {
     // straight to its target size instead of decoding full resolution first.
     const dimensions = parseDimensions(request.fileBuffer)
     const decodeSize = dimensions
-      ? resolveDecodeSize(
+      ? resolveDecodeTargetSize(
           dimensions.width,
           dimensions.height,
           request.resize,
-          request.estimateOnly ? ESTIMATE_DECODE_EDGE : undefined,
+          {
+            capLongEdge: request.estimateOnly
+              ? ESTIMATE_DECODE_EDGE
+              : undefined,
+            limits: request.limits,
+          },
         )
       : null
     const decodeTarget = decodeSize
@@ -84,6 +94,19 @@ scope.onmessage = async (event) => {
       : request.estimateOnly
         ? { maxEdge: ESTIMATE_DECODE_EDGE }
         : {}
+    const capped = dimensions
+      ? clampSizeToLimits(
+          resolveResize(
+            dimensions.width,
+            dimensions.height,
+            request.resize,
+          ) ?? {
+            width: dimensions.width,
+            height: dimensions.height,
+          },
+          request.limits,
+        ) !== null
+      : false
     const decoded = await decodeImageData(
       request.fileBuffer,
       sourceFormat,
@@ -93,14 +116,19 @@ scope.onmessage = async (event) => {
 
     if (request.estimateOnly) {
       // The estimate runs on a scaled decode, so use the true dimensions from
-      // the file header and (if resizing) the resolved target size.
-      let fullWidth = dimensions?.width ?? source.width
-      let fullHeight = dimensions?.height ?? source.height
-      const target = resolveResize(fullWidth, fullHeight, request.resize)
-      if (target) {
-        fullWidth = target.width
-        fullHeight = target.height
-      }
+      // the file header (clamped to the device ceilings) so the reported size
+      // matches what a real compression would produce.
+      const fullTarget = dimensions
+        ? resolveDecodeTargetSize(
+            dimensions.width,
+            dimensions.height,
+            request.resize,
+            { limits: request.limits },
+          )
+        : null
+      const fullWidth = fullTarget?.width ?? dimensions?.width ?? source.width
+      const fullHeight =
+        fullTarget?.height ?? dimensions?.height ?? source.height
       const [samples, thumbnailBlob] = await Promise.all([
         buildEstimateSamples(source, request.targetFormat, {
           quality: request.quality,
@@ -119,6 +147,7 @@ scope.onmessage = async (event) => {
         height: fullHeight,
         samples,
         thumbnailBlob,
+        capped,
       }
       scope.postMessage(response)
       return
@@ -144,6 +173,7 @@ scope.onmessage = async (event) => {
       format: encoded.format,
       extension: encoded.extension,
       mimeType: encoded.mimeType,
+      capped,
     }
 
     scope.postMessage(response)

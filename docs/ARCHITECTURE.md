@@ -2,7 +2,7 @@
 
 This document explains how Image Compressor works and why it is structured this way. The
 short, user-facing overview is in the [README](../README.md); measured results are in
-[Performance](./PERFORMANCE.md).
+[Performance and memory](./PERFORMANCE_AND_MEMORY.md).
 
 ## Design priorities
 

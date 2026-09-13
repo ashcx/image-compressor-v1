@@ -11,8 +11,8 @@ import {
   isHeavyFormat,
 } from './lib/codecs/formats'
 import { describeRenderer } from './lib/codecs/registry'
-import type { OutputFormat } from './lib/codecs/types'
-import { getDeviceProfile, heavyWorkerCount } from './lib/device'
+import type { OutputFormat, ResizeOptions } from './lib/codecs/types'
+import { getDeviceProfile } from './lib/device'
 import {
   averageRatioSamples,
   deriveEstimate,
@@ -31,6 +31,7 @@ import {
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { validateFiles } from './lib/intake'
 import { createJobStore } from './lib/jobStore'
+import { jobCostBytes, maxJobPixels } from './lib/memory'
 import {
   disposeMetadataWorker,
   readDimensions,
@@ -41,6 +42,7 @@ import {
   type OutputStore,
   resetOutputStorage,
 } from './lib/outputStore'
+import { resolveDecodeTargetSize, type SizeLimits } from './lib/resize'
 import { appVersion, watchForUpdates } from './lib/version'
 import {
   computeWindow,
@@ -51,6 +53,7 @@ import {
   rowOffset,
 } from './lib/virtual'
 import {
+  configureMemoryBudget,
   configureWorkers,
   disposePool,
   getPoolStats,
@@ -84,6 +87,8 @@ interface BatchJob {
   height: number
   samples: EstimateSample[]
   error: string
+  /** True when the device's canvas/budget ceiling forced a smaller decode. */
+  capped: boolean
 }
 
 interface Settings {
@@ -347,14 +352,46 @@ function clearJobs() {
 }
 
 function applyWorkerBudget() {
-  const base = getDeviceProfile().workerCount
+  const profile = getDeviceProfile()
   const format = targetFormat.value
   const heavy = isHeavyFormat(format, settings.value.mode)
-  const workers = heavy ? heavyWorkerCount(base) : base
+  const workers = heavy ? profile.heavyWorkerCount : profile.workerCount
   configureWorkers(workers)
   // Read-ahead concurrency is separate from codec concurrency and tracks the
   // device budget, so constrained phones do not read several files at once.
   configureFileReadConcurrency(Math.max(2, Math.min(4, workers + 1)))
+}
+
+// Estimates decode at most this long edge in the worker (mirrors
+// ESTIMATE_DECODE_EDGE in workers/image-worker.ts).
+const ESTIMATE_DECODE_EDGE = 2048
+
+/**
+ * Builds the decode ceilings for a job and its estimated in-flight memory
+ * cost. Dimensions are unknown until the header is read; those jobs are
+ * ungated (cost 0) rather than charged a guess.
+ */
+function jobPlan(
+  format: OutputFormat,
+  mode: number,
+  width: number,
+  height: number,
+  resize: ResizeOptions | undefined,
+  estimateOnly: boolean,
+): { cost: number; limits: SizeLimits } {
+  const profile = getDeviceProfile()
+  const limits: SizeLimits = {
+    ...profile.canvasLimits,
+    maxPixels: maxJobPixels(profile.canvasMemoryBudget, format, mode),
+  }
+  if (!width || !height) return { cost: 0, limits }
+
+  const target = resolveDecodeTargetSize(width, height, resize, {
+    capLongEdge: estimateOnly ? ESTIMATE_DECODE_EDGE : undefined,
+    limits,
+  })
+  const pixels = target ? target.width * target.height : width * height
+  return { cost: jobCostBytes(pixels, format, mode), limits }
 }
 
 let rendererToken = 0
@@ -467,7 +504,16 @@ async function estimateJob(id: string) {
   const format = targetFormat.value
   const current = settings.value
   const edge = maxLongEdge.value
+  const resize = edge > 0 ? { maxLongEdge: edge } : undefined
   const key = sampleKey.value
+  const plan = jobPlan(
+    format,
+    current.mode,
+    job.width,
+    job.height,
+    resize,
+    true,
+  )
 
   updateJob(id, { status: 'estimating', error: '', sampleKey: key })
 
@@ -479,7 +525,9 @@ async function estimateJob(id: string) {
       effort: current.effort,
       speed: current.speed,
       mode: current.mode,
-      resize: edge > 0 ? { maxLongEdge: edge } : undefined,
+      resize,
+      limits: plan.limits,
+      cost: plan.cost,
       estimateOnly: true,
       priority: 'low',
       signal: controller.signal,
@@ -496,6 +544,9 @@ async function estimateJob(id: string) {
       outputSize: interpolate(result.samples, current.quality),
       sizeIsExact: false,
       sampleKey: key,
+      width: result.width,
+      height: result.height,
+      capped: result.capped,
     })
     if (previousThumb) URL.revokeObjectURL(previousThumb)
     updateAverageRatios()
@@ -525,8 +576,17 @@ async function compressJob(id: string) {
   const format = targetFormat.value
   const current = settings.value
   const edge = maxLongEdge.value
+  const resize = edge > 0 ? { maxLongEdge: edge } : undefined
   const key = outputKey.value
   const samplesKey = sampleKey.value
+  const plan = jobPlan(
+    format,
+    current.mode,
+    job.width,
+    job.height,
+    resize,
+    false,
+  )
 
   const controller = new AbortController()
   compressControllers.set(id, controller)
@@ -541,7 +601,9 @@ async function compressJob(id: string) {
       effort: current.effort,
       speed: current.speed,
       mode: current.mode,
-      resize: edge > 0 ? { maxLongEdge: edge } : undefined,
+      resize,
+      limits: plan.limits,
+      cost: plan.cost,
       consumeInput: true,
       priority: 'high',
       signal: controller.signal,
@@ -572,6 +634,9 @@ async function compressJob(id: string) {
       sizeIsExact: true,
       outputKey: key,
       sampleKey: samplesKey,
+      width: result.width,
+      height: result.height,
+      capped: result.capped,
     })
     if (previousThumb) URL.revokeObjectURL(previousThumb)
   } catch (error) {
@@ -669,6 +734,7 @@ async function addFiles(fileList: FileList | File[] | null) {
       height: 0,
       samples: [],
       error: '',
+      capped: false,
     }))
 
     // One transaction for the whole drop: the id array and aggregates update
@@ -1068,6 +1134,7 @@ const JobRow = memo(function JobRow({
             </>
           )}
           {label && ` · ${label}`}
+          {job.capped && ' · downscaled to device limit'}
         </span>
       </div>
       <div class="job__actions">
@@ -1354,8 +1421,10 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    const profile = getDeviceProfile()
     applyWorkerBudget()
-    configureFileBufferCap(Math.floor(getDeviceProfile().maxZipBytes / 4))
+    configureMemoryBudget(profile.canvasMemoryBudget)
+    configureFileBufferCap(Math.floor(profile.maxZipBytes / 4))
     void refreshRenderer()
     return subscribeToPool(() => {
       poolStats.value = getPoolStats()

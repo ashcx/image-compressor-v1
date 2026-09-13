@@ -2,18 +2,30 @@ import { describe, expect, it } from 'vitest'
 import {
   heavyWorkerCount,
   MAX_WORKERS_HIGH_MEMORY,
+  platformCanvasLimits,
   profileFromSignals,
   resolveWorkerCount,
 } from './device'
 
 const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+const IPHONE_MODERN_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1'
+const IPHONE_LEGACY_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1'
 const IPAD_UA =
   'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
 const MAC_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
+const IPAD_MAC_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'
+const FIREFOX_UA =
+  'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0'
 const ANDROID_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36'
+
+const MIB = 1024 * 1024
+const GIB = 1024 * MIB
 
 describe('resolveWorkerCount', () => {
   it('uses the override regardless of platform', () => {
@@ -67,14 +79,14 @@ describe('resolveWorkerCount', () => {
     ).toBe(7)
   })
 
-  it('returns 1 for low-memory Android', () => {
+  it('returns 2 light workers for budget Android', () => {
     expect(
       resolveWorkerCount({
         userAgent: ANDROID_UA,
         deviceMemory: 4,
         hardwareConcurrency: 8,
       }),
-    ).toBe(1)
+    ).toBe(2)
   })
 
   it('uses the standard budget for high-memory Android', () => {
@@ -126,13 +138,13 @@ describe('profileFromSignals', () => {
     expect(profile.maxZipBytes).toBe(1024 * 1024 * 1024)
   })
 
-  it('gives low-memory Android a single worker and 384 MiB zip cap', () => {
+  it('gives budget Android two workers and a 384 MiB zip cap', () => {
     const profile = profileFromSignals({
       userAgent: ANDROID_UA,
       deviceMemory: 4,
       hardwareConcurrency: 8,
     })
-    expect(profile.workerCount).toBe(1)
+    expect(profile.workerCount).toBe(2)
     expect(profile.maxZipBytes).toBe(384 * 1024 * 1024)
   })
 
@@ -157,5 +169,100 @@ describe('profileFromSignals', () => {
   it('applies the override while preserving platform limits', () => {
     const profile = profileFromSignals({ userAgent: IPHONE_UA }, 99)
     expect(profile.workerCount).toBe(MAX_WORKERS_HIGH_MEMORY)
+  })
+})
+
+describe('platformCanvasLimits', () => {
+  it('uses the 8192 iOS ceiling from Safari 17.4+', () => {
+    expect(
+      platformCanvasLimits({ userAgent: IPHONE_MODERN_UA, maxTouchPoints: 5 }),
+    ).toEqual({ maxSide: 8192, maxArea: 8192 * 8192 })
+  })
+
+  it('falls back to 4096 for iOS before 17.4', () => {
+    expect(
+      platformCanvasLimits({ userAgent: IPHONE_LEGACY_UA, maxTouchPoints: 5 }),
+    ).toEqual({ maxSide: 4096, maxArea: 4096 * 4096 })
+  })
+
+  it('parses the Version token for iPadOS masquerading as Macintosh', () => {
+    expect(
+      platformCanvasLimits({ userAgent: IPAD_MAC_UA, maxTouchPoints: 5 }),
+    ).toEqual({ maxSide: 8192, maxArea: 8192 * 8192 })
+  })
+
+  it('uses Blink limits for Chrome and Android', () => {
+    expect(platformCanvasLimits({ userAgent: ANDROID_UA })).toEqual({
+      maxSide: 65_535,
+      maxArea: 32_768 * 8_192,
+    })
+  })
+
+  it('uses Gecko per-axis limits for Firefox with no area cap', () => {
+    expect(platformCanvasLimits({ userAgent: FIREFOX_UA })).toEqual({
+      maxSide: 32_767,
+      maxArea: Number.POSITIVE_INFINITY,
+    })
+  })
+
+  it('uses macOS WebKit limits for desktop Safari', () => {
+    expect(platformCanvasLimits({ userAgent: MAC_UA })).toEqual({
+      maxSide: 16_384,
+      maxArea: 16_384 * 16_384,
+    })
+  })
+})
+
+describe('canvas memory budget', () => {
+  it('gives iPhone a 512 MiB budget and one heavy worker', () => {
+    const profile = profileFromSignals({ userAgent: IPHONE_UA })
+    expect(profile.canvasMemoryBudget).toBe(512 * MIB)
+    expect(profile.heavyWorkerCount).toBe(1)
+  })
+
+  it('gives 7+-core iPads 1 GiB and a single heavy worker', () => {
+    const profile = profileFromSignals({
+      userAgent: IPAD_UA,
+      hardwareConcurrency: 8,
+    })
+    expect(profile.workerCount).toBe(7)
+    expect(profile.canvasMemoryBudget).toBe(1024 * MIB)
+    expect(profile.heavyWorkerCount).toBe(1)
+  })
+
+  it('gives lower-core iPads a 512 MiB budget', () => {
+    const profile = profileFromSignals({
+      userAgent: IPAD_UA,
+      hardwareConcurrency: 6,
+    })
+    expect(profile.workerCount).toBe(3)
+    expect(profile.canvasMemoryBudget).toBe(512 * MIB)
+  })
+
+  it('scales Android memory above 8 GB and floors the rest at 512 MiB', () => {
+    const high = profileFromSignals({
+      userAgent: ANDROID_UA,
+      deviceMemory: 8,
+      hardwareConcurrency: 8,
+    })
+    expect(high.canvasMemoryBudget).toBe((8 * GIB) / 6)
+
+    const low = profileFromSignals({
+      userAgent: ANDROID_UA,
+      deviceMemory: 4,
+      hardwareConcurrency: 8,
+    })
+    expect(low.canvasMemoryBudget).toBe(512 * MIB)
+  })
+
+  it('gives desktop half of deviceMemory, floored at 2 GiB', () => {
+    const high = profileFromSignals({
+      deviceMemory: 8,
+      hardwareConcurrency: 8,
+    })
+    expect(high.canvasMemoryBudget).toBe(4 * GIB)
+
+    const noSignal = profileFromSignals({ hardwareConcurrency: 8 })
+    expect(noSignal.canvasMemoryBudget).toBe(2048 * MIB)
   })
 })

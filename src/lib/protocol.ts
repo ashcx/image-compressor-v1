@@ -1,6 +1,12 @@
 import type { OutputFormat, ResizeOptions } from './codecs/types'
 import type { EstimateSample } from './estimate'
 
+export interface ProcessLimits {
+  maxSide?: number
+  maxArea?: number
+  maxPixels?: number
+}
+
 export interface ProcessRequest {
   type: 'process'
   jobId: string
@@ -12,6 +18,8 @@ export interface ProcessRequest {
   mode?: number
   resize?: ResizeOptions
   estimateOnly?: boolean
+  /** Platform canvas ceilings plus the single-job pixel budget. */
+  limits?: ProcessLimits
 }
 
 /**
@@ -42,6 +50,8 @@ export interface ResultResponse {
   format: OutputFormat
   extension: string
   mimeType: string
+  /** True when a platform/budget ceiling forced a smaller decode. */
+  capped: boolean
 }
 
 export interface EstimateResponse {
@@ -51,6 +61,8 @@ export interface EstimateResponse {
   height: number
   samples: EstimateSample[]
   thumbnailBlob: Blob
+  /** True when a platform/budget ceiling forced a smaller decode. */
+  capped: boolean
 }
 
 export interface ErrorResponse {

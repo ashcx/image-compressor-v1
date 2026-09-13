@@ -688,7 +688,8 @@ enabled, pin patched releases, and monitor the [libheif security releases](https
 ## Current status
 
 - [x] Existing worker-pool, native-first codec, bounded-estimate, and lazy-codec foundations
-      documented in [Architecture](./ARCHITECTURE.md) and [Performance](./PERFORMANCE.md).
+      documented in [Architecture](./ARCHITECTURE.md) and
+      [Performance and memory](./PERFORMANCE_AND_MEMORY.md).
 - [x] Current unit-test, typecheck, lint, and production-build baseline passes.
 - [ ] Large-batch benchmark harness checked into the repository.
 - [ ] True virtualized queue.

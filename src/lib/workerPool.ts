@@ -25,6 +25,8 @@ export interface PoolTask {
   prepare?: () => Promise<PreparedTask>
   /** Aborting removes the task from the queue if it has not started yet. */
   signal?: AbortSignal
+  /** Estimated decoded-memory bytes, used to gate concurrent large jobs. */
+  cost?: number
 }
 
 interface QueuedTask extends PoolTask {
@@ -37,6 +39,11 @@ interface WorkerPoolOptions {
   size: number
   createWorker: () => PoolWorker
   onChange?: () => void
+  /**
+   * Total decoded-memory bytes allowed across busy workers; 0 disables gating
+   * (desktop). One job is always admitted even if it alone exceeds the budget.
+   */
+  memoryBudget?: number
   /** Called when a worker crashes so callers can back off concurrency. */
   onWorkerFailure?: () => void
 }
@@ -53,11 +60,13 @@ export class WorkerPool {
   private readonly createWorker: () => PoolWorker
   private readonly onChange: (() => void) | undefined
   private readonly onWorkerFailure: (() => void) | undefined
+  private memoryBudget: number
   private workers: PoolWorker[] = []
   private idle: PoolWorker[] = []
   private high: QueuedTask[] = []
   private low: QueuedTask[] = []
   private readonly busy = new Map<PoolWorker, QueuedTask>()
+  private activeCost = 0
   private closed = false
 
   constructor(options: WorkerPoolOptions) {
@@ -65,6 +74,7 @@ export class WorkerPool {
     this.createWorker = options.createWorker
     this.onChange = options.onChange
     this.onWorkerFailure = options.onWorkerFailure
+    this.memoryBudget = Math.max(0, options.memoryBudget ?? 0)
   }
 
   get workerCount(): number {
@@ -77,6 +87,22 @@ export class WorkerPool {
 
   get queuedCount(): number {
     return this.high.length + this.low.length
+  }
+
+  /** Decoded-memory bytes currently held by busy workers. */
+  get activeCostCount(): number {
+    return this.activeCost
+  }
+
+  get memoryBudgetValue(): number {
+    return this.memoryBudget
+  }
+
+  /** Adjusts the decoded-memory budget (0 disables gating). */
+  setMemoryBudget(bytes: number): void {
+    this.memoryBudget = Math.max(0, Math.floor(bytes))
+    this.dispatch()
+    this.notify()
   }
 
   /** Adjusts the pool ceiling (e.g. lower after a crash). */
@@ -121,6 +147,7 @@ export class WorkerPool {
     this.high = []
     this.low = []
     this.busy.clear()
+    this.activeCost = 0
     this.notify()
   }
 
@@ -145,8 +172,23 @@ export class WorkerPool {
     return this.idle.length > 0 || this.workers.length < this.size
   }
 
+  private canStart(task: QueuedTask): boolean {
+    if (this.memoryBudget <= 0) return true
+    // Always let at least one job run, even if it alone exceeds the budget.
+    if (this.busy.size === 0) return true
+    return this.activeCost + (task.cost ?? 0) <= this.memoryBudget
+  }
+
   private takeDispatchable(): QueuedTask | undefined {
-    return this.high.shift() ?? this.low.shift()
+    if (this.memoryBudget <= 0) {
+      return this.high.shift() ?? this.low.shift()
+    }
+    // Highest-priority task whose memory cost fits the remaining budget.
+    for (const tier of [this.high, this.low]) {
+      const index = tier.findIndex((candidate) => this.canStart(candidate))
+      if (index !== -1) return tier.splice(index, 1)[0]
+    }
+    return undefined
   }
 
   private dispatch(): void {
@@ -155,6 +197,7 @@ export class WorkerPool {
       if (!task) break
       const worker = this.idle.pop() ?? this.spawn()
       if (!worker) break
+      this.activeCost += task.cost ?? 0
       this.busy.set(worker, task)
       void this.prepareAndPost(worker, task)
     }
@@ -200,6 +243,7 @@ export class WorkerPool {
     const task = this.busy.get(worker)
     if (!task) return
     this.busy.delete(worker)
+    this.activeCost -= task.cost ?? 0
 
     const response = event.data
     if (task.settled) {
@@ -219,6 +263,7 @@ export class WorkerPool {
     const task = this.busy.get(worker)
     if (task) {
       this.busy.delete(worker)
+      this.activeCost -= task.cost ?? 0
       this.settleReject(task, new Error(event.message || 'Worker failed'))
     }
 
@@ -236,6 +281,7 @@ export class WorkerPool {
 
   private release(worker: PoolWorker, task: QueuedTask): void {
     this.busy.delete(worker)
+    this.activeCost -= task.cost ?? 0
     if (!task.settled) task.settled = true
     this.idle.push(worker)
     this.dispatch()
