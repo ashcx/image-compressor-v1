@@ -125,12 +125,10 @@ try {
     await waitDone(clear ? count : count * i)
     const elapsed = Date.now() - started
     if (clear) {
+      const navigation = page.waitForEvent('load')
       await press('Clear all')
-      await page.waitForFunction(
-        () => document.querySelectorAll('.job').length === 0,
-        undefined,
-        { timeout: 30_000 },
-      )
+      await navigation
+      await page.waitForSelector('h1')
     }
     const sample = await measure()
     console.log(

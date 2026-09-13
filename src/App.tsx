@@ -31,7 +31,11 @@ import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { validateFiles } from './lib/intake'
 import { createJobStore } from './lib/jobStore'
 import { disposeMetadataWorker, readDimensions } from './lib/metadataClient'
-import { createOutputStore, type OutputStore } from './lib/outputStore'
+import {
+  createOutputStore,
+  type OutputStore,
+  resetOutputStorage,
+} from './lib/outputStore'
 import { appVersion, watchForUpdates } from './lib/version'
 import {
   computeWindow,
@@ -760,13 +764,18 @@ function clearAll() {
   }
   clearJobs()
   jobTokens.clear()
-  void getOutputStore().then((store) => store.clear())
   averageRatios.value = []
   sampledIds.value = new Set()
   notice.value = ''
   cancelIdleTeardown()
   disposePool()
   disposeMetadataWorker()
+  // Terminating workers does not force the browser to reclaim their WASM heaps,
+  // decoded canvases, or Blob backing store, so repeated batches can leave the
+  // tab progressively heavier. We delete all app OPFS data and reload, which
+  // re-runs the app from a clean document. Note this is not a literal first
+  // visit: the browser's HTTP/asset caches and process stay warm.
+  void resetOutputStorage().finally(() => location.reload())
 }
 
 function triggerDownload(blob: Blob, name: string) {
