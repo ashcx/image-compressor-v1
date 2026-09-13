@@ -44,8 +44,10 @@ increase contention, memory pressure, and thermal load.
 - iPhone, iPad, and Android worker budgets are policy choices, not physical-device
   measurements. Thermal throttling, battery behaviour, Safari/JSC speed, and OS tab eviction
   are outside this data set.
-- The temporary benchmark harness and 25-image fixture corpus are not checked in, so these
-  figures are documented evidence rather than CI-enforced regression thresholds.
+- The benchmark harness and deterministic fixture generator now live in
+  [`bench/`](../bench/README.md), with a committed reference run in
+  `bench/results/baseline.{json,md}`. They are still a synthetic, headless
+  reference, not CI-enforced thresholds; gates are defined in Sprint 9.
 
 Mobile memory figures are sizing rationale, not verified device limits.
 
