@@ -1,3 +1,4 @@
+import { context2d, createCanvas } from '../lib/canvas'
 import { encodeImageSource } from '../lib/convert'
 import { detectFormat } from '../lib/detect'
 import { parseDimensions } from '../lib/dimensions'
@@ -6,6 +7,7 @@ import { decodeImageData } from '../lib/image'
 import type {
   EstimateResponse,
   ResultResponse,
+  WarmRequest,
   WorkerRequest,
   WorkerResponse,
 } from '../lib/protocol'
@@ -23,9 +25,46 @@ const scope = globalThis as unknown as WorkerScope
 // representative without decoding tens of megapixels into a large canvas.
 const ESTIMATE_DECODE_EDGE = 2048
 
+// A tiny encode is enough to resolve the codec: native encoders only need their
+// support probe, while WASM codecs fetch and instantiate on first encode.
+const WARM_EDGE = 2
+
+async function warmCodec(request: WarmRequest): Promise<void> {
+  const canvas = createCanvas(WARM_EDGE, WARM_EDGE)
+  const context = context2d(canvas)
+  context.fillStyle = '#000000'
+  context.fillRect(0, 0, WARM_EDGE, WARM_EDGE)
+  await encodeImageSource(
+    { width: WARM_EDGE, height: WARM_EDGE, canvas },
+    request.targetFormat,
+    {
+      quality: request.quality,
+      effort: request.effort,
+      speed: request.speed,
+      mode: request.mode,
+    },
+  )
+}
+
 scope.onmessage = async (event) => {
   const request = event.data
-  if (request?.type !== 'process') return
+  if (!request) return
+
+  if (request.type === 'warm') {
+    try {
+      await warmCodec(request)
+      scope.postMessage({ type: 'warm', jobId: request.jobId })
+    } catch (error) {
+      scope.postMessage({
+        type: 'error',
+        jobId: request.jobId,
+        error: error instanceof Error ? error.message : 'Preload failed',
+      })
+    }
+    return
+  }
+
+  if (request.type !== 'process') return
 
   try {
     const sourceFormat = detectFormat(request.fileBuffer)

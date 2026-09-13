@@ -14,7 +14,22 @@ export interface ProcessRequest {
   estimateOnly?: boolean
 }
 
-export type WorkerRequest = ProcessRequest
+/**
+ * Asks a worker to initialize the selected codec (native probe or WASM module
+ * load/instantiate) with a tiny throwaway encode, so the first real compression
+ * does not pay the module/WASM latency.
+ */
+export interface WarmRequest {
+  type: 'warm'
+  jobId: string
+  targetFormat: OutputFormat
+  quality?: number
+  effort?: number
+  speed?: number
+  mode?: number
+}
+
+export type WorkerRequest = ProcessRequest | WarmRequest
 
 export interface ResultResponse {
   type: 'result'
@@ -44,4 +59,13 @@ export interface ErrorResponse {
   error: string
 }
 
-export type WorkerResponse = ResultResponse | EstimateResponse | ErrorResponse
+export interface WarmResponse {
+  type: 'warm'
+  jobId: string
+}
+
+export type WorkerResponse =
+  | ResultResponse
+  | EstimateResponse
+  | WarmResponse
+  | ErrorResponse

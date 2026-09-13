@@ -151,14 +151,6 @@ export async function getCodec(format: OutputFormat): Promise<Codec> {
 }
 
 /**
- * Warms a codec's module (and WASM) so the first encode of a WASM format does
- * not stall the user. Call when AVIF is selected.
- */
-export async function preloadCodec(format: OutputFormat): Promise<void> {
-  await getCodec(format)
-}
-
-/**
  * Human-readable encoder backend currently in use, for the diagnostics line.
  * `png` depends on its compression mode; JPEG/WebP report native vs WASM.
  */

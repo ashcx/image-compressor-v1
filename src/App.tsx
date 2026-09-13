@@ -10,7 +10,7 @@ import {
   type FormatControl,
   isHeavyFormat,
 } from './lib/codecs/formats'
-import { describeRenderer, preloadCodec } from './lib/codecs/registry'
+import { describeRenderer } from './lib/codecs/registry'
 import type { OutputFormat } from './lib/codecs/types'
 import { getDeviceProfile, heavyWorkerCount } from './lib/device'
 import {
@@ -54,9 +54,11 @@ import {
   configureWorkers,
   disposePool,
   getPoolStats,
+  isPoolWarm,
   noteMainThreadStall,
   processImage,
   subscribeToPool,
+  warmImage,
 } from './lib/workerClient'
 import {
   createStreamingZip,
@@ -384,7 +386,11 @@ function scheduleIdleTeardown() {
     idleTeardownTimer = undefined
     const active = stats.value.pending + stats.value.processing > 0
     if (active || zipping.value) return
-    disposePool()
+    // Keep a warmed codec pool alive while a batch still needs compressing, so
+    // the preload is not thrown away before the user presses Compress.
+    if (!isPoolWarm() || stats.value.active <= stats.value.ready) {
+      disposePool()
+    }
     disposeMetadataWorker()
   }, 2000)
 }
@@ -752,9 +758,9 @@ function changeFormat(format: OutputFormat) {
   jobStore.refreshReady()
   applyWorkerBudget()
   void refreshRenderer()
-  // Warm the WASM codec while the user dials in settings, so selecting AVIF
-  // does not stall on the first encode.
-  if (format === 'avif') void preloadCodec(format)
+  // Preload the selected codec across the pool while the user dials settings,
+  // so the first compression does not pay the module/WASM load.
+  warmImage({ targetFormat: format, ...settings.value })
   scheduleSampleReestimate()
 }
 
@@ -774,6 +780,11 @@ function changeControl(key: ControlKey, value: number) {
   } else {
     applyWorkerBudget()
     void refreshRenderer()
+    // PNG compression mode switches between the native, oxipng, and imagequant
+    // codecs, so warm the newly selected one.
+    if (key === 'mode') {
+      warmImage({ targetFormat: targetFormat.value, ...settings.value })
+    }
     scheduleSampleReestimate()
   }
 }

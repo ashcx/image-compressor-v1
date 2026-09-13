@@ -1,11 +1,13 @@
 import type { OutputFormat, ResizeOptions } from './codecs/types'
 import { getDeviceProfile } from './device'
-import type { ProcessRequest } from './protocol'
+import type { ProcessRequest, WarmRequest } from './protocol'
 import { type PoolPriority, type PoolSuccess, WorkerPool } from './workerPool'
 
 let pool: WorkerPool | null = null
 let desiredSize = getDeviceProfile().workerCount
 let counter = 0
+let warmController: AbortController | null = null
+let warmed = false
 const listeners = new Set<() => void>()
 
 function resolvePoolSize(): number {
@@ -23,6 +25,7 @@ export function configureWorkers(size: number): void {
   if (pool && pool.busyCount === 0 && pool.queuedCount === 0) {
     pool.terminate()
     pool = null
+    warmed = false
   }
   for (const listener of listeners) listener()
 }
@@ -80,6 +83,7 @@ export function disposePool(): void {
   if (pool.busyCount > 0 || pool.queuedCount > 0) return
   pool.terminate()
   pool = null
+  warmed = false
   for (const listener of listeners) listener()
 }
 
@@ -88,6 +92,51 @@ export function subscribeToPool(listener: () => void): () => void {
   return () => {
     listeners.delete(listener)
   }
+}
+
+export interface WarmOptions {
+  targetFormat: OutputFormat
+  quality?: number
+  effort?: number
+  speed?: number
+  mode?: number
+}
+
+/**
+ * Initializes the selected codec in every pool worker with a tiny throwaway
+ * encode, so the first real compression does not pay the module fetch and WASM
+ * instantiation. Tasks run on the worker pool (low priority), entirely off the
+ * main thread; a new call cancels the previous warm pass.
+ */
+export function warmImage(options: WarmOptions): void {
+  warmController?.abort()
+  const controller = new AbortController()
+  warmController = controller
+  const pool = getPool()
+  for (let i = 0; i < desiredSize; i += 1) {
+    const jobId = `warm-${++counter}`
+    const message: WarmRequest = {
+      type: 'warm',
+      jobId,
+      targetFormat: options.targetFormat,
+      quality: options.quality,
+      effort: options.effort,
+      speed: options.speed,
+      mode: options.mode,
+    }
+    void pool
+      .run({ jobId, signal: controller.signal, message }, 'low')
+      .catch(() => {
+        // Best-effort: if warming fails the first encode just loads the codec.
+      })
+  }
+  warmed = true
+  for (const listener of listeners) listener()
+}
+
+/** True while the current pool has been warmed for the selected codec. */
+export function isPoolWarm(): boolean {
+  return warmed && pool !== null
 }
 
 export interface PoolStats {
