@@ -57,6 +57,7 @@ import {
   uniqueEntryName,
   ZipTooLargeError,
 } from './lib/zip'
+import { resetZipStore } from './lib/zipStore'
 
 interface BatchJob {
   id: string
@@ -775,7 +776,9 @@ function clearAll() {
   // tab progressively heavier. We delete all app OPFS data and reload, which
   // re-runs the app from a clean document. Note this is not a literal first
   // visit: the browser's HTTP/asset caches and process stay warm.
-  void resetOutputStorage().finally(() => location.reload())
+  void Promise.allSettled([resetOutputStorage(), resetZipStore()]).finally(() =>
+    location.reload(),
+  )
 }
 
 function triggerDownload(blob: Blob, name: string) {

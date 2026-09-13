@@ -3,6 +3,8 @@ export interface ZipStore {
   close(): Promise<Blob>
 }
 
+const ZIP_FILE_NAME = 'image-compressor.zip'
+
 async function createMemoryStore(): Promise<ZipStore> {
   const parts: Uint8Array[] = []
   return {
@@ -31,7 +33,7 @@ export async function createZipStore(): Promise<ZipStore> {
   if (hasOpfs()) {
     try {
       const root = await navigator.storage.getDirectory()
-      const handle = await root.getFileHandle('image-compressor.zip', {
+      const handle = await root.getFileHandle(ZIP_FILE_NAME, {
         create: true,
       })
       const writable = await handle.createWritable()
@@ -54,4 +56,15 @@ export async function createZipStore(): Promise<ZipStore> {
     }
   }
   return createMemoryStore()
+}
+
+/** Removes the temporary zip file left in OPFS, if any. */
+export async function resetZipStore(): Promise<void> {
+  if (!hasOpfs()) return
+  try {
+    const root = await navigator.storage.getDirectory()
+    await root.removeEntry(ZIP_FILE_NAME)
+  } catch {
+    // Nothing to remove, or OPFS is unavailable.
+  }
 }
