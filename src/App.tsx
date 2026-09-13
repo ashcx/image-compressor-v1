@@ -31,6 +31,7 @@ import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { validateFiles } from './lib/intake'
 import { createJobStore } from './lib/jobStore'
 import { disposeMetadataWorker, readDimensions } from './lib/metadataClient'
+import { createOutputStore, type OutputStore } from './lib/outputStore'
 import { appVersion, watchForUpdates } from './lib/version'
 import {
   computeWindow,
@@ -60,7 +61,7 @@ interface BatchJob {
   originalSize: number
   status: JobStatus
   thumbnailUrl: string
-  outputBlob: Blob | null
+  outputStored: boolean
   outputExtension: string
   outputSize: number
   sizeIsExact: boolean
@@ -191,7 +192,7 @@ const jobStore = createJobStore<BatchJob>({
     originalSize: job.originalSize,
     outputSize: job.outputSize,
     outputKey: job.outputKey,
-    hasBlob: job.outputBlob !== null,
+    hasBlob: job.outputStored,
   }),
 })
 const jobIds = jobStore.order
@@ -203,6 +204,14 @@ function getJob(id: string): BatchJob | undefined {
 
 function listJobs(): BatchJob[] {
   return jobStore.list()
+}
+
+// Finished outputs go to OPFS (or a memory fallback) instead of accumulating
+// in the queue, so repeated batches in one tab do not grow JS memory.
+let outputStorePromise: Promise<OutputStore> | null = null
+function getOutputStore(): Promise<OutputStore> {
+  if (!outputStorePromise) outputStorePromise = createOutputStore()
+  return outputStorePromise
 }
 
 function raf(callback: () => void): number {
@@ -292,7 +301,7 @@ const canDownloadAll = computed(
 function downloadableList(): BatchJob[] {
   const key = outputKey.value
   return listJobs().filter(
-    (job) => job.status === 'done' && job.outputKey === key && job.outputBlob,
+    (job) => job.status === 'done' && job.outputKey === key && job.outputStored,
   )
 }
 
@@ -485,10 +494,16 @@ async function compressJob(id: string) {
 
     const previousThumb = job.thumbnailUrl
     const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
+    const store = await getOutputStore()
+    await store.put(id, result.outputBlob)
+    if (jobTokens.get(id) !== token) {
+      void store.delete(id)
+      return
+    }
     updateJob(id, {
       status: 'done',
       thumbnailUrl,
-      outputBlob: result.outputBlob,
+      outputStored: true,
       outputExtension: result.extension,
       outputSize: result.outputSize,
       sizeIsExact: true,
@@ -575,7 +590,7 @@ async function addFiles(fileList: FileList | File[] | null) {
       originalSize: file.size,
       status: 'queued',
       thumbnailUrl: '',
-      outputBlob: null,
+      outputStored: false,
       outputExtension: FORMAT_SPECS[targetFormat.value].extension,
       outputSize: 0,
       sizeIsExact: false,
@@ -725,7 +740,9 @@ function compressAll() {
 function removeJob(id: string) {
   cancelEstimate(id)
   nextToken(id)
+  jobTokens.delete(id)
   forgetFile(id)
+  void getOutputStore().then((store) => store.delete(id))
   const job = getJob(id)
   if (job?.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
   dropJob(id)
@@ -742,6 +759,8 @@ function clearAll() {
     if (job.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
   }
   clearJobs()
+  jobTokens.clear()
+  void getOutputStore().then((store) => store.clear())
   averageRatios.value = []
   sampledIds.value = new Set()
   notice.value = ''
@@ -759,14 +778,14 @@ function triggerDownload(blob: Blob, name: string) {
   URL.revokeObjectURL(url)
 }
 
-// The full-resolution output URL is only materialized on demand, so rows never
+// The full-resolution output is read back from storage on demand, so rows never
 // hold (or decode) a multi-megapixel blob.
-function downloadJob(job: BatchJob) {
-  if (!job.outputBlob) return
-  triggerDownload(
-    job.outputBlob,
-    replaceExtension(job.name, job.outputExtension),
-  )
+async function downloadJob(job: BatchJob) {
+  if (!job.outputStored) return
+  const store = await getOutputStore()
+  const blob = await store.get(job.id)
+  if (!blob) return
+  triggerDownload(blob, replaceExtension(job.name, job.outputExtension))
 }
 
 async function downloadAll() {
@@ -777,15 +796,17 @@ async function downloadAll() {
   zipping.value = true
   notice.value = ''
   try {
+    const store = await getOutputStore()
     const zip = await createStreamingZip(getDeviceProfile().maxZipBytes)
     const used = new Set<string>()
     for (const job of list) {
-      if (!job.outputBlob) continue
+      const blob = await store.get(job.id)
+      if (!blob) continue
       const name = uniqueEntryName(
         replaceExtension(job.name, job.outputExtension),
         used,
       )
-      await zip.add(name, job.outputBlob)
+      await zip.add(name, blob)
     }
     const blob = await zip.finish()
     triggerDownload(blob, 'images.zip')
@@ -802,17 +823,19 @@ async function downloadAll() {
 async function saveToFolder() {
   if (!directoryPicker) return
   try {
+    const store = await getOutputStore()
     const directory = await directoryPicker()
     const used = new Set<string>()
     for (const job of downloadableList()) {
-      if (!job.outputBlob) continue
+      const blob = await store.get(job.id)
+      if (!blob) continue
       const name = uniqueEntryName(
         replaceExtension(job.name, job.outputExtension),
         used,
       )
       const handle = await directory.getFileHandle(name, { create: true })
       const writable = await handle.createWritable()
-      await writable.write(job.outputBlob)
+      await writable.write(blob)
       await writable.close()
     }
   } catch (error) {
@@ -923,12 +946,12 @@ const JobRow = memo(function JobRow({
         </span>
       </div>
       <div class="job__actions">
-        {current && job.outputBlob ? (
+        {current && job.outputStored ? (
           <button
             type="button"
             class="button button--small"
             disabled={isBusy}
-            onClick={() => onDownload(job)}
+            onClick={() => void onDownload(job)}
           >
             Download
           </button>

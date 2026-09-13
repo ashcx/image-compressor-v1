@@ -266,15 +266,17 @@ before sprint acceptance.
 
 ### TODO
 
-- [ ] **PERF-10 — OPFS-backed output store (13 points)**
+- [x] **PERF-10 — OPFS-backed output store (13 points)** *(pulled forward with Sprint 2)*
   - Add an output-store abstraction that can write completed blobs to OPFS.
   - Retain job metadata and thumbnails in UI state while storing full output bytes separately.
   - Support reading a stored output for individual download.
   - Delete output files when a job is removed or the batch is cleared.
   - Recover or clean abandoned temporary output files on the next session.
+  - Delivered in `src/lib/outputStore.ts`; downloads (single, ZIP, folder) read back from the
+    store, and stale session directories older than 24 h are cleaned on startup.
 
 - [ ] **PERF-11 — Non-OPFS fallback and backpressure (5 points)**
-  - Add a bounded in-memory fallback.
+  - Add a bounded in-memory fallback. *(memory fallback landed with PERF-10; still unbounded)*
   - Stop or stage processing when output memory exceeds the device budget.
   - Explain the limitation to the user and provide an actionable download/clear path.
 

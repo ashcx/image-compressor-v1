@@ -14,7 +14,9 @@ is uploaded; fixtures are generated in-page and handed to the real file input.
 npm run benchmark          # build + counts 25, 60 (default scenarios)
 npm run benchmark:quick    # fast subset at 8 files
 npm run benchmark:scale    # 500 and 1,000-file cohorts (jpeg/png/mixed)
-npm run test:browser       # assert the virtualized queue mounts a small window
+npm run test:browser       # bounded row window + output download checks
+node bench/repeat-check.mjs --iterations 6 --count 300         # leak diagnostic
+node bench/repeat-check.mjs --iterations 6 --count 300 --clear # with clear between
 ```
 
 Each scenario runs in a **fresh browser process**. Reusing one process across
@@ -98,10 +100,23 @@ repeats or medians over cross-run ratios. The committed scale report shows
 
 ## Browser regression test
 
-`npm run test:browser` (`bench/virtual-check.mjs`) injects 1,000 files and
-asserts that only the visible window plus overscan is mounted — at the top,
-middle, and bottom of the scroll range — and that the window moves when
-scrolling. It runs in CI so a virtualization regression fails the build.
+`npm run test:browser` builds the app and runs, in a real browser:
+
+- `bench/virtual-check.mjs` injects 1,000 files and asserts that only the
+  visible window plus overscan is mounted — at the top, middle, and bottom of
+  the scroll range — and that the window moves when scrolling.
+- `bench/output-check.mjs` compresses a file and downloads it, then downloads a
+  batch as a ZIP, asserting both are non-empty (covers the OPFS output store).
+
+Both run in CI so a virtualization or output-store regression fails the build.
+
+## Leak diagnostic
+
+`bench/repeat-check.mjs` runs several batches in one tab and reports JS heap and
+DOM counts after forced GC, with per-run timing. Use `--clear` to clear the queue
+between runs. It is a diagnostic, not a pass/fail test: absolute timings vary on
+shared machines, but a rising per-run `elapsedMs` while heap stays flat points at
+retained binary memory rather than a JS-heap leak.
 
 ## Limitations
 
