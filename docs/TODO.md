@@ -97,11 +97,9 @@ decide whether HEIC encoding is technically and legally viable.
   - Verify whether the selected JavaScript wrapper exposes the required decoder and encoder
     functionality in a Vite worker bundle.
   - Compare `libde265` decoding with an encoder backend such as x265 or kvazaar.
-  - Document LGPL, GPL, codec-patent, and distribution implications with a legal decision
     owner.
   - Confirm the minimum patched libheif version and security-update process.
-  - Produce a GO/NO-GO decision for HEIC encoding. HEIC decoding may proceed even if encoding
-    is deferred.
+  - Ensure both HEIC encoding and decoding works on all platforms, and if HEIC support fails on obscure browsers and platforms, an error message is shown to the user rather than just implicitly failing
 
 - [ ] **QA-01 — Define the test corpus and release matrix (3 points)**
   - Collect representative JPEG, PNG, WebP, AVIF, and HEIC fixtures.
