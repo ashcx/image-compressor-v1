@@ -66,12 +66,12 @@ The HEIC decoder and UI work can proceed in parallel once the codec interface is
 encoding should follow the feasibility spike and can be developed independently from the UI,
 but its final integration depends on the output-storage and worker-budget contracts.
 
-## Sprint 1 — Baseline, UX contract, and HEIC feasibility
+## Sprint 1 — Baseline and HEIC feasibility
 
-**Goal:** establish measurable performance targets, agree the responsive product shape, and
-decide whether HEIC encoding is technically and legally viable.
+**Goal:** establish measurable performance targets and decide whether HEIC encoding is
+technically and legally viable.
 
-**Capacity: 21 points**
+**Capacity: 16 points**
 
 ### TODO
 
@@ -85,15 +85,6 @@ decide whether HEIC encoding is technically and legally viable.
   - Persist benchmark summaries so changes can be compared between commits.
   - Delivered in [`bench/`](../bench/README.md) with a committed 25/60/240 baseline in
     `bench/results/baseline.{json,md}`; fixture counts up to 1,000 run on demand.
-
-- [x] **UX-01 — Define responsive information architecture and design tokens (5 points)**
-  - Produce desktop, tablet, portrait-tablet, and mobile wireframes.
-  - Define spacing, typography, control heights, radius, colors, focus states, and density
-    tokens.
-  - Define the empty state, importing state, estimating state, compressing state, complete
-    state, and error state.
-  - Decide whether single-file auto-compression remains distinct from batch compression.
-  - Delivered in [DESIGN.md](./DESIGN.md); tokens are implemented in `src/app.css`.
 
 - [x] **HEIC-01 — Run HEIC feasibility, licensing, and security spike (5 points)**
   - Prototype the current `libheif` Emscripten/WASM build path.
@@ -118,7 +109,6 @@ decide whether HEIC encoding is technically and legally viable.
 ### Expected output
 
 - A runnable benchmark harness and baseline report.
-- Approved responsive wireframes and UI acceptance criteria.
 - A documented HEIC feasibility decision.
 - A versioned fixture corpus and browser test matrix.
 
@@ -128,12 +118,11 @@ decide whether HEIC encoding is technically and legally viable.
 - Run the benchmark against the current production build.
 - Verify that the harness reports the existing 60- and 240-row baseline as a regression
   reference.
-- Manually review wireframes at 360px, 768px, 1024px, and 1440px widths.
 
 ### Parallel work
 
-UX-01 and QA-01 can run in parallel. HEIC-01 can run in parallel with the benchmark harness,
-but its decision must be complete before HEIC encoding is scheduled.
+QA-01 and HEIC-01 can run in parallel with the benchmark harness, but the HEIC decision
+must be complete before HEIC encoding is scheduled.
 
 ## Sprint 2 — Batch ingestion, state aggregation, and virtualized queue
 
@@ -291,13 +280,22 @@ before sprint acceptance.
 PERF-10 and QA-02 can be developed in parallel once the storage interface is agreed. PERF-12
 can proceed alongside PERF-10 using a mocked store.
 
-## Sprint 5 — Responsive UI and accessibility
+## Sprint 5 — Design system, responsive UI, and accessibility
 
-**Goal:** make the product feel polished and efficient at mobile, tablet, and desktop sizes.
+**Goal:** define the responsive product shape and design tokens, then make the product feel
+polished and efficient at mobile, tablet, and desktop sizes.
 
-**Capacity: 29 points**
+**Capacity: 34 points**
 
 ### TODO
+
+- [ ] **UX-01 — Define responsive information architecture and design tokens (5 points)**
+  - Produce desktop, tablet, portrait-tablet, and mobile wireframes.
+  - Define spacing, typography, control heights, radius, colors, focus states, and density
+    tokens.
+  - Define the empty state, importing state, estimating state, compressing state, complete
+    state, and error state.
+  - Decide whether single-file auto-compression remains distinct from batch compression.
 
 - [ ] **UX-02 — Desktop and tablet shell (8 points)**
   - Expand the desktop content area to use available space.
@@ -327,12 +325,14 @@ can proceed alongside PERF-10 using a mocked store.
 
 ### Expected output
 
+- Approved wireframes, design tokens, and UI acceptance criteria.
 - Responsive layouts at 360px, 768px, 1024px, and 1440px.
 - A clear mobile action model and a productive desktop batch workflow.
 - Accessible progress and queue interaction.
 
 ### Tests and verification
 
+- Review the UX-01 wireframes before implementing the shells.
 - Run browser visual checks at the four target widths.
 - Test touch targets on iOS Safari and Android Chrome.
 - Test keyboard-only navigation and screen-reader status announcements.
@@ -342,8 +342,9 @@ can proceed alongside PERF-10 using a mocked store.
 
 ### Parallel work
 
-UX-02, UX-03, and UX-04 can run in parallel after Sprint 1 design tokens are approved.
-A11Y-01 should review each UI stream continuously rather than waiting until the end.
+UX-01 defines the shared tokens and must land before the shells. UX-02, UX-03, and UX-04
+can then run in parallel. A11Y-01 should review each UI stream continuously rather than
+waiting until the end.
 
 ## Sprint 6 — HEIC decoding
 

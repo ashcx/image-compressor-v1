@@ -92,7 +92,6 @@ The main source areas are:
 - [Performance](./docs/PERFORMANCE.md) — measured encode times, output sizes, memory model,
   worker scaling, estimate accuracy, and remaining measurement gaps.
 - [Benchmark harness](./bench/README.md) — how to run and compare the browser benchmarks.
-- [Design](./docs/DESIGN.md) — responsive information architecture and design tokens.
 - [QA matrix](./docs/TEST-MATRIX.md) — test corpus, browser/device matrix, and release checks.
 - [HEIC decision](./docs/HEIC.md) — decoder/encoder feasibility, licensing, and security.
 - [Scrum TODO roadmap](./docs/TODO.md) — sprint backlog, story points, acceptance criteria,
