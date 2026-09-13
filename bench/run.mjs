@@ -337,24 +337,35 @@ function parseMeter(text) {
   return { busy: Number(match[1]), size: Number(match[2]) }
 }
 
+// The queue is virtualized, so counting DOM rows no longer reflects batch
+// progress. Read the panel's aggregate phase label instead.
+function parsePhase(text) {
+  const match =
+    /(\d+)\s*\/\s*(\d+)\s*compressed(?:\s*·\s*(\d+)\s*failed)?/.exec(text ?? '')
+  if (!match) return null
+  return {
+    finished: Number(match[1]),
+    total: Number(match[2]),
+    failed: match[3] ? Number(match[3]) : 0,
+  }
+}
+
 async function snapshot(page) {
   return page.evaluate(() => {
-    const label = document.querySelector('.panel__row .panel__label')
-    const meter = document.querySelector('.panel__value')
-    const downloads = [
-      ...document.querySelectorAll('.job__actions button'),
-    ].filter(
-      (button) => (button.textContent ?? '').trim() === 'Download',
-    ).length
-    const errors = document.querySelectorAll('.job__icon--error').length
+    const labels = [...document.querySelectorAll('.panel__label')].map(
+      (element) => element.textContent ?? '',
+    )
+    const label = labels.find((text) => text.includes('compressed')) ?? ''
+    const meter = document.querySelector(
+      '[title="Encoder backend and worker pool"]',
+    )
     const compress = [...document.querySelectorAll('button')].find((button) =>
       (button.textContent ?? '').trim().startsWith('Compress'),
     )
     return {
-      label: label?.textContent ?? '',
+      label,
       meter: meter?.textContent ?? '',
-      downloads,
-      errors,
+      mountedRows: document.querySelectorAll('.job').length,
       compressEnabled: Boolean(compress) && !compress.disabled,
       estimating: (
         document.querySelector('.panel')?.textContent ?? ''
@@ -367,6 +378,7 @@ async function waitAndRun(page, expected, timeout, runStartedAt) {
   const poolSamples = []
   let estimateAt = null
   let firstResultAt = null
+  let peakMounted = 0
   const deadline = Date.now() + timeout
 
   for (;;) {
@@ -375,13 +387,23 @@ async function waitAndRun(page, expected, timeout, runStartedAt) {
     if (meter) {
       poolSamples.push({ t: Date.now() - runStartedAt, ...meter })
     }
+    peakMounted = Math.max(peakMounted, state.mountedRows)
 
-    const done = state.downloads + state.errors
-    if (firstResultAt === null && done >= 1) {
+    const phase = parsePhase(state.label)
+    const finished = phase?.finished ?? 0
+    const failed = phase?.failed ?? 0
+
+    if (firstResultAt === null && finished >= 1) {
       firstResultAt = Date.now() - runStartedAt
     }
-    if (done >= expected) {
-      return { estimateAt, firstResultAt, poolSamples, errors: state.errors }
+    if (finished >= expected && phase?.total === expected) {
+      return {
+        estimateAt,
+        firstResultAt,
+        poolSamples,
+        errors: failed,
+        peakMounted,
+      }
     }
 
     // Trigger compression once estimation has settled and the button is live.
@@ -401,7 +423,7 @@ async function waitAndRun(page, expected, timeout, runStartedAt) {
     if (Date.now() > deadline) {
       const label = state.label || 'no progress'
       throw new Error(
-        `Timed out after ${timeout}ms with ${done}/${expected} results (${label})`,
+        `Timed out after ${timeout}ms with ${finished}/${expected} results (${label})`,
       )
     }
     await sleep(50)
@@ -460,7 +482,11 @@ function round(value) {
   return Math.round(value * 10) / 10
 }
 
-async function runScenario(browser, baseUrl, scenario, count, options) {
+async function runScenario(baseUrl, scenario, count, options) {
+  // A fresh browser process per scenario keeps retained memory (blobs, WASM
+  // heaps, terminated workers) from one run from slowing the next.
+  const browser = await chromium.launch({ headless: !options.headed })
+  const chromiumVersion = browser.version()
   const page = await browser.newPage()
   const consoleErrors = []
   page.on('console', (message) => {
@@ -516,15 +542,18 @@ async function runScenario(browser, baseUrl, scenario, count, options) {
         firstResultMs: outcome.firstResultAt,
         completeMs: completeAt,
         errors: outcome.errors,
+        peakMountedRows: outcome.peakMounted,
         longTasks: longTaskStats(bench.longTasks, benchStart, bench.t1),
         frames: frameStats(bench.frames, benchStart, bench.t1),
         heap: heapStats(bench.heap, benchStart, bench.t1),
         workers: utilisation(outcome.poolSamples),
       },
       consoleErrors,
+      chromium: chromiumVersion,
     }
   } finally {
     await page.close()
+    await browser.close()
   }
 }
 
@@ -537,8 +566,8 @@ function renderMarkdown(report) {
     `- Node: ${report.meta.node} · Chromium: ${report.meta.chromium}`,
     `- Counts: ${report.meta.counts.join(', ')}`,
     '',
-    '| Scenario | Files | Format | First result (ms) | Complete (ms) | Estimate (ms) | Long tasks | Max frame gap (ms) | Busy/size | Errors |',
-    '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| Scenario | Files | Format | First result (ms) | Complete (ms) | Estimate (ms) | Peak rows | Long tasks | Max frame gap (ms) | Busy/size | Errors |',
+    '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
   ]
   for (const result of report.results) {
     const metrics = result.metrics
@@ -552,6 +581,7 @@ function renderMarkdown(report) {
       metrics.firstResultMs ?? '—',
       metrics.completeMs,
       metrics.estimateMs ?? '—',
+      metrics.peakMountedRows ?? '—',
       `${metrics.longTasks.count} (${metrics.longTasks.totalMs} ms)`,
       metrics.frames.maxGapMs,
       workers,
@@ -591,14 +621,11 @@ async function main() {
   const baseUrl = server.resolvedUrls?.local?.[0]
   if (!baseUrl) throw new Error('Preview server did not expose a local URL')
 
-  const browser = await chromium.launch({ headless: !options.headed })
-  const version = browser.version()
   const results = []
   try {
     for (const job of jobs) {
       process.stdout.write(`bench ${job.scenario.id} x${job.count} ... `)
       const result = await runScenario(
-        browser,
         baseUrl,
         job.scenario,
         job.count,
@@ -612,7 +639,6 @@ async function main() {
       )
     }
   } finally {
-    await browser.close()
     await server.close()
   }
 
@@ -621,7 +647,7 @@ async function main() {
       commit: shortCommit(),
       timestamp: new Date().toISOString(),
       node: process.version,
-      chromium: version,
+      chromium: results[0]?.chromium ?? 'unknown',
       counts: options.counts,
       seed: options.seed,
     },

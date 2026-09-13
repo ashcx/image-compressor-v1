@@ -1,10 +1,14 @@
 {
   "meta": {
-    "commit": "3276daa",
-    "timestamp": "2026-09-13T04:14:24.205Z",
+    "commit": "a7f5a27",
+    "timestamp": "2026-09-13T04:56:33.901Z",
     "node": "v22.23.2",
     "chromium": "153.0.8010.12",
-    "counts": [25, 60, 240],
+    "counts": [
+      25,
+      60,
+      240
+    ],
     "seed": 1
   },
   "results": [
@@ -17,31 +21,33 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 992,
-        "firstResultMs": 1047,
-        "completeMs": 1329,
+        "estimateMs": 996,
+        "firstResultMs": 1051,
+        "completeMs": 1268,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 71,
+          "frames": 67,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 1.9,
+          "avgBusy": 2,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 7
+          "samples": 6
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo-resize",
@@ -53,19 +59,20 @@
         "maxLongEdge": 1024
       },
       "metrics": {
-        "estimateMs": 977,
-        "firstResultMs": 1037,
-        "completeMs": 1255,
+        "estimateMs": 998,
+        "firstResultMs": 1054,
+        "completeMs": 1268,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 66,
+          "frames": 67,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
@@ -77,7 +84,8 @@
           "samples": 6
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "webp-photo",
@@ -88,31 +96,33 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 4530,
-        "firstResultMs": 4653,
-        "completeMs": 5630,
+        "estimateMs": 1231,
+        "firstResultMs": 1345,
+        "completeMs": 2263,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 135,
+          "frames": 127,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.8
+          "p95GapMs": 16.7
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.4,
+          "avgBusy": 2.3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 27
+          "samples": 25
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot",
@@ -123,31 +133,33 @@
         "mode": 0
       },
       "metrics": {
-        "estimateMs": 947,
-        "firstResultMs": 1009,
-        "completeMs": 1238,
+        "estimateMs": 886,
+        "firstResultMs": 945,
+        "completeMs": 1106,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 70,
+          "frames": 63,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2,
+          "avgBusy": 1.8,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 6
+          "samples": 5
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot-lossless",
@@ -158,31 +170,33 @@
         "mode": 1
       },
       "metrics": {
-        "estimateMs": 1664,
-        "firstResultMs": 1822,
-        "completeMs": 3753,
+        "estimateMs": 892,
+        "firstResultMs": 999,
+        "completeMs": 2068,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 220,
-          "maxGapMs": 33.4,
+          "frames": 120,
+          "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.7,
+          "avgBusy": 2.5,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 52
+          "samples": 23
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "avif-photo",
@@ -194,17 +208,18 @@
         "speed": 8
       },
       "metrics": {
-        "estimateMs": 2509,
-        "firstResultMs": 3061,
-        "completeMs": 7486,
+        "estimateMs": 2435,
+        "firstResultMs": 2870,
+        "completeMs": 7381,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 435,
+          "frames": 431,
           "maxGapMs": 16.8,
           "p95GapMs": 16.7
         },
@@ -215,10 +230,11 @@
           "avgBusy": 2.8,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 115
+          "samples": 114
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -229,19 +245,20 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1853,
-        "firstResultMs": 1915,
-        "completeMs": 2930,
+        "estimateMs": 3603,
+        "firstResultMs": 3662,
+        "completeMs": 4428,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 122,
+          "frames": 102,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
@@ -250,10 +267,11 @@
           "avgBusy": 2.3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 21
+          "samples": 16
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo",
@@ -264,31 +282,33 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1146,
-        "firstResultMs": 1203,
-        "completeMs": 2336,
+        "estimateMs": 1161,
+        "firstResultMs": 1224,
+        "completeMs": 2357,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 122,
-          "maxGapMs": 33.3,
+          "frames": 126,
+          "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.6,
+          "avgBusy": 2.7,
           "avgSize": 3,
           "peakBusy": 3,
           "samples": 22
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo-resize",
@@ -300,17 +320,18 @@
         "maxLongEdge": 1024
       },
       "metrics": {
-        "estimateMs": 1142,
-        "firstResultMs": 1196,
-        "completeMs": 2407,
+        "estimateMs": 1172,
+        "firstResultMs": 1228,
+        "completeMs": 2226,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 127,
+          "frames": 118,
           "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
@@ -318,13 +339,14 @@
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.7,
+          "avgBusy": 2.6,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 23
+          "samples": 20
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "webp-photo",
@@ -335,19 +357,20 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 2436,
-        "firstResultMs": 2599,
-        "completeMs": 7323,
+        "estimateMs": 2426,
+        "firstResultMs": 2588,
+        "completeMs": 7452,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 423,
+          "frames": 433,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
@@ -359,7 +382,8 @@
           "samples": 114
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot",
@@ -370,31 +394,33 @@
         "mode": 0
       },
       "metrics": {
-        "estimateMs": 975,
-        "firstResultMs": 1028,
-        "completeMs": 3895,
+        "estimateMs": 956,
+        "firstResultMs": 1017,
+        "completeMs": 1783,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 93,
-          "maxGapMs": 33.3,
+          "frames": 102,
+          "maxGapMs": 16.8,
           "p95GapMs": 16.7
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.5,
+          "avgBusy": 2.6,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 14
+          "samples": 16
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot-lossless",
@@ -405,18 +431,19 @@
         "mode": 1
       },
       "metrics": {
-        "estimateMs": 1533,
-        "firstResultMs": 1745,
-        "completeMs": 6286,
+        "estimateMs": 1662,
+        "firstResultMs": 1820,
+        "completeMs": 6862,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 371,
-          "maxGapMs": 16.8,
+          "frames": 406,
+          "maxGapMs": 33.3,
           "p95GapMs": 16.7
         },
         "heap": {
@@ -426,10 +453,11 @@
           "avgBusy": 2.8,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 98
+          "samples": 103
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -440,31 +468,33 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1705,
-        "firstResultMs": 1762,
-        "completeMs": 3853,
+        "estimateMs": 2619,
+        "firstResultMs": 2672,
+        "completeMs": 5488,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 178,
-          "maxGapMs": 33.3,
-          "p95GapMs": 16.7
+          "frames": 238,
+          "maxGapMs": 33.4,
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.8,
+          "avgBusy": 2.7,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 39
+          "samples": 53
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo",
@@ -475,19 +505,20 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1303,
-        "firstResultMs": 1359,
-        "completeMs": 6705,
+        "estimateMs": 3405,
+        "firstResultMs": 3460,
+        "completeMs": 9279,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 369,
-          "maxGapMs": 83.3,
-          "p95GapMs": 16.7
+          "frames": 416,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
@@ -496,10 +527,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 97
+          "samples": 101
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo-resize",
@@ -511,18 +543,19 @@
         "maxLongEdge": 1024
       },
       "metrics": {
-        "estimateMs": 1274,
-        "firstResultMs": 1331,
-        "completeMs": 6730,
+        "estimateMs": 1475,
+        "firstResultMs": 1541,
+        "completeMs": 6543,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
-          "count": 1,
-          "totalMs": 65,
-          "maxMs": 65
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
         },
         "frames": {
-          "frames": 371,
-          "maxGapMs": 83.4,
+          "frames": 373,
+          "maxGapMs": 33.4,
           "p95GapMs": 16.8
         },
         "heap": {
@@ -532,10 +565,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 97
+          "samples": 90
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "webp-photo",
@@ -546,31 +580,33 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 2700,
-        "firstResultMs": 2920,
-        "completeMs": 26073,
+        "estimateMs": 2385,
+        "firstResultMs": 2556,
+        "completeMs": 24720,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
-          "count": 1,
-          "totalMs": 50,
-          "maxMs": 50
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
         },
         "frames": {
-          "frames": 1406,
-          "maxGapMs": 50,
-          "p95GapMs": 16.8
+          "frames": 1348,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 3,
+          "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 401
+          "samples": 392
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot",
@@ -581,18 +617,19 @@
         "mode": 0
       },
       "metrics": {
-        "estimateMs": 1012,
-        "firstResultMs": 1071,
-        "completeMs": 4821,
+        "estimateMs": 1178,
+        "firstResultMs": 1239,
+        "completeMs": 5093,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 270,
-          "maxGapMs": 100,
+          "frames": 299,
+          "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
         "heap": {
@@ -602,10 +639,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 68
+          "samples": 70
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot-lossless",
@@ -616,31 +654,33 @@
         "mode": 1
       },
       "metrics": {
-        "estimateMs": 1794,
-        "firstResultMs": 1953,
-        "completeMs": 24502,
+        "estimateMs": 2010,
+        "firstResultMs": 2340,
+        "completeMs": 25283,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
-          "count": 1,
-          "totalMs": 58,
-          "maxMs": 58
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
         },
         "frames": {
-          "frames": 1312,
-          "maxGapMs": 50,
-          "p95GapMs": 16.7
+          "frames": 1379,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.9,
+          "avgBusy": 3,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 377
+          "samples": 392
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -651,18 +691,19 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 2104,
-        "firstResultMs": 2156,
-        "completeMs": 11981,
+        "estimateMs": 2804,
+        "firstResultMs": 2859,
+        "completeMs": 13206,
         "errors": 0,
+        "peakMountedRows": 12,
         "longTasks": {
           "count": 0,
           "totalMs": 0,
           "maxMs": 0
         },
         "frames": {
-          "frames": 648,
-          "maxGapMs": 100.1,
+          "frames": 728,
+          "maxGapMs": 33.4,
           "p95GapMs": 16.7
         },
         "heap": {
@@ -672,10 +713,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 176
+          "samples": 192
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     }
   ]
 }

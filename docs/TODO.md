@@ -132,30 +132,38 @@ must be complete before HEIC encoding is scheduled.
 
 ### TODO
 
-- [ ] **PERF-02 — Batch file ingestion (5 points)**
+- [x] **PERF-02 — Batch file ingestion (5 points)**
   - Create all job records and IDs in one state transaction.
   - Avoid repeatedly copying the growing ID array during a 1,000-file import.
   - Show an immediate import summary while metadata and previews arrive progressively.
   - Preserve ordering and duplicate filenames.
+  - Delivered via `createJobStore` bulk `add` (one id-array write, one aggregate fold) and an
+    async intake path in `App.tsx`; ordering and duplicates covered in `jobStore.test.ts`.
 
-- [ ] **PERF-03 — Incremental aggregate state (5 points)**
+- [x] **PERF-03 — Incremental aggregate state (5 points)**
   - Replace repeated full-batch reductions for completed, failed, pending, and byte totals with
     incremental counters or selectors.
   - Throttle visual progress updates to an appropriate frame rate.
   - Prevent a single row completion from causing unnecessary panel and queue work.
+  - Delivered with the `BatchStats` reducer in `batchStats.ts` and an rAF-throttled panel view;
+    the incremental reducer is tested against a full recompute.
 
-- [ ] **PERF-04 — True virtualized job list (13 points)**
+- [x] **PERF-04 — True virtualized job list (13 points)**
   - Mount only the visible rows plus a small overscan window.
   - Preserve correct scroll height with a spacer or measured row offsets.
   - Support keyboard focus, removal, download, error actions, and screen-reader navigation.
   - Keep row height predictable for the default density.
   - Handle insertion, removal, resize, and orientation changes without scroll jumps.
   - Keep `content-visibility` as a secondary optimization where useful.
+  - Delivered with `computeWindow`/`listHeight` in `virtual.ts` and a scroll-container
+    `JobList`; the baseline mounts 12 rows whether the batch is 25 or 240.
 
-- [ ] **PERF-05 — File validation and intake guardrails (3 points)**
+- [x] **PERF-05 — File validation and intake guardrails (3 points)**
   - Validate supported formats using magic bytes after reading a bounded header.
   - Report unsupported files before they enter the processing queue.
   - Show count, total input size, and device-risk warnings for unusually large batches.
+  - Delivered with bounded-header `validateFiles` in `intake.ts`; unsupported files are skipped
+    with a notice and oversized batches show a device-risk warning.
 
 ### Expected output
 
@@ -172,6 +180,27 @@ must be complete before HEIC encoding is scheduled.
 - Measure DOM row count, script time, scroll frame gaps, and long tasks.
 - Acceptance target: only visible rows plus overscan are mounted at 1,000 files.
 - Run all standard project checks.
+
+Delivered:
+
+- Unit tests: `jobStore.test.ts`, `batchStats.test.ts`, `intake.test.ts`, `virtual.test.ts`
+  (30 cases; 125 total).
+- The harness gained a `Peak rows` column and now reads the panel's aggregate label, so it
+  works against the virtualized list. Each scenario runs in a fresh browser process, which
+  removed a memory-carryover artifact that had made large batches look super-linear.
+- The committed baseline covers 25/60/240; the 500/1,000 cohorts are committed separately in
+  `bench/results/scale-500-1000.{json,md}` and rerunnable with `npm run benchmark:scale`.
+- Peak mounted rows stayed at **12** at every batch size, including 1,000 — the acceptance
+  target holds.
+- Scaling is roughly linear: 1,000 files ran at ~1.8–2.1× the 500-file time (jpeg-photo
+  **28.0 s**, png-screenshot **21.7 s**, jpeg-mixed **50.6 s**), all with 0 errors; only
+  jpeg-mixed showed long tasks (2).
+- `npm run test:browser` injects 1,000 files and asserts the mounted-row bound at the top,
+  middle, and bottom of the scroll range; it runs as a CI job.
+- Completed outputs persist to OPFS and are read back for downloads, so the queue no longer
+  holds full-resolution Blobs; **Clear all** deletes every app OPFS directory and reloads,
+  returning the tab to a clean document (PERF-10 pulled forward).
+- Remaining: fold 500/1,000 into PERF-13 (Sprint 9) regression thresholds.
 
 ### Parallel work
 
@@ -240,15 +269,17 @@ before sprint acceptance.
 
 ### TODO
 
-- [ ] **PERF-10 — OPFS-backed output store (13 points)**
+- [x] **PERF-10 — OPFS-backed output store (13 points)** *(pulled forward with Sprint 2)*
   - Add an output-store abstraction that can write completed blobs to OPFS.
   - Retain job metadata and thumbnails in UI state while storing full output bytes separately.
   - Support reading a stored output for individual download.
   - Delete output files when a job is removed or the batch is cleared.
   - Recover or clean abandoned temporary output files on the next session.
+  - Delivered in `src/lib/outputStore.ts`; downloads (single, ZIP, folder) read back from the
+    store, and stale session directories older than 24 h are cleaned on startup.
 
 - [ ] **PERF-11 — Non-OPFS fallback and backpressure (5 points)**
-  - Add a bounded in-memory fallback.
+  - Add a bounded in-memory fallback. *(memory fallback landed with PERF-10; still unbounded)*
   - Stop or stage processing when output memory exceeds the device budget.
   - Explain the limitation to the user and provide an actionable download/clear path.
 

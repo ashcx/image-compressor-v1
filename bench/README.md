@@ -13,7 +13,16 @@ is uploaded; fixtures are generated in-page and handed to the real file input.
 ```sh
 npm run benchmark          # build + counts 25, 60 (default scenarios)
 npm run benchmark:quick    # fast subset at 8 files
+npm run benchmark:scale    # 500 and 1,000-file cohorts (jpeg/png/mixed)
+npm run test:browser       # bounded row window + output download checks
+node bench/repeat-check.mjs --iterations 6 --count 300         # leak diagnostic
+node bench/repeat-check.mjs --iterations 6 --count 300 --clear # with clear between
 ```
+
+Each scenario runs in a **fresh browser process**. Reusing one process across
+runs caused retained memory (blobs, WASM heaps, terminated workers) to slow later
+runs by up to ~2× and made large batches look super-linear. With isolation,
+scaling is roughly linear and repeated runs agree.
 
 Pass options through the script:
 
@@ -72,18 +81,49 @@ per-file processing cost.
 - **Estimate** — injection → compression triggered (batch estimation settled).
 - **Long tasks** — `PerformanceObserver('longtask')` entries inside the run window.
 - **Frame gap** — max / p95 gap between `requestAnimationFrame` callbacks.
+- **Peak rows** — max job rows mounted in the DOM (virtualization check).
 - **Busy/size** — sampled app worker meter (busy workers / pool size).
 - **Heap** — peak `performance.memory.usedJSHeapSize` where available (Chromium).
 
 ## Baseline
 
 `bench/results/baseline.{json,md}` is the recorded reference for 25 / 60 / 240
-files. It is a synthetic, headless reference, not a device claim. Compare a new
-run against it by diffing the two JSON files or regenerating the Markdown table.
+files. The 500 / 1,000-file cohorts are recorded in
+`bench/results/scale-500-1000.{json,md}`. They are synthetic, headless
+references, not device claims. Compare a new run against them by diffing the
+JSON files or regenerating the Markdown table.
+
+Absolute times vary across machines and invocations (the reference numbers were
+taken on a shared VM), so compare counts **within a single run** and prefer
+repeats or medians over cross-run ratios. The committed scale report shows
+1,000 files at ~1.8–2.1× the 500-file time, i.e. roughly linear.
+
+## Browser regression test
+
+`npm run test:browser` builds the app and runs, in a real browser:
+
+- `bench/virtual-check.mjs` injects 1,000 files and asserts that only the
+  visible window plus overscan is mounted — at the top, middle, and bottom of
+  the scroll range — and that the window moves when scrolling.
+- `bench/output-check.mjs` compresses a file and downloads it, then downloads a
+  batch as a ZIP, asserting both are non-empty (covers the OPFS output store).
+
+Both run in CI so a virtualization or output-store regression fails the build.
+
+## Leak diagnostic
+
+`bench/repeat-check.mjs` runs several batches in one tab and reports JS heap and
+DOM counts after forced GC, with per-run timing. Use `--clear` to clear the queue
+between runs. It is a diagnostic, not a pass/fail test: absolute timings vary on
+shared machines, but a rising per-run `elapsedMs` while heap stays flat points at
+retained binary memory rather than a JS-heap leak.
 
 ## Limitations
 
 - Headless Chromium only; Safari and Firefox are not exercised here.
 - Synthetic fixtures cannot stand in for real photographs or malformed inputs.
-- `performance.memory` and `longtask` are Chromium-specific; other engines report nulls.
+- `performance.memory` and `longtask` are Chromium-specific; other engines report nulls,
+  and `performance.memory` returns a near-constant figure in headless Chromium.
 - Mobile worker budgets are policy, not measured on physical devices.
+- The app retains every finished output Blob until Sprint 4 (PERF-10, OPFS output store);
+  very large batches pay for that retained memory.

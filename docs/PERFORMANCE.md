@@ -195,6 +195,9 @@ point; the worker budget is a balance between throughput and responsiveness.
   ImageData.
 - Thumbnails are generated in the worker at **96 px**; output object URLs are created lazily
   on download.
+- Completed outputs are written to the Origin Private File System when available and read
+  back on demand for download, so the queue keeps metadata and thumbnails rather than every
+  full-resolution Blob. A memory fallback is used where OPFS is unavailable.
 - Idle teardown terminates the worker pool and metadata worker about **two seconds** after
   becoming idle, and immediately on format change or clearing the list.
 - Per-device ZIP size caps prevent the app from attempting very large archives without an
