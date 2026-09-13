@@ -12,7 +12,11 @@ import {
 } from './lib/codecs/formats'
 import { describeRenderer, preloadCodec } from './lib/codecs/registry'
 import type { OutputFormat } from './lib/codecs/types'
-import { getDeviceProfile, heavyWorkerCount } from './lib/device'
+import {
+  getDeviceProfile,
+  heavyWorkerCount,
+  pixelBudgetFor,
+} from './lib/device'
 import {
   averageRatioSamples,
   deriveEstimate,
@@ -23,6 +27,7 @@ import {
 import {
   acquireFileBuffer,
   configureFileBufferCap,
+  configureFileReadConcurrency,
   forgetFile,
   registerFile,
   releaseFileBuffer,
@@ -30,7 +35,11 @@ import {
 import { formatBytes, percentReduction, replaceExtension } from './lib/format'
 import { validateFiles } from './lib/intake'
 import { createJobStore } from './lib/jobStore'
-import { disposeMetadataWorker, readDimensions } from './lib/metadataClient'
+import {
+  disposeMetadataWorker,
+  readDimensions,
+  readThumbnail,
+} from './lib/metadataClient'
 import {
   createOutputStore,
   type OutputStore,
@@ -46,9 +55,11 @@ import {
   rowOffset,
 } from './lib/virtual'
 import {
+  configurePixelBudget,
   configureWorkers,
   disposePool,
   getPoolStats,
+  noteMainThreadStall,
   processImage,
   subscribeToPool,
 } from './lib/workerClient'
@@ -152,6 +163,7 @@ let reprocessTimer: ReturnType<typeof setTimeout> | undefined
 let sampleChangeTimer: ReturnType<typeof setTimeout> | undefined
 const jobTokens = new Map<string, number>()
 const estimateControllers = new Map<string, AbortController>()
+const compressControllers = new Map<string, AbortController>()
 
 const activeControls = computed(() => FORMAT_SPECS[targetFormat.value].controls)
 
@@ -256,15 +268,19 @@ const progressPercent = computed(() => {
     : Math.round((value.finished / value.total) * 100)
 })
 const pendingEstimate = computed(() => displayStats.value.pending)
+const cancelledCount = computed(() => displayStats.value.cancelled)
 const estimatePhase = computed(
   () => batchMode.value && pendingEstimate.value > 0,
+)
+const cancellable = computed(
+  () => stats.value.processing + stats.value.pending > 0,
 )
 // The bar only reflects compression; estimates happen quietly in the
 // background so the app looks ready to compress immediately.
 const phasePercent = computed(() => progressPercent.value)
 const phaseLabel = computed(
   () =>
-    `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}`,
+    `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}${cancelledCount.value > 0 ? ` · ${cancelledCount.value} cancelled` : ''}`,
 )
 
 // Active/ready come straight from the incremental counters, so the Compress
@@ -276,6 +292,11 @@ function estimateFor(job: BatchJob, quality: number): number {
   if (job.sampleKey !== sampleKey.value) return 0
   if (job.samples.length > 0) return interpolate(job.samples, quality)
   return deriveEstimate(job.originalSize, averageRatios.value, quality)
+}
+
+/** Decoded-pixel cost used by the worker pool's pixel budget. */
+function jobPixels(job: BatchJob): number {
+  return job.width > 0 && job.height > 0 ? job.width * job.height : 0
 }
 
 // Batch size estimate, rebuilt at most once per frame as jobs change.
@@ -337,7 +358,11 @@ function applyWorkerBudget() {
   const base = getDeviceProfile().workerCount
   const format = targetFormat.value
   const heavy = isHeavyFormat(format, settings.value.mode)
-  configureWorkers(heavy ? heavyWorkerCount(base) : base)
+  const workers = heavy ? heavyWorkerCount(base) : base
+  configureWorkers(workers)
+  // Read-ahead concurrency is separate from codec concurrency and tracks the
+  // device budget, so constrained phones do not read several files at once.
+  configureFileReadConcurrency(Math.max(2, Math.min(4, workers + 1)))
 }
 
 let rendererToken = 0
@@ -382,6 +407,33 @@ function cancelEstimate(id: string) {
 function cancelAllEstimates() {
   for (const controller of estimateControllers.values()) controller.abort()
   estimateControllers.clear()
+}
+
+// Preview requests that are in flight or already resolved for a row. Bounded to
+// the virtualized rows that have actually scrolled into view.
+const previewRequests = new Set<string>()
+
+/**
+ * Lazily generates a preview for an estimated row that has none. Only called
+ * for visible rows, so a large batch pays for previews the user actually sees
+ * rather than decoding every file up front.
+ */
+async function loadThumbnail(id: string) {
+  const job = getJob(id)
+  if (!job || job.thumbnailUrl || job.status !== 'estimated') return
+  if (previewRequests.has(id)) return
+  previewRequests.add(id)
+  cancelIdleTeardown()
+  try {
+    const blob = await readThumbnail(job.file)
+    if (!blob) return
+    const current = getJob(id)
+    if (!current || current.thumbnailUrl || current.status === 'error') return
+    updateJob(id, { thumbnailUrl: URL.createObjectURL(blob) })
+  } finally {
+    previewRequests.delete(id)
+    scheduleIdleTeardown()
+  }
 }
 
 function updateAverageRatios() {
@@ -433,13 +485,14 @@ async function estimateJob(id: string) {
       mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       estimateOnly: true,
+      pixels: jobPixels(job),
       priority: 'low',
       signal: controller.signal,
     })
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'estimate') return
 
-    const previousThumb = job.thumbnailUrl
+    const previousThumb = getJob(id)?.thumbnailUrl
     const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     updateJob(id, {
       status: 'estimated',
@@ -480,6 +533,9 @@ async function compressJob(id: string) {
   const key = outputKey.value
   const samplesKey = sampleKey.value
 
+  const controller = new AbortController()
+  compressControllers.set(id, controller)
+
   updateJob(id, { status: 'processing', error: '' })
 
   try {
@@ -492,12 +548,20 @@ async function compressJob(id: string) {
       mode: current.mode,
       resize: edge > 0 ? { maxLongEdge: edge } : undefined,
       consumeInput: true,
+      pixels: jobPixels(job),
       priority: 'high',
+      signal: controller.signal,
     })
     const result = await response
-    if (jobTokens.get(id) !== token || result.type !== 'result') return
+    if (
+      controller.signal.aborted ||
+      jobTokens.get(id) !== token ||
+      result.type !== 'result'
+    ) {
+      return
+    }
 
-    const previousThumb = job.thumbnailUrl
+    const previousThumb = getJob(id)?.thumbnailUrl
     const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     const store = await getOutputStore()
     await store.put(id, result.outputBlob)
@@ -517,19 +581,25 @@ async function compressJob(id: string) {
     })
     if (previousThumb) URL.revokeObjectURL(previousThumb)
   } catch (error) {
-    if (jobTokens.get(id) !== token) return
+    if (controller.signal.aborted || jobTokens.get(id) !== token) return
     updateJob(id, {
       status: 'error',
       error: error instanceof Error ? error.message : 'Conversion failed',
     })
   } finally {
+    if (compressControllers.get(id) === controller) {
+      compressControllers.delete(id)
+    }
     releaseFileBuffer(id)
     scheduleIdleTeardown()
   }
 }
 
 function updateSampling(): Set<string> {
-  const ids = jobIds.value.filter((id) => getJob(id)?.status !== 'error')
+  const ids = jobIds.value.filter((id) => {
+    const status = getJob(id)?.status
+    return status !== 'error' && status !== 'cancelled'
+  })
   const limit = sampleSize(
     ids.length,
     isHeavyFormat(targetFormat.value, settings.value.mode),
@@ -666,7 +736,7 @@ function scheduleSampleReestimate() {
     const key = sampleKey.value
     for (const id of jobIds.value) {
       const job = getJob(id)
-      if (!job || job.status === 'error') continue
+      if (!job || job.status === 'error' || job.status === 'cancelled') continue
       const measured = sampled.has(id)
       updateJob(id, {
         status: measured ? 'estimating' : 'estimated',
@@ -742,8 +812,37 @@ function compressAll() {
   }
 }
 
+/**
+ * Stops queued work and marks unsettled rows cancelled. Tasks already running
+ * in a worker are left to settle safely; their results are discarded via the
+ * per-job token, and completed rows keep their output.
+ */
+function cancelAllWork() {
+  if (reprocessTimer) clearTimeout(reprocessTimer)
+  if (sampleChangeTimer) clearTimeout(sampleChangeTimer)
+  cancelAllEstimates()
+  for (const controller of compressControllers.values()) controller.abort()
+  compressControllers.clear()
+  for (const id of jobIds.value) {
+    const job = getJob(id)
+    if (!job) continue
+    if (
+      job.status === 'done' ||
+      job.status === 'error' ||
+      job.status === 'cancelled'
+    ) {
+      continue
+    }
+    nextToken(id)
+    updateJob(id, { status: 'cancelled', error: '' })
+  }
+  scheduleIdleTeardown()
+}
+
 function removeJob(id: string) {
   cancelEstimate(id)
+  compressControllers.get(id)?.abort()
+  compressControllers.delete(id)
   nextToken(id)
   jobTokens.delete(id)
   forgetFile(id)
@@ -758,6 +857,8 @@ function clearAll() {
   if (reprocessTimer) clearTimeout(reprocessTimer)
   if (sampleChangeTimer) clearTimeout(sampleChangeTimer)
   cancelAllEstimates()
+  for (const controller of compressControllers.values()) controller.abort()
+  compressControllers.clear()
   for (const job of listJobs()) {
     nextToken(job.id)
     forgetFile(job.id)
@@ -873,6 +974,8 @@ function statusLabel(job: BatchJob): string {
       return 'compressing…'
     case 'done':
       return isCurrent(job) ? '' : 'settings changed — re-compress'
+    case 'cancelled':
+      return 'cancelled'
     case 'error':
       return job.error
   }
@@ -881,10 +984,19 @@ function statusLabel(job: BatchJob): string {
 // Reads poolStats/renderer itself so frequent pool notifications re-render only
 // this meter, not the whole job list.
 function PoolMeter() {
+  const stats = poolStats.value
+  const pixels =
+    stats.pixelBudget > 0
+      ? ` · ${Math.round(stats.pixels / 1e6)}/${Math.round(stats.pixelBudget / 1e6)}MP`
+      : ''
   return (
-    <span class="panel__value" title="Encoder backend and worker pool">
-      {renderer.value ? `${renderer.value} · ` : ''}workers{' '}
-      {poolStats.value.busy}/{poolStats.value.size}
+    <span
+      class="panel__value"
+      title="Encoder backend, worker pool, and decoded-pixel budget"
+    >
+      {renderer.value ? `${renderer.value} · ` : ''}workers {stats.busy}/
+      {stats.size}
+      {pixels}
     </span>
   )
 }
@@ -896,6 +1008,7 @@ interface JobRowProps {
   top: number
   onRemove: (id: string) => void
   onDownload: (job: BatchJob) => void
+  onThumbnail: (id: string) => void
 }
 
 // Reads its own job signal, so a completion re-renders only this row. Memoized
@@ -907,8 +1020,13 @@ const JobRow = memo(function JobRow({
   top,
   onRemove,
   onDownload,
+  onThumbnail,
 }: JobRowProps) {
   const job = jobStore.signalFor(id)?.value
+  // Request a preview only once the row is mounted (i.e. scrolled into view).
+  useEffect(() => {
+    if (job && !job.thumbnailUrl && job.status === 'estimated') onThumbnail(id)
+  }, [id, job?.thumbnailUrl, job?.status, onThumbnail])
   if (!job) return null
   const current = isCurrent(job)
   const label = statusLabel(job)
@@ -925,6 +1043,10 @@ const JobRow = memo(function JobRow({
           <span class="job__spinner" />
         ) : job.status === 'error' ? (
           <span class="job__icon job__icon--error">!</span>
+        ) : job.status === 'cancelled' ? (
+          <span class="job__icon job__icon--cancelled" title="Cancelled">
+            –
+          </span>
         ) : job.thumbnailUrl ? (
           <img
             class={current ? '' : 'job__thumb--stale'}
@@ -1036,6 +1158,7 @@ function JobList() {
               top={rowOffset(index, DEFAULT_ROW_HEIGHT, DEFAULT_ROW_GAP)}
               onRemove={removeJob}
               onDownload={downloadJob}
+              onThumbnail={loadThumbnail}
             />
           )
         })}
@@ -1124,17 +1247,6 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
         />
       </label>
 
-      <div class="panel__row">
-        <span class="panel__label">
-          {importing.value
-            ? 'Checking files…'
-            : `${total.value} file${total.value === 1 ? '' : 's'}`}
-        </span>
-        <span class="panel__value">
-          {formatBytes(originalTotal.value)} input
-        </span>
-      </div>
-
       <div class="progress" aria-hidden="true">
         <div
           class="progress__bar"
@@ -1186,6 +1298,17 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
           onClick={compressAll}
         >
           Compress {total.value > 1 ? `all ${total.value} images` : 'image'}
+        </button>
+      )}
+
+      {cancellable.value && (
+        <button
+          type="button"
+          class="button"
+          disabled={zipping.value}
+          onClick={cancelAllWork}
+        >
+          Cancel
         </button>
       )}
 
@@ -1242,10 +1365,29 @@ export function App() {
   useEffect(() => {
     applyWorkerBudget()
     configureFileBufferCap(Math.floor(getDeviceProfile().maxZipBytes / 4))
+    configurePixelBudget(pixelBudgetFor(getDeviceProfile()))
     void refreshRenderer()
     return subscribeToPool(() => {
       poolStats.value = getPoolStats()
     })
+  }, [])
+
+  // Shrink the worker budget if the main thread stalls while encoding, so a
+  // heavy batch backs off instead of making the UI janky.
+  useEffect(() => {
+    if (typeof PerformanceObserver === 'undefined') return
+    try {
+      const observer = new PerformanceObserver((list) => {
+        if (stats.value.processing === 0) return
+        for (const entry of list.getEntries()) {
+          if (entry.duration >= 100) noteMainThreadStall()
+        }
+      })
+      observer.observe({ entryTypes: ['longtask'] })
+      return () => observer.disconnect()
+    } catch {
+      return
+    }
   }, [])
 
   useEffect(() => {
@@ -1351,14 +1493,6 @@ export function App() {
           <Panel onAddImages={() => inputRef.current?.click()} />
           <JobList />
         </>
-      )}
-
-      {jobCount > 0 && batchMode.value && (
-        <p class="footnote">
-          Batch mode: change the settings as much as you like — sizes update
-          from cached estimates instantly. Nothing is encoded until you press
-          Compress.
-        </p>
       )}
 
       <footer class="app__footer">v{appVersion}</footer>

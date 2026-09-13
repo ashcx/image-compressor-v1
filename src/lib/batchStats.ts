@@ -5,6 +5,7 @@ export type JobStatus =
   | 'processing'
   | 'done'
   | 'error'
+  | 'cancelled'
 
 /**
  * The subset of a job that affects batch aggregates. Kept structural so the
@@ -26,6 +27,7 @@ export interface BatchStats {
   /** Jobs still queued or estimating. */
   pending: number
   processing: number
+  cancelled: number
   /** Jobs that can still produce output (not errored). */
   active: number
   /** Sum of original bytes for non-errored jobs. */
@@ -43,6 +45,7 @@ export const EMPTY_BATCH_STATS: BatchStats = {
   failed: 0,
   pending: 0,
   processing: 0,
+  cancelled: 0,
   active: 0,
   originalBytes: 0,
   ready: 0,
@@ -57,6 +60,7 @@ const ZERO: Counters = {
   failed: 0,
   pending: 0,
   processing: 0,
+  cancelled: 0,
   active: 0,
   originalBytes: 0,
   ready: 0,
@@ -73,6 +77,7 @@ function counters(job: StatsJob, outputKey: string): Counters {
     failed: errored ? 1 : 0,
     pending: job.status === 'queued' || job.status === 'estimating' ? 1 : 0,
     processing: job.status === 'processing' ? 1 : 0,
+    cancelled: job.status === 'cancelled' ? 1 : 0,
     active: errored ? 0 : 1,
     originalBytes: errored ? 0 : job.originalSize,
     ready: current ? 1 : 0,
@@ -87,6 +92,7 @@ function diff(a: Counters, b: Counters): Counters {
     failed: b.failed - a.failed,
     pending: b.pending - a.pending,
     processing: b.processing - a.processing,
+    cancelled: b.cancelled - a.cancelled,
     active: b.active - a.active,
     originalBytes: b.originalBytes - a.originalBytes,
     ready: b.ready - a.ready,
@@ -101,6 +107,7 @@ function isEmpty(delta: Counters): boolean {
     delta.failed === 0 &&
     delta.pending === 0 &&
     delta.processing === 0 &&
+    delta.cancelled === 0 &&
     delta.active === 0 &&
     delta.originalBytes === 0 &&
     delta.ready === 0 &&
@@ -116,6 +123,7 @@ function apply(stats: BatchStats, delta: Counters): BatchStats {
     failed: stats.failed + delta.failed,
     pending: stats.pending + delta.pending,
     processing: stats.processing + delta.processing,
+    cancelled: stats.cancelled + delta.cancelled,
     active: stats.active + delta.active,
     originalBytes: stats.originalBytes + delta.originalBytes,
     ready: stats.ready + delta.ready,

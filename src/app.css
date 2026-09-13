@@ -290,6 +290,11 @@ input[type="range"]:disabled {
   font-weight: 700;
 }
 
+.job__icon--cancelled {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .job__thumb--stale {
   opacity: 0.4;
 }

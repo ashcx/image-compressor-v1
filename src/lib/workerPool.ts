@@ -25,6 +25,8 @@ export interface PoolTask {
   prepare?: () => Promise<PreparedTask>
   /** Aborting removes the task from the queue if it has not started yet. */
   signal?: AbortSignal
+  /** Estimated decoded pixels, used to gate concurrent large jobs. */
+  cost?: number
 }
 
 interface QueuedTask extends PoolTask {
@@ -37,6 +39,10 @@ interface WorkerPoolOptions {
   size: number
   createWorker: () => PoolWorker
   onChange?: () => void
+  /** Total decoded pixels allowed across busy workers; 0 disables gating. */
+  pixelBudget?: number
+  /** Called when a worker crashes so callers can back off concurrency. */
+  onWorkerFailure?: () => void
 }
 
 /**
@@ -47,20 +53,25 @@ interface WorkerPoolOptions {
  * does not allocate every file buffer up front.
  */
 export class WorkerPool {
-  private readonly size: number
+  private size: number
   private readonly createWorker: () => PoolWorker
   private readonly onChange: (() => void) | undefined
+  private readonly pixelBudget: number
+  private readonly onWorkerFailure: (() => void) | undefined
   private workers: PoolWorker[] = []
   private idle: PoolWorker[] = []
   private high: QueuedTask[] = []
   private low: QueuedTask[] = []
   private readonly busy = new Map<PoolWorker, QueuedTask>()
+  private activePixels = 0
   private closed = false
 
   constructor(options: WorkerPoolOptions) {
     this.size = Math.max(1, options.size)
     this.createWorker = options.createWorker
     this.onChange = options.onChange
+    this.pixelBudget = Math.max(0, options.pixelBudget ?? 0)
+    this.onWorkerFailure = options.onWorkerFailure
   }
 
   get workerCount(): number {
@@ -73,6 +84,28 @@ export class WorkerPool {
 
   get queuedCount(): number {
     return this.high.length + this.low.length
+  }
+
+  /** Decoded pixels currently being held by busy workers. */
+  get activePixelsCount(): number {
+    return this.activePixels
+  }
+
+  get pixelBudgetValue(): number {
+    return this.pixelBudget
+  }
+
+  /** Adjusts the pool ceiling (e.g. lower after a crash). */
+  setSize(size: number): void {
+    this.size = Math.max(1, Math.floor(size))
+    while (this.workers.length > this.size && this.idle.length > 0) {
+      const worker = this.idle.pop()
+      if (!worker) break
+      worker.terminate()
+      this.workers = this.workers.filter((candidate) => candidate !== worker)
+    }
+    this.dispatch()
+    this.notify()
   }
 
   run(task: PoolTask, priority: PoolPriority = 'high'): Promise<PoolSuccess> {
@@ -104,6 +137,7 @@ export class WorkerPool {
     this.high = []
     this.low = []
     this.busy.clear()
+    this.activePixels = 0
     this.notify()
   }
 
@@ -124,17 +158,36 @@ export class WorkerPool {
     // Already dispatched: let it finish; callers ignore stale results.
   }
 
+  private hasCapacity(): boolean {
+    return this.idle.length > 0 || this.workers.length < this.size
+  }
+
+  private canStart(task: QueuedTask): boolean {
+    if (this.pixelBudget <= 0) return true
+    // Always let at least one job run, even if it alone exceeds the budget.
+    if (this.busy.size === 0) return true
+    return this.activePixels + (task.cost ?? 0) <= this.pixelBudget
+  }
+
+  private takeDispatchable(): QueuedTask | undefined {
+    if (this.pixelBudget <= 0) {
+      return this.high.shift() ?? this.low.shift()
+    }
+    // Highest priority task whose pixel cost fits the remaining budget.
+    for (const tier of [this.high, this.low]) {
+      const index = tier.findIndex((candidate) => this.canStart(candidate))
+      if (index !== -1) return tier.splice(index, 1)[0]
+    }
+    return undefined
+  }
+
   private dispatch(): void {
-    while (this.high.length > 0 || this.low.length > 0) {
+    while (this.hasCapacity()) {
+      const task = this.takeDispatchable()
+      if (!task) break
       const worker = this.idle.pop() ?? this.spawn()
       if (!worker) break
-
-      const task = this.high.shift() ?? this.low.shift()
-      if (!task) {
-        this.idle.push(worker)
-        break
-      }
-
+      this.activePixels += task.cost ?? 0
       this.busy.set(worker, task)
       void this.prepareAndPost(worker, task)
     }
@@ -180,6 +233,7 @@ export class WorkerPool {
     const task = this.busy.get(worker)
     if (!task) return
     this.busy.delete(worker)
+    this.activePixels -= task.cost ?? 0
 
     const response = event.data
     if (task.settled) {
@@ -199,6 +253,7 @@ export class WorkerPool {
     const task = this.busy.get(worker)
     if (task) {
       this.busy.delete(worker)
+      this.activePixels -= task.cost ?? 0
       this.settleReject(task, new Error(event.message || 'Worker failed'))
     }
 
@@ -206,12 +261,17 @@ export class WorkerPool {
     this.idle = this.idle.filter((candidate) => candidate !== worker)
     worker.terminate()
 
-    if (!this.closed) this.dispatch()
-    else this.notify()
+    if (!this.closed) {
+      this.onWorkerFailure?.()
+      this.dispatch()
+    } else {
+      this.notify()
+    }
   }
 
   private release(worker: PoolWorker, task: QueuedTask): void {
     this.busy.delete(worker)
+    this.activePixels -= task.cost ?? 0
     if (!task.settled) task.settled = true
     this.idle.push(worker)
     this.dispatch()

@@ -308,3 +308,93 @@ describe('WorkerPool', () => {
     pool.terminate()
   })
 })
+
+describe('WorkerPool pixel budget', () => {
+  function gatedPool(size: number, pixelBudget: number, order?: string[]) {
+    const releases: Array<() => void> = []
+    const pool = new WorkerPool({
+      size,
+      pixelBudget,
+      createWorker: () =>
+        new FakeWorker((worker, message) => {
+          order?.push(message.jobId)
+          releases.push(() => worker.respond(resultFor(message.jobId)))
+        }),
+    })
+    return { pool, releases }
+  }
+
+  it('gates large jobs until active pixels fit the budget', async () => {
+    const { pool, releases } = gatedPool(2, 100)
+    const first = pool.run({ ...task('a'), cost: 60 })
+    const second = pool.run({ ...task('b'), cost: 60 })
+
+    expect(pool.busyCount).toBe(1)
+    expect(pool.queuedCount).toBe(1)
+    expect(pool.activePixelsCount).toBe(60)
+
+    releases.shift()?.()
+    await first
+    expect(pool.activePixelsCount).toBe(60)
+    releases.shift()?.()
+    await second
+    expect(pool.activePixelsCount).toBe(0)
+    pool.terminate()
+  })
+
+  it('runs a single job even when it exceeds the budget alone', async () => {
+    const { pool, releases } = gatedPool(2, 10)
+    const only = pool.run({ ...task('a'), cost: 999 })
+    expect(pool.busyCount).toBe(1)
+    releases.shift()?.()
+    await expect(only).resolves.toMatchObject({ jobId: 'a' })
+    expect(pool.activePixelsCount).toBe(0)
+    pool.terminate()
+  })
+
+  it('lets a smaller queued job overtake one that exceeds the budget', async () => {
+    const order: string[] = []
+    const { pool, releases } = gatedPool(3, 100, order)
+    const running = pool.run({ ...task('running'), cost: 60 })
+    const big = pool.run({ ...task('big'), cost: 60 })
+    const small = pool.run({ ...task('small'), cost: 10 })
+
+    expect(order).toEqual(['running', 'small'])
+    expect(pool.queuedCount).toBe(1)
+    expect(pool.activePixelsCount).toBe(70)
+
+    releases.shift()?.()
+    await running
+    releases.shift()?.()
+    await small
+    releases.shift()?.()
+    await big
+    expect(order).toEqual(['running', 'small', 'big'])
+    expect(pool.activePixelsCount).toBe(0)
+    pool.terminate()
+  })
+
+  it('reports worker failures so callers can back off', async () => {
+    let failures = 0
+    let created = 0
+    const pool = new WorkerPool({
+      size: 1,
+      onWorkerFailure: () => {
+        failures += 1
+      },
+      createWorker: () => {
+        created += 1
+        const index = created
+        return new FakeWorker((worker, message) => {
+          if (index === 1) worker.crash('boom')
+          else worker.respond(resultFor(message.jobId))
+        })
+      },
+    })
+
+    await expect(pool.run(task('a'))).rejects.toThrow('boom')
+    expect(failures).toBe(1)
+    await expect(pool.run(task('b'))).resolves.toMatchObject({ jobId: 'b' })
+    pool.terminate()
+  })
+})

@@ -1,5 +1,7 @@
 interface Entry {
   file: File
+  /** Reserved read size, used before the buffer exists. */
+  size: number
   buffer?: ArrayBuffer
   error?: Error
   promise?: Promise<void>
@@ -11,16 +13,21 @@ interface Entry {
 // picker/drop is still guaranteed valid, and cached per job. Deferring the read
 // until a worker was free (the previous behaviour) failed with NotFoundError
 // whenever the backing file was moved, deleted, or was a transient drag-and-drop
-// temp file. Reads are capped so a huge batch cannot balloon the heap.
+// temp file. Reads are budgeted so a huge batch cannot balloon the heap.
 const DEFAULT_CAP = 320 * 1024 * 1024
 let byteCap = DEFAULT_CAP
-const readConcurrency = () =>
-  typeof navigator === 'undefined'
-    ? 4
-    : Math.max(2, navigator.hardwareConcurrency || 4)
+
+function defaultReadConcurrency(): number {
+  if (typeof navigator === 'undefined') return 4
+  return Math.min(4, Math.max(2, navigator.hardwareConcurrency || 4))
+}
+
+let readConcurrency = defaultReadConcurrency()
 
 const entries = new Map<string, Entry>()
 let bufferedBytes = 0
+// Bytes claimed by in-flight reads that have not produced a buffer yet.
+let reservedBytes = 0
 let reading = 0
 let readSeq = 0
 let scheduled = false
@@ -30,28 +37,30 @@ function pump(): void {
   scheduled = true
   queueMicrotask(() => {
     scheduled = false
-    while (reading < readConcurrency() && bufferedBytes < byteCap) {
+    while (reading < readConcurrency) {
       const next = findUnread()
       if (!next) return
-      startRead(next[1])
+      startRead(next)
     }
   })
 }
 
-function findUnread(): [string, Entry] | undefined {
-  for (const entry of entries) {
-    const value = entry[1]
-    if (value.eager && !value.buffer && !value.promise && !value.error) {
-      return entry
-    }
+/** Only eager reads that fit the remaining budget are started. */
+function findUnread(): Entry | undefined {
+  for (const entry of entries.values()) {
+    if (!entry.eager || entry.buffer || entry.promise || entry.error) continue
+    if (bufferedBytes + reservedBytes + entry.size > byteCap) continue
+    return entry
   }
   return undefined
 }
 
 function startRead(entry: Entry): void {
   const token = ++readSeq
+  const size = entry.size
   entry.token = token
   reading += 1
+  reservedBytes += size
   entry.promise = (async () => {
     try {
       const buffer = await entry.file.arrayBuffer()
@@ -65,6 +74,7 @@ function startRead(entry: Entry): void {
       }
     } finally {
       reading -= 1
+      reservedBytes -= size
       if (entry.token === token) entry.promise = undefined
       pump()
     }
@@ -84,10 +94,16 @@ function resolveBuffer(entry: Entry, id: string): Promise<ArrayBuffer> {
   return resolveBuffer(entry, id)
 }
 
+function readSize(file: File): number {
+  return typeof file.size === 'number' && Number.isFinite(file.size)
+    ? file.size
+    : 0
+}
+
 /** Registers a job's file for eager reading. */
 export function registerFile(id: string, file: File): void {
   if (entries.has(id)) return
-  entries.set(id, { file, eager: true, token: 0 })
+  entries.set(id, { file, size: readSize(file), eager: true, token: 0 })
   pump()
 }
 
@@ -144,8 +160,23 @@ export function configureFileBufferCap(bytes: number): void {
   pump()
 }
 
+/**
+ * Sets read-ahead concurrency independently of the codec worker budget, so
+ * memory-constrained devices can read fewer files at once.
+ */
+export function configureFileReadConcurrency(count: number): void {
+  readConcurrency = Math.max(1, Math.floor(count))
+  pump()
+}
+
 /** Test seam: overrides the read-ahead byte cap. */
 export function setFileBufferCapForTests(bytes: number): void {
   byteCap = bytes
+  pump()
+}
+
+/** Test seam: restores the default read concurrency. */
+export function resetFileReadConcurrencyForTests(): void {
+  readConcurrency = defaultReadConcurrency()
   pump()
 }
