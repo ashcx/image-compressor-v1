@@ -1,5 +1,7 @@
 :root {
   color-scheme: dark;
+
+  /* Colour tokens */
   --bg: #0f1115;
   --panel: #161a21;
   --panel-border: #262c36;
@@ -8,7 +10,53 @@
   --accent: #6ea8fe;
   --accent-strong: #4c8dff;
   --bad: #ff7b72;
+
+  /* Radius scale */
+  --radius-sm: 6px;
   --radius: 10px;
+  --radius-pill: 999px;
+
+  /* Spacing scale */
+  --space-1: 0.15rem;
+  --space-2: 0.2rem;
+  --space-3: 0.25rem;
+  --space-4: 0.35rem;
+  --space-5: 0.4rem;
+  --space-6: 0.5rem;
+  --space-7: 0.55rem;
+  --space-8: 0.6rem;
+  --space-9: 0.65rem;
+  --space-10: 0.7rem;
+  --space-11: 0.75rem;
+  --space-12: 0.9rem;
+  --space-13: 1rem;
+  --space-14: 1.25rem;
+  --space-15: 1.5rem;
+  --space-16: 2.5rem;
+  --space-17: 4rem;
+
+  /* Type scale */
+  --text-2xs: 0.75rem;
+  --text-xs: 0.78rem;
+  --text-sm: 0.8rem;
+  --text-md: 0.85rem;
+  --text-base: 0.9rem;
+  --text-lg: 0.95rem;
+  --text-xl: 1.1rem;
+  --text-2xl: 1.6rem;
+
+  /* Controls and focus */
+  --control-pad-y: var(--space-7);
+  --control-pad-x: var(--space-10);
+  --button-pad-y: var(--space-9);
+  --button-pad-x: var(--space-13);
+  --focus-width: 2px;
+  --focus-offset: 1px;
+
+  /* Density */
+  --row-min-height: 64px;
+  --thumb-size: 40px;
+
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -26,15 +74,15 @@ body {
 .app {
   max-width: 44rem;
   margin: 0 auto;
-  padding: 2.5rem 1.25rem 4rem;
+  padding: var(--space-16) var(--space-14) var(--space-17);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: var(--space-14);
 }
 
 .app__header h1 {
-  margin: 0 0 0.5rem;
-  font-size: 1.6rem;
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-2xl);
 }
 
 .app__header p {
@@ -47,8 +95,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  padding: 2.5rem 1.5rem;
+  gap: var(--space-5);
+  padding: var(--space-16) var(--space-15);
   background: var(--panel);
   color: var(--text);
   border: 2px dashed var(--panel-border);
@@ -67,30 +115,30 @@ body {
 }
 
 .dropzone__title {
-  font-size: 1.1rem;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 
 .dropzone__hint {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .panel {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  padding: var(--space-14);
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-12);
 }
 
 .panel__row {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.95rem;
+  gap: var(--space-13);
+  font-size: var(--text-lg);
 }
 
 .panel__label {
@@ -108,11 +156,11 @@ body {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-6);
 }
 
 .field__label {
-  font-size: 0.95rem;
+  font-size: var(--text-lg);
 }
 
 .field input[type="range"] {
@@ -122,35 +170,38 @@ body {
 
 .field__hint {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .field__warning {
   margin: 0;
-  padding: 0.55rem 0.7rem;
+  padding: var(--space-7) var(--space-10);
   background: #3a2a12;
   border: 1px solid #b7791f;
   border-radius: var(--radius);
   color: #f6c177;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
 }
 
 .select,
 .input {
   width: 100%;
-  padding: 0.55rem 0.7rem;
+  padding: var(--control-pad-y) var(--control-pad-x);
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
-  font-size: 0.95rem;
+  font-size: var(--text-lg);
   font-family: inherit;
 }
 
 .select:focus,
-.input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.input:focus,
+.button:focus-visible,
+.icon-button:focus-visible,
+.dropzone:focus-visible {
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
 }
 
 .select:disabled,
@@ -163,19 +214,19 @@ input[type="range"]:disabled {
 .panel__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-6);
 }
 
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.65rem 1rem;
+  padding: var(--button-pad-y) var(--button-pad-x);
   background: var(--panel-border);
   color: var(--text);
   border: 1px solid transparent;
   border-radius: var(--radius);
-  font-size: 0.95rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
@@ -205,7 +256,7 @@ input[type="range"]:disabled {
 .progress {
   height: 6px;
   background: var(--panel-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
@@ -222,27 +273,27 @@ input[type="range"]:disabled {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-6);
 }
 
 .job {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-11);
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
-  padding: 0.6rem 0.75rem;
+  padding: var(--space-8) var(--space-11);
   /* Skip layout/paint for offscreen rows so large batches stay responsive. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 64px;
+  contain-intrinsic-size: auto var(--row-min-height);
 }
 
 .job__thumb {
   flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
+  width: var(--thumb-size);
+  height: var(--thumb-size);
+  border-radius: var(--radius-sm);
   background: #0b0d11;
   overflow: hidden;
   display: grid;
@@ -269,7 +320,7 @@ input[type="range"]:disabled {
   place-items: center;
   width: 20px;
   height: 20px;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   line-height: 1;
 }
 
@@ -299,19 +350,19 @@ input[type="range"]:disabled {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-1);
 }
 
 .job__name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .job__meta {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .job__meta--error {
@@ -322,21 +373,21 @@ input[type="range"]:disabled {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-5);
 }
 
 .button--small {
-  padding: 0.35rem 0.6rem;
-  font-size: 0.8rem;
+  padding: var(--space-4) var(--space-8);
+  font-size: var(--text-sm);
 }
 
 .icon-button {
-  padding: 0.2rem 0.4rem;
+  padding: var(--space-2) var(--space-5);
   background: transparent;
   color: var(--muted);
   border: none;
-  border-radius: 6px;
-  font-size: 1.1rem;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xl);
   line-height: 1;
   cursor: pointer;
 }
@@ -349,24 +400,24 @@ input[type="range"]:disabled {
 .footnote {
   margin: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-md);
 }
 
 .update-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.6rem 0.9rem;
+  gap: var(--space-13);
+  padding: var(--space-8) var(--space-12);
   background: #16233a;
   border: 1px solid var(--accent);
   border-radius: var(--radius);
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .app__footer {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--text-2xs);
   text-align: center;
 }
 

@@ -1,0 +1,681 @@
+{
+  "meta": {
+    "commit": "3276daa",
+    "timestamp": "2026-09-13T04:14:24.205Z",
+    "node": "v22.23.2",
+    "chromium": "153.0.8010.12",
+    "counts": [25, 60, 240],
+    "seed": 1
+  },
+  "results": [
+    {
+      "scenario": "jpeg-photo",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 992,
+        "firstResultMs": 1047,
+        "completeMs": 1329,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 71,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 1.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 7
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-photo-resize",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75,
+        "maxLongEdge": 1024
+      },
+      "metrics": {
+        "estimateMs": 977,
+        "firstResultMs": 1037,
+        "completeMs": 1255,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 66,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 6
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "webp-photo",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "webp",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 4530,
+        "firstResultMs": 4653,
+        "completeMs": 5630,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 135,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.4,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 27
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 25,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 947,
+        "firstResultMs": 1009,
+        "completeMs": 1238,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 70,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 6
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot-lossless",
+      "count": 25,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 1
+      },
+      "metrics": {
+        "estimateMs": 1664,
+        "firstResultMs": 1822,
+        "completeMs": 3753,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 220,
+          "maxGapMs": 33.4,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.7,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 52
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "avif-photo",
+      "count": 25,
+      "cohorts": "photo",
+      "format": "avif",
+      "settings": {
+        "quality": 50,
+        "speed": 8
+      },
+      "metrics": {
+        "estimateMs": 2509,
+        "firstResultMs": 3061,
+        "completeMs": 7486,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 435,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 115
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 25,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1853,
+        "firstResultMs": 1915,
+        "completeMs": 2930,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 122,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 21
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-photo",
+      "count": 60,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1146,
+        "firstResultMs": 1203,
+        "completeMs": 2336,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 122,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.6,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 22
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-photo-resize",
+      "count": 60,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75,
+        "maxLongEdge": 1024
+      },
+      "metrics": {
+        "estimateMs": 1142,
+        "firstResultMs": 1196,
+        "completeMs": 2407,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 127,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.7,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 23
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "webp-photo",
+      "count": 60,
+      "cohorts": "photo",
+      "format": "webp",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2436,
+        "firstResultMs": 2599,
+        "completeMs": 7323,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 423,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 114
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 60,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 975,
+        "firstResultMs": 1028,
+        "completeMs": 3895,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 93,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.5,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 14
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot-lossless",
+      "count": 60,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 1
+      },
+      "metrics": {
+        "estimateMs": 1533,
+        "firstResultMs": 1745,
+        "completeMs": 6286,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 371,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 98
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 60,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1705,
+        "firstResultMs": 1762,
+        "completeMs": 3853,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 178,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 39
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-photo",
+      "count": 240,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 1303,
+        "firstResultMs": 1359,
+        "completeMs": 6705,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 369,
+          "maxGapMs": 83.3,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 97
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-photo-resize",
+      "count": 240,
+      "cohorts": "photo",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75,
+        "maxLongEdge": 1024
+      },
+      "metrics": {
+        "estimateMs": 1274,
+        "firstResultMs": 1331,
+        "completeMs": 6730,
+        "errors": 0,
+        "longTasks": {
+          "count": 1,
+          "totalMs": 65,
+          "maxMs": 65
+        },
+        "frames": {
+          "frames": 371,
+          "maxGapMs": 83.4,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 97
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "webp-photo",
+      "count": 240,
+      "cohorts": "photo",
+      "format": "webp",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2700,
+        "firstResultMs": 2920,
+        "completeMs": 26073,
+        "errors": 0,
+        "longTasks": {
+          "count": 1,
+          "totalMs": 50,
+          "maxMs": 50
+        },
+        "frames": {
+          "frames": 1406,
+          "maxGapMs": 50,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 401
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 240,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 1012,
+        "firstResultMs": 1071,
+        "completeMs": 4821,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 270,
+          "maxGapMs": 100,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 68
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "png-screenshot-lossless",
+      "count": 240,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 1
+      },
+      "metrics": {
+        "estimateMs": 1794,
+        "firstResultMs": 1953,
+        "completeMs": 24502,
+        "errors": 0,
+        "longTasks": {
+          "count": 1,
+          "totalMs": 58,
+          "maxMs": 58
+        },
+        "frames": {
+          "frames": 1312,
+          "maxGapMs": 50,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 2,
+          "peakBusy": 3,
+          "samples": 377
+        }
+      },
+      "consoleErrors": []
+    },
+    {
+      "scenario": "jpeg-mixed",
+      "count": 240,
+      "cohorts": "photo+screenshot+transparency+noise+large",
+      "format": "jpeg",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2104,
+        "firstResultMs": 2156,
+        "completeMs": 11981,
+        "errors": 0,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 648,
+          "maxGapMs": 100.1,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.9,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 176
+        }
+      },
+      "consoleErrors": []
+    }
+  ]
+}

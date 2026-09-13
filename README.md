@@ -70,6 +70,7 @@ npm run lint      # check formatting and static rules
 npm run typecheck # check TypeScript
 npm run build     # typecheck and create the production build
 npm run preview   # serve the production build locally
+npm run benchmark # run the Playwright browser benchmarks against the build
 ```
 
 The project is a Vite + TypeScript + Preact application. GitHub Pages deploys the build from
@@ -82,6 +83,7 @@ The main source areas are:
 - `src/lib/codecs/` — native and WebAssembly codec selection
 - `src/workers/` — decode, resize, estimate, and encode work away from the UI thread
 - `src/lib/*.test.ts` — unit tests for the non-UI modules
+- `bench/` — Playwright benchmark harness, fixture generator, and committed baseline
 
 ## Further documentation
 
@@ -89,6 +91,10 @@ The main source areas are:
   trade-offs.
 - [Performance](./docs/PERFORMANCE.md) — measured encode times, output sizes, memory model,
   worker scaling, estimate accuracy, and remaining measurement gaps.
+- [Benchmark harness](./bench/README.md) — how to run and compare the browser benchmarks.
+- [Design](./docs/DESIGN.md) — responsive information architecture and design tokens.
+- [QA matrix](./docs/TEST-MATRIX.md) — test corpus, browser/device matrix, and release checks.
+- [HEIC decision](./docs/HEIC.md) — decoder/encoder feasibility, licensing, and security.
 - [Scrum TODO roadmap](./docs/TODO.md) — sprint backlog, story points, acceptance criteria,
   tests, parallel work, and the HEIC delivery plan.
 
