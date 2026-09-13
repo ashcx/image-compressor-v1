@@ -5,26 +5,11 @@ import { type PoolPriority, type PoolSuccess, WorkerPool } from './workerPool'
 
 let pool: WorkerPool | null = null
 let desiredSize = getDeviceProfile().workerCount
-let pixelBudget = 0
 let counter = 0
 const listeners = new Set<() => void>()
 
 function resolvePoolSize(): number {
   return desiredSize
-}
-
-/**
- * Sets the decoded-pixel ceiling across busy workers. Jobs are admitted in
- * priority order and any single job may exceed the budget alone, so a large
- * batch cannot run several huge canvases at once.
- */
-export function configurePixelBudget(pixels: number): void {
-  pixelBudget = Math.max(0, Math.floor(pixels))
-  for (const listener of listeners) listener()
-}
-
-export function resolvePixelBudget(): number {
-  return pixelBudget
 }
 
 /**
@@ -72,7 +57,6 @@ function getPool(): WorkerPool {
   if (!pool) {
     pool = new WorkerPool({
       size: desiredSize,
-      pixelBudget,
       onWorkerFailure: backOffWorkers,
       createWorker: () =>
         new Worker(new URL('../workers/image-worker.ts', import.meta.url), {
@@ -109,17 +93,12 @@ export function subscribeToPool(listener: () => void): () => void {
 export interface PoolStats {
   busy: number
   size: number
-  /** Decoded pixels currently held by busy workers. */
-  pixels: number
-  pixelBudget: number
 }
 
 export function getPoolStats(): PoolStats {
   return {
     busy: pool?.busyCount ?? 0,
     size: resolvePoolSize(),
-    pixels: pool?.activePixelsCount ?? 0,
-    pixelBudget: resolvePixelBudget(),
   }
 }
 
@@ -140,8 +119,6 @@ export interface ProcessJobOptions {
   consumeInput?: boolean
   priority?: PoolPriority
   signal?: AbortSignal
-  /** Estimated decoded pixels, used by the pixel budget gate. */
-  pixels?: number
 }
 
 export function processImage(options: ProcessJobOptions): {
@@ -154,7 +131,6 @@ export function processImage(options: ProcessJobOptions): {
     {
       jobId,
       signal: options.signal,
-      cost: options.pixels ?? 0,
       prepare: async () => {
         // Source bytes are read eagerly at selection time (fileBufferStore). The
         // buffer is transferred when the job will not need it again, saving a
