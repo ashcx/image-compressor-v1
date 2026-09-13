@@ -1,10 +1,11 @@
 import type { OutputFormat, ResizeOptions } from './codecs/types'
 import { getDeviceProfile } from './device'
-import type { ProcessRequest, WarmRequest } from './protocol'
+import type { ProcessLimits, ProcessRequest, WarmRequest } from './protocol'
 import { type PoolPriority, type PoolSuccess, WorkerPool } from './workerPool'
 
 let pool: WorkerPool | null = null
 let desiredSize = getDeviceProfile().workerCount
+let memoryBudget = 0
 let counter = 0
 let warmController: AbortController | null = null
 let warmed = false
@@ -12,6 +13,23 @@ const listeners = new Set<() => void>()
 
 function resolvePoolSize(): number {
   return desiredSize
+}
+
+/**
+ * Sets the decoded-canvas memory ceiling across busy workers (0 disables
+ * gating). Jobs are admitted in priority order and any single job may exceed
+ * the budget alone, so a large batch cannot run several huge canvases at once.
+ */
+export function configureMemoryBudget(bytes: number): void {
+  const next = Math.max(0, Math.floor(bytes))
+  if (next === memoryBudget) return
+  memoryBudget = next
+  pool?.setMemoryBudget(memoryBudget)
+  for (const listener of listeners) listener()
+}
+
+export function resolveMemoryBudget(): number {
+  return memoryBudget
 }
 
 /**
@@ -60,6 +78,7 @@ function getPool(): WorkerPool {
   if (!pool) {
     pool = new WorkerPool({
       size: desiredSize,
+      memoryBudget,
       onWorkerFailure: backOffWorkers,
       createWorker: () =>
         new Worker(new URL('../workers/image-worker.ts', import.meta.url), {
@@ -142,12 +161,18 @@ export function isPoolWarm(): boolean {
 export interface PoolStats {
   busy: number
   size: number
+  /** Decoded-memory bytes currently held by busy workers. */
+  cost: number
+  /** Configured decoded-memory ceiling; 0 when gating is disabled. */
+  budget: number
 }
 
 export function getPoolStats(): PoolStats {
   return {
     busy: pool?.busyCount ?? 0,
     size: resolvePoolSize(),
+    cost: pool?.activeCostCount ?? 0,
+    budget: resolveMemoryBudget(),
   }
 }
 
@@ -161,6 +186,10 @@ export interface ProcessJobOptions {
   mode?: number
   resize?: ResizeOptions
   estimateOnly?: boolean
+  /** Platform canvas ceilings plus the single-job pixel budget. */
+  limits?: ProcessLimits
+  /** Estimated decoded-memory bytes, used by the scheduler gate. */
+  cost?: number
   /**
    * Transfer the input buffer instead of cloning it. Use only when the buffer
    * will not be read again (not for estimate passes that compression reuses).
@@ -179,6 +208,7 @@ export function processImage(options: ProcessJobOptions): {
   const response = getPool().run(
     {
       jobId,
+      cost: options.cost ?? 0,
       signal: options.signal,
       prepare: async () => {
         // Source bytes are read eagerly at selection time (fileBufferStore). The
@@ -198,6 +228,7 @@ export function processImage(options: ProcessJobOptions): {
           mode: options.mode,
           resize: options.resize,
           estimateOnly: options.estimateOnly,
+          limits: options.limits,
         }
         return consume ? { message, transfer: [fileBuffer] } : { message }
       },

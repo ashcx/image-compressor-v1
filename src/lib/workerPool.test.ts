@@ -14,6 +14,7 @@ function resultFor(jobId: string): ResultResponse {
     format: 'webp',
     extension: 'webp',
     mimeType: 'image/webp',
+    capped: false,
   }
 }
 
@@ -184,6 +185,7 @@ describe('WorkerPool', () => {
             height: 2,
             samples: [{ quality: 50, bytes: 10 }],
             thumbnailBlob: new Blob([new ArrayBuffer(1)]),
+            capped: false,
           }),
         ),
     })
@@ -306,6 +308,115 @@ describe('WorkerPool', () => {
     releases.shift()?.()
     await second
     pool.terminate()
+  })
+})
+
+describe('WorkerPool memory budget', () => {
+  function costTask(jobId: string, cost: number): PoolTask {
+    return { ...task(jobId), cost }
+  }
+
+  function holdingPool(options: { size: number; memoryBudget: number }): {
+    pool: WorkerPool
+    releases: Array<() => void>
+  } {
+    const releases: Array<() => void> = []
+    const pool = new WorkerPool({
+      size: options.size,
+      memoryBudget: options.memoryBudget,
+      createWorker: () =>
+        new FakeWorker((worker, message) => {
+          releases.push(() => worker.respond(resultFor(message.jobId)))
+        }),
+    })
+    return { pool, releases }
+  }
+
+  it('admits jobs only while their cost fits the remaining budget', () => {
+    const { pool, releases } = holdingPool({ size: 4, memoryBudget: 1000 })
+    const promises = [
+      pool.run(costTask('a', 400)),
+      pool.run(costTask('b', 400)),
+      pool.run(costTask('c', 400)),
+      pool.run(costTask('d', 400)),
+    ]
+
+    // 400 + 400 <= 1000; the third would reach 1200.
+    expect(pool.busyCount).toBe(2)
+    expect(pool.queuedCount).toBe(2)
+    expect(pool.activeCostCount).toBe(800)
+
+    // Finishing one frees 400 MB, so one queued job takes its place.
+    releases.shift()?.()
+    expect(pool.busyCount).toBe(2)
+    expect(pool.queuedCount).toBe(1)
+    expect(pool.activeCostCount).toBe(800)
+
+    pool.terminate()
+    void Promise.allSettled(promises)
+  })
+
+  it('always admits one job even when it alone exceeds the budget', () => {
+    const { pool, releases } = holdingPool({ size: 4, memoryBudget: 100 })
+    const promises = [
+      pool.run(costTask('a', 500)),
+      pool.run(costTask('b', 500)),
+    ]
+
+    expect(pool.busyCount).toBe(1)
+    expect(pool.queuedCount).toBe(1)
+
+    pool.terminate()
+    for (const release of releases) release()
+    void Promise.allSettled(promises)
+  })
+
+  it('disables gating when the budget is zero', () => {
+    const { pool } = holdingPool({ size: 3, memoryBudget: 0 })
+    const promises = [
+      pool.run(costTask('a', 1_000_000)),
+      pool.run(costTask('b', 1_000_000)),
+      pool.run(costTask('c', 1_000_000)),
+    ]
+
+    expect(pool.busyCount).toBe(3)
+    pool.terminate()
+    void Promise.allSettled(promises)
+  })
+
+  it('releases cost when a job completes and dispatches the next', async () => {
+    const { pool, releases } = holdingPool({ size: 4, memoryBudget: 1000 })
+    const first = pool.run(costTask('a', 400))
+    const second = pool.run(costTask('b', 400))
+    const third = pool.run(costTask('c', 400))
+
+    expect(pool.activeCostCount).toBe(800)
+    releases.shift()?.()
+    await first
+    expect(pool.activeCostCount).toBe(800)
+    expect(pool.busyCount).toBe(2)
+
+    releases.shift()?.()
+    releases.shift()?.()
+    await Promise.all([second, third])
+    expect(pool.activeCostCount).toBe(0)
+    pool.terminate()
+  })
+
+  it('raises the ceiling at runtime and dispatches queued work', () => {
+    const { pool } = holdingPool({ size: 3, memoryBudget: 100 })
+    const promises = [
+      pool.run(costTask('a', 60)),
+      pool.run(costTask('b', 60)),
+      pool.run(costTask('c', 60)),
+    ]
+    expect(pool.busyCount).toBe(1)
+
+    pool.setMemoryBudget(200)
+    expect(pool.busyCount).toBe(3)
+
+    pool.terminate()
+    void Promise.allSettled(promises)
   })
 })
 
