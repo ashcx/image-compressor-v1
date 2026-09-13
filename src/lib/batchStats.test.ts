@@ -57,6 +57,14 @@ describe('computeBatchStats', () => {
     )
     expect(stats.originalBytes).toBe(1000)
   })
+
+  it('counts cancelled jobs without treating them as finished or failed', () => {
+    const stats = computeBatchStats([job({ status: 'cancelled' })], KEY)
+    expect(stats.cancelled).toBe(1)
+    expect(stats.finished).toBe(0)
+    expect(stats.failed).toBe(0)
+    expect(stats.active).toBe(1)
+  })
 })
 
 describe('applyJobChange', () => {
@@ -92,6 +100,25 @@ describe('applyJobChange', () => {
     const before = job({ status: 'estimated' })
     const after = { ...before }
     expect(applyJobChange(base, before, after, KEY)).toBe(base)
+  })
+
+  it('moves a job from processing to cancelled', () => {
+    let stats = applyJobChange(
+      EMPTY_BATCH_STATS,
+      null,
+      job({ status: 'processing' }),
+      KEY,
+    )
+    expect(stats.processing).toBe(1)
+    stats = applyJobChange(
+      stats,
+      job({ status: 'processing' }),
+      job({ status: 'cancelled' }),
+      KEY,
+    )
+    expect(stats.processing).toBe(0)
+    expect(stats.cancelled).toBe(1)
+    expect(stats.finished).toBe(0)
   })
 })
 

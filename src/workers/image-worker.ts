@@ -9,7 +9,7 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from '../lib/protocol'
-import { resizeImage, resolveResize } from '../lib/resize'
+import { resizeImage, resolveDecodeSize, resolveResize } from '../lib/resize'
 import { createThumbnail } from '../lib/thumbnail'
 
 interface WorkerScope {
@@ -29,23 +29,26 @@ scope.onmessage = async (event) => {
 
   try {
     const sourceFormat = detectFormat(request.fileBuffer)
-    // Read the true dimensions first: estimates run on a capped decode and
-    // small images must not be upscaled.
-    const dimensions = request.estimateOnly
-      ? parseDimensions(request.fileBuffer)
+    // True dimensions come from the header, so a downscaled output can decode
+    // straight to its target size instead of decoding full resolution first.
+    const dimensions = parseDimensions(request.fileBuffer)
+    const decodeSize = dimensions
+      ? resolveDecodeSize(
+          dimensions.width,
+          dimensions.height,
+          request.resize,
+          request.estimateOnly ? ESTIMATE_DECODE_EDGE : undefined,
+        )
       : null
-    const longEdge = dimensions
-      ? Math.max(dimensions.width, dimensions.height)
-      : null
-    const maxEdge =
-      request.estimateOnly &&
-      (longEdge == null || longEdge > ESTIMATE_DECODE_EDGE)
-        ? ESTIMATE_DECODE_EDGE
-        : undefined
+    const decodeTarget = decodeSize
+      ? { size: decodeSize }
+      : request.estimateOnly
+        ? { maxEdge: ESTIMATE_DECODE_EDGE }
+        : {}
     const decoded = await decodeImageData(
       request.fileBuffer,
       sourceFormat,
-      maxEdge,
+      decodeTarget,
     )
     const source = resizeImage(decoded, request.resize)
 

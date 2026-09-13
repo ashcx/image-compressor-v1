@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   heavyWorkerCount,
   MAX_WORKERS_HIGH_MEMORY,
+  pixelBudgetFor,
   profileFromSignals,
   resolveWorkerCount,
 } from './device'
@@ -104,6 +105,23 @@ describe('resolveWorkerCount', () => {
     expect(heavyWorkerCount(8)).toBe(4)
     expect(heavyWorkerCount(3)).toBe(2)
     expect(heavyWorkerCount(1)).toBe(1)
+  })
+})
+
+describe('pixelBudgetFor', () => {
+  it('scales with the device archive budget', () => {
+    expect(
+      pixelBudgetFor({ workerCount: 8, maxZipBytes: 2 * 1024 * 1024 * 1024 }),
+    ).toBe(67_108_864)
+    expect(
+      pixelBudgetFor({ workerCount: 4, maxZipBytes: 1024 * 1024 * 1024 }),
+    ).toBe(33_554_432)
+  })
+
+  it('floors constrained devices at 16 MP', () => {
+    expect(
+      pixelBudgetFor({ workerCount: 1, maxZipBytes: 384 * 1024 * 1024 }),
+    ).toBe(16_000_000)
   })
 })
 

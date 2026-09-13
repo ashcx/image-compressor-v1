@@ -57,3 +57,38 @@ export function resizeImage(
   context.drawImage(source.canvas, 0, 0, size.width, size.height)
   return { width: size.width, height: size.height, canvas }
 }
+
+/**
+ * Chooses the size to decode at so a downscaled output never pays for a
+ * full-resolution decode. Applies the requested resize first, then an optional
+ * long-edge cap (used by estimates), and returns `null` when the image should be
+ * decoded at full resolution.
+ */
+export function resolveDecodeSize(
+  width: number,
+  height: number,
+  resize: ResizeOptions | undefined,
+  capLongEdge?: number,
+): ResolvedSize | null {
+  let targetWidth = width
+  let targetHeight = height
+
+  const target = resolveResize(width, height, resize)
+  if (target) {
+    targetWidth = target.width
+    targetHeight = target.height
+  }
+
+  if (capLongEdge && capLongEdge > 0) {
+    const capped = resolveResize(targetWidth, targetHeight, {
+      maxLongEdge: capLongEdge,
+    })
+    if (capped) {
+      targetWidth = capped.width
+      targetHeight = capped.height
+    }
+  }
+
+  if (targetWidth >= width && targetHeight >= height) return null
+  return { width: targetWidth, height: targetHeight }
+}

@@ -215,30 +215,38 @@ state contract but can be developed alongside PERF-05.
 
 ### TODO
 
-- [ ] **PERF-06 — Hard input-buffer reservations (8 points)**
+- [x] **PERF-06 — Hard input-buffer reservations (8 points)**
   - Reserve `file.size` before starting an eager read.
   - Ensure in-flight reads cannot collectively exceed the configured byte budget.
   - Separate file-read concurrency from codec-worker concurrency.
   - Use smaller read-ahead limits on memory-constrained devices.
+  - Delivered in `fileBufferStore.ts`: reads reserve their size, only fitting eager
+    reads start, and `configureFileReadConcurrency` tracks the device budget.
 
-- [ ] **PERF-07 — Pixel-aware and adaptive worker budget (8 points)**
+- [x] **PERF-07 — Pixel-aware and adaptive worker budget (8 points)**
   - Track estimated decoded pixels per active job.
   - Prevent too many large canvases from running simultaneously.
   - Retain conservative mobile defaults.
   - Lower concurrency after allocation errors, worker crashes, or sustained long frames.
   - Add diagnostics for worker count, active pixel budget, and queue depth.
+  - Delivered via a pixel-budget gate in `WorkerPool` (`cost`/`pixelBudget`), a device-derived
+    `pixelBudgetFor`, crash and long-task backoff, and a `busy/size · pixels/budget` meter.
 
-- [ ] **PERF-08 — Resize-aware decoding (8 points)**
+- [x] **PERF-08 — Resize-aware decoding (8 points)**
   - Pass target decode dimensions into `createImageBitmap` where supported.
   - Avoid decoding a full-resolution image when the requested output is substantially smaller.
   - Preserve the existing fallback path for browsers that cannot scale during decode.
   - Verify orientation and dimensions after scaled decode.
+  - Delivered with `resolveDecodeSize` and a `{ size }` decode target; the worker decodes straight
+    to the resize target and falls back to full decode when scaling is unsupported.
 
-- [ ] **PERF-09 — Pause and cancellation semantics (5 points)**
+- [x] **PERF-09 — Pause and cancellation semantics (5 points)**
   - Add a user-visible cancel action for active batches.
   - Stop queued work immediately and allow active worker tasks to settle safely.
   - Keep completed results available after cancellation.
   - Clearly distinguish cancelled, failed, and completed rows.
+  - Delivered with a Cancel button, per-job compression abort signals, a `cancelled` job status
+    and counter, and token-guarded results so completed rows are untouched.
 
 ### Expected output
 
@@ -254,6 +262,15 @@ state contract but can be developed alongside PERF-05.
 - Force worker failures and verify recovery without losing unrelated jobs.
 - Confirm cancellation removes queued work and does not produce false error rows.
 - Run all standard project checks.
+
+Delivered:
+
+- Unit tests: reservation/read-concurrency (`fileBufferStore.test.ts`), decode sizing
+  (`resize.test.ts`), pixel-budget gating and crash backoff (`workerPool.test.ts`), cancelled
+  aggregate transitions (`batchStats.test.ts`), and device pixel budget (`device.test.ts`).
+- End-to-end smoke on the production build for jpeg, jpeg-resize, and avif: 0 errors.
+- Remaining: run dedicated 12/26/48 MP fixtures and the full mobile browser matrix; add a
+  browser test that exercises Cancel under load (currently covered by unit tests).
 
 ### Parallel work
 

@@ -198,6 +198,14 @@ point; the worker budget is a balance between throughput and responsiveness.
 - Completed outputs are written to the Origin Private File System when available and read
   back on demand for download, so the queue keeps metadata and thumbnails rather than every
   full-resolution Blob. A memory fallback is used where OPFS is unavailable.
+- When a resize is requested, the decode target is the resized size, so a downscaled output
+  never allocates a full-resolution RGBA canvas (decode *time* may be similar in Chrome, but
+  the canvas and its memory are bounded).
+- Eager reads reserve their byte size first and only reads that fit the budget start; read
+  concurrency is separate from codec-worker concurrency.
+- Busy jobs are admitted against a decoded-pixel budget, so several very large canvases do not
+  run at once. The worker budget also backs off after crashes or sustained main-thread long
+  tasks, and the meter shows `busy/size · pixels/budget`.
 - Idle teardown terminates the worker pool and metadata worker about **two seconds** after
   becoming idle, and immediately on format change or clearing the list.
 - Per-device ZIP size caps prevent the app from attempting very large archives without an

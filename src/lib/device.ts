@@ -134,6 +134,15 @@ export function heavyWorkerCount(workerCount: number): number {
   return Math.max(1, Math.round(workerCount / 2))
 }
 
+/**
+ * Decoded-pixel ceiling across busy workers, derived from the device's archive
+ * budget (~4 bytes per RGBA pixel with headroom), floored at 16 MP. Keeps a
+ * batch of very large images from decoding several full canvases at once.
+ */
+export function pixelBudgetFor(profile: DeviceProfile): number {
+  return Math.max(16_000_000, Math.round(profile.maxZipBytes / 32))
+}
+
 /** Standard pool size: hardwareConcurrency - 1, leaving a core for the UI. */
 function standardWorkerCount(cores: number): number {
   return Math.max(1, cores - 1)

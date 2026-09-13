@@ -1,17 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   acquireFileBuffer,
+  configureFileReadConcurrency,
   forgetFile,
   registerFile,
   releaseFileBuffer,
+  resetFileReadConcurrencyForTests,
   setFileBufferCapForTests,
 } from './fileBufferStore'
 
 let counter = 0
 const nextId = () => `job-${++counter}`
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 afterEach(() => {
   setFileBufferCapForTests(320 * 1024 * 1024)
+  resetFileReadConcurrencyForTests()
 })
 
 describe('fileBufferStore', () => {
@@ -86,5 +90,83 @@ describe('fileBufferStore', () => {
     } as unknown as File
     registerFile(id, file)
     await expect(acquireFileBuffer(id)).rejects.toThrow('can not be found')
+  })
+})
+
+describe('fileBufferStore reservations', () => {
+  const delayedFile = (size: number, onRead: () => void): File =>
+    ({
+      size,
+      arrayBuffer: () => {
+        onRead()
+        return new Promise<ArrayBuffer>((resolve) =>
+          setTimeout(() => resolve(new ArrayBuffer(size)), 5),
+        )
+      },
+    }) as unknown as File
+
+  it('skips eager reads that exceed the cap and reads on demand instead', async () => {
+    setFileBufferCapForTests(2)
+    const id = nextId()
+    let reads = 0
+    registerFile(
+      id,
+      delayedFile(10, () => (reads += 1)),
+    )
+    await flush()
+    expect(reads).toBe(0)
+
+    const buffer = await acquireFileBuffer(id)
+    expect(buffer.byteLength).toBe(10)
+    expect(reads).toBe(1)
+    forgetFile(id)
+  })
+
+  it('reserves bytes so in-flight eager reads respect the cap', async () => {
+    setFileBufferCapForTests(6)
+    const first = nextId()
+    const second = nextId()
+    let reads = 0
+    registerFile(
+      first,
+      delayedFile(4, () => (reads += 1)),
+    )
+    registerFile(
+      second,
+      delayedFile(4, () => (reads += 1)),
+    )
+    await flush()
+    // 4 buffered/reserved + 4 does not fit in 6, so only one eager read starts.
+    expect(reads).toBe(1)
+
+    await acquireFileBuffer(first)
+    await acquireFileBuffer(second)
+    expect(reads).toBe(2)
+    forgetFile(first)
+    forgetFile(second)
+  })
+
+  it('limits eager read concurrency independently of the buffer cap', async () => {
+    setFileBufferCapForTests(1024)
+    configureFileReadConcurrency(1)
+    const first = nextId()
+    const second = nextId()
+    let reads = 0
+    registerFile(
+      first,
+      delayedFile(1, () => (reads += 1)),
+    )
+    registerFile(
+      second,
+      delayedFile(1, () => (reads += 1)),
+    )
+    await flush()
+    expect(reads).toBe(1)
+
+    await acquireFileBuffer(first)
+    await acquireFileBuffer(second)
+    expect(reads).toBe(2)
+    forgetFile(first)
+    forgetFile(second)
   })
 })
