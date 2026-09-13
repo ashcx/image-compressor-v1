@@ -11,6 +11,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
+    "test:browser": "npm run build && node bench/virtual-check.mjs",
     "benchmark": "npm run build && node bench/run.mjs",
     "benchmark:quick": "npm run build && node bench/run.mjs --counts 8 --scenarios jpeg-photo,jpeg-photo-resize,webp-photo,png-screenshot --label quick",
     "benchmark:scale": "npm run build && node bench/run.mjs --counts 500,1000 --scenarios jpeg-photo,png-screenshot,jpeg-mixed --label scale-500-1000 --timeout 600000"

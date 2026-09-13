@@ -14,7 +14,13 @@ is uploaded; fixtures are generated in-page and handed to the real file input.
 npm run benchmark          # build + counts 25, 60 (default scenarios)
 npm run benchmark:quick    # fast subset at 8 files
 npm run benchmark:scale    # 500 and 1,000-file cohorts (jpeg/png/mixed)
+npm run test:browser       # assert the virtualized queue mounts a small window
 ```
+
+Each scenario runs in a **fresh browser process**. Reusing one process across
+runs caused retained memory (blobs, WASM heaps, terminated workers) to slow later
+runs by up to ~2× and made large batches look super-linear. With isolation,
+scaling is roughly linear and repeated runs agree.
 
 Pass options through the script:
 
@@ -85,9 +91,24 @@ files. The 500 / 1,000-file cohorts are recorded in
 references, not device claims. Compare a new run against them by diffing the
 JSON files or regenerating the Markdown table.
 
+Absolute times vary across machines and invocations (the reference numbers were
+taken on a shared VM), so compare counts **within a single run** and prefer
+repeats or medians over cross-run ratios. The committed scale report shows
+1,000 files at ~1.8–2.1× the 500-file time, i.e. roughly linear.
+
+## Browser regression test
+
+`npm run test:browser` (`bench/virtual-check.mjs`) injects 1,000 files and
+asserts that only the visible window plus overscan is mounted — at the top,
+middle, and bottom of the scroll range — and that the window moves when
+scrolling. It runs in CI so a virtualization regression fails the build.
+
 ## Limitations
 
 - Headless Chromium only; Safari and Firefox are not exercised here.
 - Synthetic fixtures cannot stand in for real photographs or malformed inputs.
-- `performance.memory` and `longtask` are Chromium-specific; other engines report nulls.
+- `performance.memory` and `longtask` are Chromium-specific; other engines report nulls,
+  and `performance.memory` returns a near-constant figure in headless Chromium.
 - Mobile worker budgets are policy, not measured on physical devices.
+- The app retains every finished output Blob until Sprint 4 (PERF-10, OPFS output store);
+  very large batches pay for that retained memory.

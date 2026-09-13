@@ -482,7 +482,11 @@ function round(value) {
   return Math.round(value * 10) / 10
 }
 
-async function runScenario(browser, baseUrl, scenario, count, options) {
+async function runScenario(baseUrl, scenario, count, options) {
+  // A fresh browser process per scenario keeps retained memory (blobs, WASM
+  // heaps, terminated workers) from one run from slowing the next.
+  const browser = await chromium.launch({ headless: !options.headed })
+  const chromiumVersion = browser.version()
   const page = await browser.newPage()
   const consoleErrors = []
   page.on('console', (message) => {
@@ -545,9 +549,11 @@ async function runScenario(browser, baseUrl, scenario, count, options) {
         workers: utilisation(outcome.poolSamples),
       },
       consoleErrors,
+      chromium: chromiumVersion,
     }
   } finally {
     await page.close()
+    await browser.close()
   }
 }
 
@@ -615,14 +621,11 @@ async function main() {
   const baseUrl = server.resolvedUrls?.local?.[0]
   if (!baseUrl) throw new Error('Preview server did not expose a local URL')
 
-  const browser = await chromium.launch({ headless: !options.headed })
-  const version = browser.version()
   const results = []
   try {
     for (const job of jobs) {
       process.stdout.write(`bench ${job.scenario.id} x${job.count} ... `)
       const result = await runScenario(
-        browser,
         baseUrl,
         job.scenario,
         job.count,
@@ -636,7 +639,6 @@ async function main() {
       )
     }
   } finally {
-    await browser.close()
     await server.close()
   }
 
@@ -645,7 +647,7 @@ async function main() {
       commit: shortCommit(),
       timestamp: new Date().toISOString(),
       node: process.version,
-      chromium: version,
+      chromium: results[0]?.chromium ?? 'unknown',
       counts: options.counts,
       seed: options.seed,
     },

@@ -1,7 +1,7 @@
 {
   "meta": {
-    "commit": "9b4e4df",
-    "timestamp": "2026-09-13T04:34:16.761Z",
+    "commit": "a7f5a27",
+    "timestamp": "2026-09-13T04:56:33.901Z",
     "node": "v22.23.2",
     "chromium": "153.0.8010.12",
     "counts": [
@@ -21,9 +21,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1004,
-        "firstResultMs": 1063,
-        "completeMs": 1341,
+        "estimateMs": 996,
+        "firstResultMs": 1051,
+        "completeMs": 1268,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -32,7 +32,7 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 72,
+          "frames": 67,
           "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
@@ -40,13 +40,14 @@
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.1,
+          "avgBusy": 2,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 7
+          "samples": 6
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo-resize",
@@ -58,9 +59,9 @@
         "maxLongEdge": 1024
       },
       "metrics": {
-        "estimateMs": 996,
-        "firstResultMs": 1049,
-        "completeMs": 1317,
+        "estimateMs": 998,
+        "firstResultMs": 1054,
+        "completeMs": 1268,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -69,21 +70,22 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 70,
+          "frames": 67,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.1,
+          "avgBusy": 2,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 7
+          "samples": 6
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "webp-photo",
@@ -94,9 +96,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 4688,
-        "firstResultMs": 4912,
-        "completeMs": 6896,
+        "estimateMs": 1231,
+        "firstResultMs": 1345,
+        "completeMs": 2263,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -105,7 +107,7 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 256,
+          "frames": 127,
           "maxGapMs": 16.8,
           "p95GapMs": 16.7
         },
@@ -113,13 +115,14 @@
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.7,
+          "avgBusy": 2.3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 63
+          "samples": 25
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot",
@@ -130,9 +133,9 @@
         "mode": 0
       },
       "metrics": {
-        "estimateMs": 939,
-        "firstResultMs": 999,
-        "completeMs": 1277,
+        "estimateMs": 886,
+        "firstResultMs": 945,
+        "completeMs": 1106,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -141,21 +144,22 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 72,
-          "maxGapMs": 33.3,
+          "frames": 63,
+          "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 1.9,
+          "avgBusy": 1.8,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 7
+          "samples": 5
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot-lossless",
@@ -166,9 +170,9 @@
         "mode": 1
       },
       "metrics": {
-        "estimateMs": 1525,
-        "firstResultMs": 1748,
-        "completeMs": 3533,
+        "estimateMs": 892,
+        "firstResultMs": 999,
+        "completeMs": 2068,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -177,21 +181,22 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 208,
+          "frames": 120,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.7,
+          "avgBusy": 2.5,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 48
+          "samples": 23
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "avif-photo",
@@ -203,9 +208,9 @@
         "speed": 8
       },
       "metrics": {
-        "estimateMs": 2791,
-        "firstResultMs": 3413,
-        "completeMs": 8128,
+        "estimateMs": 2435,
+        "firstResultMs": 2870,
+        "completeMs": 7381,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -214,21 +219,22 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 472,
-          "maxGapMs": 33.3,
+          "frames": 431,
+          "maxGapMs": 16.8,
           "p95GapMs": 16.7
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.9,
+          "avgBusy": 2.8,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 123
+          "samples": 114
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -239,9 +245,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1611,
-        "firstResultMs": 1677,
-        "completeMs": 2644,
+        "estimateMs": 3603,
+        "firstResultMs": 3662,
+        "completeMs": 4428,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -250,7 +256,7 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 114,
+          "frames": 102,
           "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
@@ -258,13 +264,14 @@
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.5,
+          "avgBusy": 2.3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 19
+          "samples": 16
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo",
@@ -275,9 +282,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1183,
-        "firstResultMs": 1238,
-        "completeMs": 2421,
+        "estimateMs": 1161,
+        "firstResultMs": 1224,
+        "completeMs": 2357,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -286,9 +293,9 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 129,
+          "frames": 126,
           "maxGapMs": 16.8,
-          "p95GapMs": 16.7
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
@@ -297,10 +304,11 @@
           "avgBusy": 2.7,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 23
+          "samples": 22
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo-resize",
@@ -312,9 +320,9 @@
         "maxLongEdge": 1024
       },
       "metrics": {
-        "estimateMs": 1204,
-        "firstResultMs": 1259,
-        "completeMs": 2472,
+        "estimateMs": 1172,
+        "firstResultMs": 1228,
+        "completeMs": 2226,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -323,79 +331,7 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 133,
-          "maxGapMs": 16.8,
-          "p95GapMs": 16.7
-        },
-        "heap": {
-          "peakBytes": 10000000
-        },
-        "workers": {
-          "avgBusy": 2.7,
-          "avgSize": 3,
-          "peakBusy": 3,
-          "samples": 23
-        }
-      },
-      "consoleErrors": []
-    },
-    {
-      "scenario": "webp-photo",
-      "count": 60,
-      "cohorts": "photo",
-      "format": "webp",
-      "settings": {
-        "quality": 75
-      },
-      "metrics": {
-        "estimateMs": 2488,
-        "firstResultMs": 2717,
-        "completeMs": 10477,
-        "errors": 0,
-        "peakMountedRows": 12,
-        "longTasks": {
-          "count": 0,
-          "totalMs": 0,
-          "maxMs": 0
-        },
-        "frames": {
-          "frames": 461,
-          "maxGapMs": 16.8,
-          "p95GapMs": 16.8
-        },
-        "heap": {
-          "peakBytes": 10000000
-        },
-        "workers": {
-          "avgBusy": 2.9,
-          "avgSize": 3,
-          "peakBusy": 3,
-          "samples": 122
-        }
-      },
-      "consoleErrors": []
-    },
-    {
-      "scenario": "png-screenshot",
-      "count": 60,
-      "cohorts": "screenshot",
-      "format": "png",
-      "settings": {
-        "mode": 0
-      },
-      "metrics": {
-        "estimateMs": 989,
-        "firstResultMs": 1048,
-        "completeMs": 1726,
-        "errors": 0,
-        "peakMountedRows": 12,
-        "longTasks": {
-          "count": 0,
-          "totalMs": 0,
-          "maxMs": 0
-        },
-        "frames": {
-          "frames": 99,
+          "frames": 118,
           "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
@@ -406,10 +342,85 @@
           "avgBusy": 2.6,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 14
+          "samples": 20
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "webp-photo",
+      "count": 60,
+      "cohorts": "photo",
+      "format": "webp",
+      "settings": {
+        "quality": 75
+      },
+      "metrics": {
+        "estimateMs": 2426,
+        "firstResultMs": 2588,
+        "completeMs": 7452,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 433,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.8,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 114
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 60,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 956,
+        "firstResultMs": 1017,
+        "completeMs": 1783,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 102,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 2.6,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 16
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot-lossless",
@@ -420,9 +431,9 @@
         "mode": 1
       },
       "metrics": {
-        "estimateMs": 1666,
-        "firstResultMs": 1828,
-        "completeMs": 6424,
+        "estimateMs": 1662,
+        "firstResultMs": 1820,
+        "completeMs": 6862,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -431,9 +442,9 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 381,
-          "maxGapMs": 16.8,
-          "p95GapMs": 16.8
+          "frames": 406,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.7
         },
         "heap": {
           "peakBytes": 10000000
@@ -442,10 +453,11 @@
           "avgBusy": 2.8,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 99
+          "samples": 103
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -456,9 +468,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1693,
-        "firstResultMs": 1746,
-        "completeMs": 3942,
+        "estimateMs": 2619,
+        "firstResultMs": 2672,
+        "completeMs": 5488,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -467,21 +479,22 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 188,
-          "maxGapMs": 16.8,
+          "frames": 238,
+          "maxGapMs": 33.4,
           "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.8,
+          "avgBusy": 2.7,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 40
+          "samples": 53
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo",
@@ -492,9 +505,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1347,
-        "firstResultMs": 1402,
-        "completeMs": 6733,
+        "estimateMs": 3405,
+        "firstResultMs": 3460,
+        "completeMs": 9279,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -503,8 +516,8 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 386,
-          "maxGapMs": 16.8,
+          "frames": 416,
+          "maxGapMs": 33.3,
           "p95GapMs": 16.8
         },
         "heap": {
@@ -514,10 +527,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 94
+          "samples": 101
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo-resize",
@@ -529,9 +543,9 @@
         "maxLongEdge": 1024
       },
       "metrics": {
-        "estimateMs": 1339,
-        "firstResultMs": 1401,
-        "completeMs": 6960,
+        "estimateMs": 1475,
+        "firstResultMs": 1541,
+        "completeMs": 6543,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -540,8 +554,8 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 399,
-          "maxGapMs": 33.3,
+          "frames": 373,
+          "maxGapMs": 33.4,
           "p95GapMs": 16.8
         },
         "heap": {
@@ -551,10 +565,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 98
+          "samples": 90
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "webp-photo",
@@ -565,9 +580,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 3094,
-        "firstResultMs": 3359,
-        "completeMs": 26911,
+        "estimateMs": 2385,
+        "firstResultMs": 2556,
+        "completeMs": 24720,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -576,9 +591,9 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 1443,
-          "maxGapMs": 33.4,
-          "p95GapMs": 16.8
+          "frames": 1348,
+          "maxGapMs": 16.8,
+          "p95GapMs": 16.7
         },
         "heap": {
           "peakBytes": 10000000
@@ -587,10 +602,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 415
+          "samples": 392
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot",
@@ -601,9 +617,9 @@
         "mode": 0
       },
       "metrics": {
-        "estimateMs": 1270,
-        "firstResultMs": 1330,
-        "completeMs": 5772,
+        "estimateMs": 1178,
+        "firstResultMs": 1239,
+        "completeMs": 5093,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -612,8 +628,8 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 338,
-          "maxGapMs": 33.3,
+          "frames": 299,
+          "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
         "heap": {
@@ -623,10 +639,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 78
+          "samples": 70
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot-lossless",
@@ -637,9 +654,9 @@
         "mode": 1
       },
       "metrics": {
-        "estimateMs": 2114,
-        "firstResultMs": 2338,
-        "completeMs": 28349,
+        "estimateMs": 2010,
+        "firstResultMs": 2340,
+        "completeMs": 25283,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -648,9 +665,9 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 1556,
-          "maxGapMs": 33.4,
-          "p95GapMs": 16.7
+          "frames": 1379,
+          "maxGapMs": 33.3,
+          "p95GapMs": 16.8
         },
         "heap": {
           "peakBytes": 10000000
@@ -659,10 +676,11 @@
           "avgBusy": 3,
           "avgSize": 2,
           "peakBusy": 3,
-          "samples": 435
+          "samples": 392
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -673,19 +691,19 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 4182,
-        "firstResultMs": 4240,
-        "completeMs": 15911,
+        "estimateMs": 2804,
+        "firstResultMs": 2859,
+        "completeMs": 13206,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
-          "count": 1,
-          "totalMs": 60,
-          "maxMs": 60
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
         },
         "frames": {
-          "frames": 802,
-          "maxGapMs": 66.6,
+          "frames": 728,
+          "maxGapMs": 33.4,
           "p95GapMs": 16.7
         },
         "heap": {
@@ -695,10 +713,11 @@
           "avgBusy": 2.9,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 208
+          "samples": 192
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     }
   ]
 }

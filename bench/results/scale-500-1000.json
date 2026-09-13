@@ -1,7 +1,7 @@
 {
   "meta": {
-    "commit": "6b89f7e",
-    "timestamp": "2026-09-13T04:47:32.522Z",
+    "commit": "a7f5a27",
+    "timestamp": "2026-09-13T04:59:16.417Z",
     "node": "v22.23.2",
     "chromium": "153.0.8010.12",
     "counts": [
@@ -20,9 +20,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1333,
-        "firstResultMs": 1390,
-        "completeMs": 6016,
+        "estimateMs": 1346,
+        "firstResultMs": 1411,
+        "completeMs": 15631,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -31,7 +31,7 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 347,
+          "frames": 800,
           "maxGapMs": 16.8,
           "p95GapMs": 16.8
         },
@@ -39,13 +39,14 @@
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.9,
+          "avgBusy": 3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 87
+          "samples": 209
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "png-screenshot",
@@ -56,9 +57,9 @@
         "mode": 0
       },
       "metrics": {
-        "estimateMs": 1248,
-        "firstResultMs": 1304,
-        "completeMs": 4659,
+        "estimateMs": 1883,
+        "firstResultMs": 1942,
+        "completeMs": 10389,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -67,21 +68,22 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 271,
-          "maxGapMs": 16.8,
-          "p95GapMs": 16.8
+          "frames": 612,
+          "maxGapMs": 33.4,
+          "p95GapMs": 16.7
         },
         "heap": {
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.9,
+          "avgBusy": 3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 63
+          "samples": 148
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -92,9 +94,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 1879,
-        "firstResultMs": 1940,
-        "completeMs": 18930,
+        "estimateMs": 2226,
+        "firstResultMs": 2333,
+        "completeMs": 25889,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -103,7 +105,7 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 971,
+          "frames": 1369,
           "maxGapMs": 33.4,
           "p95GapMs": 16.7
         },
@@ -111,13 +113,14 @@
           "peakBytes": 10000000
         },
         "workers": {
-          "avgBusy": 2.9,
+          "avgBusy": 3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 271
+          "samples": 370
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-photo",
@@ -128,9 +131,9 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 2757,
-        "firstResultMs": 2826,
-        "completeMs": 27682,
+        "estimateMs": 2763,
+        "firstResultMs": 2859,
+        "completeMs": 27994,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
@@ -139,43 +142,7 @@
           "maxMs": 0
         },
         "frames": {
-          "frames": 1506,
-          "maxGapMs": 50.1,
-          "p95GapMs": 16.8
-        },
-        "heap": {
-          "peakBytes": 10000000
-        },
-        "workers": {
-          "avgBusy": 3,
-          "avgSize": 3,
-          "peakBusy": 3,
-          "samples": 401
-        }
-      },
-      "consoleErrors": []
-    },
-    {
-      "scenario": "png-screenshot",
-      "count": 1000,
-      "cohorts": "screenshot",
-      "format": "png",
-      "settings": {
-        "mode": 0
-      },
-      "metrics": {
-        "estimateMs": 2019,
-        "firstResultMs": 2090,
-        "completeMs": 18805,
-        "errors": 0,
-        "peakMountedRows": 12,
-        "longTasks": {
-          "count": 0,
-          "totalMs": 0,
-          "maxMs": 0
-        },
-        "frames": {
-          "frames": 1110,
+          "frames": 1648,
           "maxGapMs": 33.3,
           "p95GapMs": 16.7
         },
@@ -186,10 +153,48 @@
           "avgBusy": 3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 294
+          "samples": 430
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
+    },
+    {
+      "scenario": "png-screenshot",
+      "count": 1000,
+      "cohorts": "screenshot",
+      "format": "png",
+      "settings": {
+        "mode": 0
+      },
+      "metrics": {
+        "estimateMs": 2669,
+        "firstResultMs": 2743,
+        "completeMs": 21726,
+        "errors": 0,
+        "peakMountedRows": 12,
+        "longTasks": {
+          "count": 0,
+          "totalMs": 0,
+          "maxMs": 0
+        },
+        "frames": {
+          "frames": 1276,
+          "maxGapMs": 66.6,
+          "p95GapMs": 16.8
+        },
+        "heap": {
+          "peakBytes": 10000000
+        },
+        "workers": {
+          "avgBusy": 3,
+          "avgSize": 3,
+          "peakBusy": 3,
+          "samples": 324
+        }
+      },
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     },
     {
       "scenario": "jpeg-mixed",
@@ -200,18 +205,18 @@
         "quality": 75
       },
       "metrics": {
-        "estimateMs": 4239,
-        "firstResultMs": 4418,
-        "completeMs": 48487,
+        "estimateMs": 3821,
+        "firstResultMs": 3927,
+        "completeMs": 50574,
         "errors": 0,
         "peakMountedRows": 12,
         "longTasks": {
-          "count": 1,
-          "totalMs": 73,
-          "maxMs": 73
+          "count": 2,
+          "totalMs": 111,
+          "maxMs": 60
         },
         "frames": {
-          "frames": 2592,
+          "frames": 2684,
           "maxGapMs": 66.7,
           "p95GapMs": 16.8
         },
@@ -222,10 +227,11 @@
           "avgBusy": 3,
           "avgSize": 3,
           "peakBusy": 3,
-          "samples": 707
+          "samples": 743
         }
       },
-      "consoleErrors": []
+      "consoleErrors": [],
+      "chromium": "153.0.8010.12"
     }
   ]
 }
