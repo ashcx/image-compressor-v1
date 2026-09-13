@@ -79,14 +79,14 @@ describe('resolveWorkerCount', () => {
     ).toBe(7)
   })
 
-  it('returns 1 for low-memory Android', () => {
+  it('returns 2 light workers for budget Android', () => {
     expect(
       resolveWorkerCount({
         userAgent: ANDROID_UA,
         deviceMemory: 4,
         hardwareConcurrency: 8,
       }),
-    ).toBe(1)
+    ).toBe(2)
   })
 
   it('uses the standard budget for high-memory Android', () => {
@@ -138,13 +138,13 @@ describe('profileFromSignals', () => {
     expect(profile.maxZipBytes).toBe(1024 * 1024 * 1024)
   })
 
-  it('gives low-memory Android a single worker and 384 MiB zip cap', () => {
+  it('gives budget Android two workers and a 384 MiB zip cap', () => {
     const profile = profileFromSignals({
       userAgent: ANDROID_UA,
       deviceMemory: 4,
       hardwareConcurrency: 8,
     })
-    expect(profile.workerCount).toBe(1)
+    expect(profile.workerCount).toBe(2)
     expect(profile.maxZipBytes).toBe(384 * 1024 * 1024)
   })
 

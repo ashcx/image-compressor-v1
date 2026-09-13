@@ -1,9 +1,9 @@
-# Performance
+# Performance and memory
 
-This document records the measurements behind Image Compressor's speed-first design:
-native browser encoding where practical, batch-level parallelism, bounded memory use,
-and stored ZIP output. It also makes clear which figures are measured, derived, or still
-only policy assumptions.
+This document records the measurements and policy behind Image Compressor's speed-first
+design: native browser encoding where practical, batch-level parallelism, decoded-canvas
+memory limits, and stored ZIP output. It also makes clear which figures are measured,
+derived, or still only policy assumptions.
 
 ## Results at a glance
 
@@ -173,58 +173,86 @@ point; the worker budget is a balance between throughput and responsiveness.
 
 ## 3. Memory and device policy
 
-### Approximate memory per worker
+### Decoded memory model
 
-- Decoded RGBA canvas = `W × H × 4`: 2.7 MP ≈ **11 MB**, 8.6 MP ≈ **35 MB**,
-  16.6 MP ≈ **66 MB**, 26 MP ≈ **104 MB**.
-- Estimate decode is capped at **2048 px** — about **11 MB** at 2048 × 1365 — plus
-  the 384/896 sample canvases, which are under **5 MB**.
-- The codec's WebAssembly heap is also material for AVIF, oxipng, and imagequant.
-- The input buffer and output Blob add to the live working set.
+- A decoded RGBA canvas costs `W × H × 4`: 2.7 MP ≈ **11 MB**, 8.6 MP ≈ **35 MB**,
+  16.6 MP ≈ **66 MB**, 26 MP ≈ **104 MB**, 100 MP ≈ **400 MB**.
+- Each codec path holds several copies at peak. Scheduling charges a multiplier of the RGBA
+  size (`src/lib/memory.ts`):
 
-### Techniques that keep memory bounded
+  | Path | Weight |
+  | --- | ---: |
+  | Native JPEG / PNG mode 0 | 2.5 |
+  | WebP (native on Chromium/Firefox, WASM on Safari) | 4 |
+  | AVIF, PNG modes 1–2 | 5 |
 
-- Fixed, bounded pool; never one worker per image.
-- Heavy codecs run on half the pool, `max(1, round(base / 2))`, because each worker holds
-  a large WASM heap and a full canvas for seconds.
-- Zero-copy input transfer for one-shot compression. Cloning is used only when a later pass
-  reuses the bytes. Removing input copies reduced JPEG time from roughly **35 ms to
-  20.5 ms per image**.
-- Lazy task materialisation so queued jobs do not hold buffers.
-- Only the result crosses the worker boundary: a compact Blob plus metadata, never full
-  ImageData.
-- Thumbnails are generated in the worker at **96 px**; output object URLs are created lazily
-  on download.
-- Completed outputs are written to the Origin Private File System when available and read
-  back on demand for download, so the queue keeps metadata and thumbnails rather than every
-  full-resolution Blob. A memory fallback is used where OPFS is unavailable.
-- When a resize is requested, the decode target is the resized size, so a downscaled output
-  never allocates a full-resolution RGBA canvas (decode *time* may be similar in Chrome, but
-  the canvas and its memory are bounded).
-- Eager reads reserve their byte size first and only reads that fit the budget start; read
-  concurrency is separate from codec-worker concurrency.
-- Busy jobs are admitted against a decoded-pixel budget, so several very large canvases do not
-  run at once. The worker budget also backs off after crashes or sustained main-thread long
-  tasks, and the meter shows `busy/size · pixels/budget`.
-- Idle teardown terminates the worker pool and metadata worker about **two seconds** after
-  becoming idle, and immediately on format change or clearing the list.
-- Per-device ZIP size caps prevent the app from attempting very large archives without an
-  explicit device policy.
+- Estimate decodes are capped at **2048 px** (~11 MB at 2048 × 1365) plus the 384/896 sample
+  canvases, which are under **5 MB**. The compressed input buffer and output Blob also count
+  against the live working set.
+
+### Browser canvas ceilings
+
+The decoder output must fit the engine's maximum canvas. These limits are read from engine
+source, not only from test tables:
+
+| Engine / platform | Max side | Max area |
+| --- | ---: | ---: |
+| WebKit iOS/iPadOS, Safari ≥ 17.4 | 8,192 | 67,108,864 (8192²) |
+| WebKit iOS/iPadOS, before 17.4 | 4,096 | 16,777,216 (4096²) |
+| Blink (Chrome/Edge/Opera, Android) | 65,535 | 268,435,456 (`32768 × 8192`) |
+| Gecko (Firefox) | 32,767 | none |
+| WebKit macOS Safari | 16,384 | 268,435,456 (16384²) |
+| Unknown | 8,192 | 67,108,864 (8192²) |
+
+iOS raised its limit to **8192 per axis** in Safari 17.4 (WebKit bug 271002); older iOS is
+detected from the UA `OS`/`Version` token and clamped to 4096. Every decode is scaled down to
+satisfy both the side and area ceilings, and never upscaled. When a clamp applies, the worker
+reports it and the row shows **"downscaled to device limit."**
+
+### Decoded-memory budget and scheduling
+
+Concurrent jobs are admitted against a device memory ceiling. A job is charged
+`decodePixels × 4 × weight`; the pool admits the highest-priority job whose cost still fits
+`activeCost + cost ≤ budget` and always admits at least one job. The scheduler lives in
+`src/lib/workerPool.ts`; budgets and weights come from `src/lib/device.ts` and
+`src/lib/memory.ts`.
+
+| Device | Canvas memory budget |
+| --- | ---: |
+| iPhone | 512 MiB |
+| iPad, light worker count ≥ 6 | 1 GiB |
+| iPad, light worker count < 6 | 512 MiB |
+| Android, `deviceMemory ≥ 8 GiB` | `deviceMemory / 6` |
+| Android, otherwise / no signal | 512 MiB |
+| Desktop | `deviceMemory / 2`; 2048 MiB fallback |
+
+The single-job ceiling `maxJobPixels = 0.9 × budget / (4 × weight)` keeps one oversized image
+from exceeding the budget on its own, so the "always admit one" rule cannot blow the ceiling.
+AVIF and compressed PNG are additionally pinned to **one worker on iOS/iPadOS**, because even
+one heavy encode can exhaust a tablet's canvas memory.
+
+This is the device-level model: iOS/iPadOS canvas memory scales with RAM (WebKit's
+`ramSize() / 4`, reported into the JSC heap), and OS Jetsam can evict a tab before any
+in-page limit is reached. The budgets above are therefore deliberately below the raw
+ceiling.
 
 ### Device worker scaling
 
 Worker budgets are defined in `src/lib/device.ts`.
 
-| Device | Light pool | Heavy pool | Current app ZIP cap |
+| Device | Light pool | Heavy pool | App ZIP cap |
 | --- | --- | --- | --- |
-| iPhone (no RAM API) | cores ≥ 6 → 3, 4–5 → 2, otherwise 1 | 3→2, 2→1, 1→1 | 512 MB |
-| iPad, reported cores < 7 | phone tier | halved | 1 GB |
-| iPad, reported cores ≥ 7 | `min(cores − 1, 8)` | halved | 1 GB |
-| Android, `deviceMemory` < 6 or unknown | **1** | 1 | 384 MB |
+| iPhone (no RAM API) | cores ≥ 6 → 3, 4–5 → 2, otherwise 1 | 1 on iOS | 512 MB |
+| iPad, reported cores < 7 | phone tier | 1 on iOS | 1 GB |
+| iPad, reported cores ≥ 7 | `min(cores − 1, 8)` | 1 on iOS | 1 GB |
+| Android, `deviceMemory` < 6 or unknown | **2** | 1 | 384 MB |
 | Android, ≥ 6 GB | `min(cores − 1, 8)` | halved | 1 GB |
 | Desktop, `deviceMemory` ≥ 8 | `min(cores − 1, 8)`; cores ≥ 16 and RAM ≥ 12 GB → up to **16** | halved | 2 GB |
 | Desktop, `deviceMemory` < 8 | `min(cores − 1, 6)` | halved | 1 GB |
 | `?workers=N` override | N capped at 16 | — | — |
+
+iPad is treated as Pro when its light worker count is **≥ 6** (7+ reported cores); that tier
+gets the 1 GiB budget and can run about four 25 MP JPEGs concurrently.
 
 These ZIP values are **conservative application caps**, not browser or device maximums. A
 mobile browser may be able to create a larger archive, especially when the Origin Private
@@ -236,14 +264,13 @@ initial safety policy and revisited after real-device ZIP testing.
 In memory terms, for approximately 12 MP — about **48 MB decoded + ~15 MB estimate + heap
 per worker**:
 
-- iPhone at 3 light workers ≈ **~180 MB** live; heavy halving to 2 ≈ **~120 MB**.
-  This is conservative because Safari exposes no RAM signal and iOS can evict a tab without
-  warning.
-- Low-RAM Android is pinned to **1** because Chrome on Android reclaims tabs aggressively;
-  a second concurrent full canvas can be the difference between finishing and reloading.
-- Desktop at 8 workers ≈ **~500 MB** plus WASM heaps at 12 MP, acceptable on an 8 GB+
-  machine, with teardown once idle.
-- The budget is always **cores − 1**, reserving a core for paint and input.
+- iPhone at 3 light workers ≈ **~180 MB** live; heavy work is pinned to 1 worker. This is
+  conservative because Safari exposes no RAM signal and iOS can evict a tab without warning.
+- Budget Android at **2** light workers ≈ **~120 MB** live for JPEG, while heavy codecs
+  collapse to a single worker.
+- Desktop at 8 workers ≈ **~500 MB** plus WASM heaps at 12 MP, with teardown once idle. The
+  budget is proportional to `deviceMemory`.
+- The light budget is always **cores − 1**, reserving a core for paint and input.
 
 With 8 workers, an 8-image batch finishes in roughly the time of one image, while a
 300-image batch runs in waves. On memory-bound work, speedup per added worker decays — about

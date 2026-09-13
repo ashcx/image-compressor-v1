@@ -89,8 +89,9 @@ The main source areas are:
 
 - [Architecture](./docs/ARCHITECTURE.md) — the processing pipeline, design choices, and
   trade-offs.
-- [Performance](./docs/PERFORMANCE.md) — measured encode times, output sizes, memory model,
-  worker scaling, estimate accuracy, and remaining measurement gaps.
+- [Performance and memory](./docs/PERFORMANCE_AND_MEMORY.md) — measured encode times,
+  output sizes, the decoded-canvas memory model, worker scaling, estimate accuracy, and
+  remaining measurement gaps.
 - [Benchmark harness](./bench/README.md) — how to run and compare the browser benchmarks.
 - [QA matrix](./docs/TEST-MATRIX.md) — test corpus, browser/device matrix, and release checks.
 - [HEIC decision](./docs/HEIC.md) — decoder/encoder feasibility, licensing, and security.

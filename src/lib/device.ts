@@ -131,7 +131,9 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
       workerCount >= 6 ? IPAD_PRO_CANVAS_BUDGET : IPAD_CANVAS_BUDGET
   } else if (ua.includes('Android')) {
     if (memory === undefined || memory < 6) {
-      workerCount = 1
+      // Budget Android: two light workers so JPEG batches still overlap, but
+      // heavy codecs collapse to a single worker.
+      workerCount = 2
       maxZipBytes = ANDROID_LOW_MEMORY_MAX_ZIP_BYTES
       canvasMemoryBudget = ANDROID_CANVAS_BUDGET
     } else {
