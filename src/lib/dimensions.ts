@@ -166,6 +166,38 @@ function findBox(
   return null
 }
 
+function collectBoxes(
+  view: DataView,
+  start: number,
+  end: number,
+  type: string,
+): BoxLocation[] {
+  const found: BoxLocation[] = []
+  let offset = start
+  while (offset + 8 <= end) {
+    let size = view.getUint32(offset, false)
+    const boxType = readFourCC(view, offset + 4)
+    if (boxType === null) break
+    let headerSize = 8
+
+    if (size === 1) {
+      if (offset + 16 > end) break
+      const high = view.getUint32(offset + 8, false)
+      const low = view.getUint32(offset + 12, false)
+      size = high * 2 ** 32 + low
+      headerSize = 16
+    } else if (size === 0) {
+      size = end - offset
+    }
+
+    if (boxType === 'uuid') headerSize += 16
+    if (size < headerSize || offset + size > end) break
+    if (boxType === type) found.push({ start: offset, size, headerSize })
+    offset += size
+  }
+  return found
+}
+
 function parseAvif(view: DataView): Dimensions | null {
   const end = view.byteLength
   const meta = findBox(view, 0, end, 'meta')
@@ -202,6 +234,52 @@ function parseAvif(view: DataView): Dimensions | null {
   return { width, height }
 }
 
+/**
+ * HEIC/HEIF stores the primary image size in the same `meta/iprp/ipco/ispe`
+ * structure as AVIF. A file may contain several `ispe` boxes (for example a
+ * thumbnail and the primary image), so the largest one is used.
+ */
+function parseHeif(view: DataView): Dimensions | null {
+  const end = view.byteLength
+  const meta = findBox(view, 0, end, 'meta')
+  if (meta === null) return null
+
+  const iprp = findBox(
+    view,
+    meta.start + meta.headerSize + 4,
+    meta.start + meta.size,
+    'iprp',
+  )
+  if (iprp === null) return null
+
+  const ipco = findBox(
+    view,
+    iprp.start + iprp.headerSize,
+    iprp.start + iprp.size,
+    'ipco',
+  )
+  if (ipco === null) return null
+
+  let best: Dimensions | null = null
+  for (const ispe of collectBoxes(
+    view,
+    ipco.start + ipco.headerSize,
+    ipco.start + ipco.size,
+    'ispe',
+  )) {
+    const payload = ispe.start + ispe.headerSize
+    const width = readU32BE(view, payload + 4)
+    const height = readU32BE(view, payload + 8)
+    if (width === null || height === null || width === 0 || height === 0) {
+      continue
+    }
+    if (best === null || width * height > best.width * best.height) {
+      best = { width, height }
+    }
+  }
+  return best
+}
+
 export function parseDimensions(buffer: ArrayBuffer): Dimensions | null {
   if (!(buffer instanceof ArrayBuffer)) return null
   const format = detectFormat(buffer)
@@ -218,6 +296,8 @@ export function parseDimensions(buffer: ArrayBuffer): Dimensions | null {
         return parseWebp(view)
       case 'avif':
         return parseAvif(view)
+      case 'heic':
+        return parseHeif(view)
     }
   } catch {
     return null

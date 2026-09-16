@@ -16,6 +16,7 @@ const HEADROOM = 0.9
  */
 export function formatMemoryWeight(format: OutputFormat, mode = 0): number {
   if (format === 'avif') return 5
+  if (format === 'heic') return 5
   if (format === 'png') return isHeavyFormat('png', mode) ? 5 : 2.5
   if (format === 'webp') return 4
   return 2.5

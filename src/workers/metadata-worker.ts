@@ -1,5 +1,7 @@
-import { context2d, createCanvas } from '../lib/canvas'
+import { context2d, createCanvas, scaleImage } from '../lib/canvas'
+import { detectFormat } from '../lib/detect'
 import { parseDimensions } from '../lib/dimensions'
+import { decodeImageData } from '../lib/image'
 import { createThumbnail } from '../lib/thumbnail'
 
 interface DimensionsRequest {
@@ -71,6 +73,25 @@ async function generateThumbnail(file: File): Promise<Blob | null> {
     } finally {
       bitmap.close()
     }
+  } catch {
+    return generateWasmThumbnail(file)
+  }
+}
+
+/**
+ * Browsers cannot natively decode HEIC to a bitmap, so previews fall back to
+ * the WASM decoder. The source is scaled before thumbnailing to keep the
+ * full-resolution pixels short-lived.
+ */
+async function generateWasmThumbnail(file: File): Promise<Blob | null> {
+  try {
+    const buffer = await file.arrayBuffer()
+    const format = detectFormat(buffer)
+    if (format !== 'heic') return null
+    const source = await decodeImageData(buffer, format, {
+      maxEdge: PREVIEW_DECODE_EDGE,
+    })
+    return await createThumbnail(scaleImage(source, PREVIEW_DECODE_EDGE))
   } catch {
     return null
   }

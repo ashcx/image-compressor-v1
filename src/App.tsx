@@ -1822,7 +1822,7 @@ export function App() {
         ref={inputRef}
         class="visually-hidden"
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         multiple
         onChange={onInputChange}
       />

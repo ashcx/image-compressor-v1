@@ -9,6 +9,7 @@ const EXPECTED: Record<OutputFormat, { mimeType: string; extension: string }> =
     png: { mimeType: 'image/png', extension: 'png' },
     webp: { mimeType: 'image/webp', extension: 'webp' },
     avif: { mimeType: 'image/avif', extension: 'avif' },
+    heic: { mimeType: 'image/heic', extension: 'heic' },
   }
 
 describe('codec registry', () => {

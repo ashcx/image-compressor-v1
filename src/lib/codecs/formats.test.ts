@@ -20,6 +20,11 @@ describe('format specs', () => {
   it('gives every control valid defaults and options', () => {
     for (const format of FORMAT_ORDER) {
       const spec = FORMAT_SPECS[format]
+      if (format === 'heic') {
+        // The bundled encoder has a single fixed quality, so no controls.
+        expect(spec.controls).toEqual([])
+        continue
+      }
       expect(spec.controls.length).toBeGreaterThan(0)
       for (const control of spec.controls) {
         expect(ALL_KEYS).toContain(control.key)

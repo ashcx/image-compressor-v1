@@ -98,6 +98,39 @@ try {
   const zipSize = zipPath ? (await stat(zipPath)).size : 0
   assert.ok(zipSize > 0, 'zip download was empty')
 
+  // HEIC round trip: select HEIC output, add a HEIC input, and confirm the
+  // WASM decoder reads it and the WASM encoder writes a .heic row.
+  await page.locator('select').first().selectOption('heic')
+  await page.setInputFiles('input[type="file"]', ['bench/fixtures/sample.heic'])
+  await page
+    .locator('button', { hasText: /^Compress/ })
+    .first()
+    .click()
+  await page.waitForFunction(
+    () => {
+      const count =
+        document.querySelector('.summary-card__count')?.textContent ?? ''
+      const status =
+        document.querySelector('.summary-card__status')?.textContent ?? ''
+      return /3 \/ 3/.test(count) && /Complete/.test(status)
+    },
+    undefined,
+    { timeout: 60_000 },
+  )
+  const heicDownload = page.waitForEvent('download')
+  await page
+    .locator('.job__actions button', { hasText: 'Download' })
+    .first()
+    .click()
+  const heic = await heicDownload
+  const heicPath = await heic.path()
+  const heicSize = heicPath ? (await stat(heicPath)).size : 0
+  assert.ok(heicSize > 0, 'HEIC download was empty')
+  assert.ok(
+    heic.suggestedFilename().endsWith('.heic'),
+    `expected a .heic output, got ${heic.suggestedFilename()}`,
+  )
+
   assert.deepEqual(errors, [], `page errors: ${errors.join('; ')}`)
   console.log(
     JSON.stringify({
@@ -106,6 +139,8 @@ try {
       singleName: single.suggestedFilename(),
       zipBytes: zipSize,
       zipName: zip.suggestedFilename(),
+      heicBytes: heicSize,
+      heicName: heic.suggestedFilename(),
     }),
   )
 } finally {

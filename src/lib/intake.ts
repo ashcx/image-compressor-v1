@@ -4,7 +4,7 @@ import { detectFormat } from './detect'
 export const HEADER_BYTES = 64 * 1024
 export const VALIDATION_CONCURRENCY = 8
 
-const SUPPORTED = 'JPEG, PNG, WebP, or AVIF'
+const SUPPORTED = 'JPEG, PNG, WebP, AVIF, or HEIC'
 
 export interface IntakeAcceptance {
   accepted: boolean
