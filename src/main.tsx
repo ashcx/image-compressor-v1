@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { App } from './App'
+import './lib/preferences'
 import './app.css'
 
 const root = document.getElementById('app')

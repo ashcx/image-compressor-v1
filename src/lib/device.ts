@@ -1,6 +1,31 @@
 const MAX_WORKERS = 8
 export const MAX_WORKERS_HIGH_MEMORY = 16
 
+let preferenceMaxWorkers: number | undefined
+let preferenceCompatibilityMode = false
+
+export interface WorkerPreferenceOptions {
+  maxWorkers?: number | null
+  compatibilityMode?: boolean
+}
+
+/**
+ * Applies stored user preferences that cap the worker budget. The `?workers=`
+ * URL override still takes precedence so the benchmark harness stays in control.
+ * Compatibility mode pins everything to a single worker.
+ */
+export function configureWorkerPreferences(
+  options: WorkerPreferenceOptions,
+): void {
+  preferenceCompatibilityMode = options.compatibilityMode === true
+  preferenceMaxWorkers =
+    typeof options.maxWorkers === 'number' &&
+    Number.isFinite(options.maxWorkers) &&
+    options.maxWorkers > 0
+      ? Math.round(options.maxWorkers)
+      : undefined
+}
+
 export interface DeviceSignals {
   hardwareConcurrency?: number
   deviceMemory?: number
@@ -84,7 +109,7 @@ export function profileFromSignals(
   return profile
 }
 
-export function getDeviceProfile(): DeviceProfile {
+export function getDeviceSignals(): DeviceSignals {
   const signals: DeviceSignals = {}
 
   if (typeof navigator !== 'undefined') {
@@ -97,7 +122,23 @@ export function getDeviceProfile(): DeviceProfile {
     }
   }
 
-  return profileFromSignals(signals, readWorkerOverride())
+  return signals
+}
+
+export function getDeviceProfile(): DeviceProfile {
+  const signals = getDeviceSignals()
+  const override = readUrlWorkerOverride() ?? readPreferenceWorkerOverride()
+  return profileFromSignals(signals, override)
+}
+
+/** Platform worker budget before any user preference or URL override. */
+export function getAutoWorkerCount(): number {
+  return resolveWorkerCount(getDeviceSignals())
+}
+
+function readPreferenceWorkerOverride(): number | undefined {
+  if (preferenceCompatibilityMode) return 1
+  return preferenceMaxWorkers
 }
 
 function platformProfile(signals: DeviceSignals): DeviceProfile {
@@ -272,7 +313,7 @@ function phoneWorkerCount(reported: number): number {
   return reported >= 6 ? 3 : reported >= 4 ? 2 : 1
 }
 
-function readWorkerOverride(): number | undefined {
+function readUrlWorkerOverride(): number | undefined {
   if (typeof window === 'undefined' || !window.location?.search) {
     return undefined
   }
@@ -282,6 +323,81 @@ function readWorkerOverride(): number | undefined {
   }
   const parsed = Number(raw)
   return isPositiveFinite(parsed) ? parsed : undefined
+}
+
+export interface PlatformInfo {
+  deviceType: string
+  os: string
+  browser: string
+  browserVersion: string
+}
+
+/** Device class, OS, and browser parsed from the UA for the diagnostics page. */
+export function describePlatform(
+  signals: DeviceSignals = getDeviceSignals(),
+): PlatformInfo {
+  const ua = signals.userAgent ?? ''
+  const touch = signals.maxTouchPoints ?? 0
+  const { browser, version: browserVersion } = parseBrowser(ua)
+
+  const info = (deviceType: string, os: string): PlatformInfo => ({
+    deviceType,
+    os,
+    browser,
+    browserVersion,
+  })
+
+  if (ua.includes('iPhone')) {
+    return info('Phone', iosLabel(ua, 'iOS'))
+  }
+  if (isIpad(ua, touch)) {
+    return info('Tablet', iosLabel(ua, 'iPadOS'))
+  }
+  if (ua.includes('Android')) {
+    const version = versionFrom(ua, /Android ([\d.]+)/)
+    const tablet = touch >= 2 && !ua.includes('Mobile')
+    return info(tablet ? 'Tablet' : 'Phone', joinVersion('Android', version))
+  }
+  if (ua.includes('CrOS')) return info('Desktop', 'ChromeOS')
+  if (ua.includes('Macintosh') || ua.includes('Mac OS X')) {
+    return info('Desktop', 'macOS')
+  }
+  if (ua.includes('Windows')) return info('Desktop', 'Windows')
+  if (ua.includes('Linux')) return info('Desktop', 'Linux')
+  return info(touch > 0 ? 'Touch device' : 'Desktop', 'Unknown')
+}
+
+function parseBrowser(ua: string): { browser: string; version: string } {
+  if (ua.includes('Edg/')) {
+    return { browser: 'Edge', version: versionFrom(ua, /Edg\/([\d.]+)/) }
+  }
+  if (ua.includes('OPR/')) {
+    return { browser: 'Opera', version: versionFrom(ua, /OPR\/([\d.]+)/) }
+  }
+  if (ua.includes('Firefox/')) {
+    return { browser: 'Firefox', version: versionFrom(ua, /Firefox\/([\d.]+)/) }
+  }
+  if (ua.includes('Chrome/')) {
+    return { browser: 'Chrome', version: versionFrom(ua, /Chrome\/([\d.]+)/) }
+  }
+  if (ua.includes('Version/') && ua.includes('Safari')) {
+    return { browser: 'Safari', version: versionFrom(ua, /Version\/([\d.]+)/) }
+  }
+  return { browser: 'Unknown', version: '' }
+}
+
+function iosLabel(ua: string, name: string): string {
+  const match =
+    /OS (\d+)[._](\d+)/.exec(ua) ?? /Version\/(\d+)[._](\d+)/.exec(ua)
+  return match ? `${name} ${match[1]}.${match[2]}` : name
+}
+
+function versionFrom(ua: string, pattern: RegExp): string {
+  return pattern.exec(ua)?.[1] ?? ''
+}
+
+function joinVersion(name: string, version: string): string {
+  return version ? `${name} ${version}` : name
 }
 
 function isPositiveFinite(value: number | undefined): value is number {

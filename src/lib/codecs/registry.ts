@@ -9,7 +9,7 @@ type CodecLoader = () => Promise<Codec>
 // under a .webp name, and lets JPEG/WebP run with no WASM loaded at all.
 const nativeSupport = new Map<string, Promise<boolean>>()
 
-function canEncodeNatively(type: string): Promise<boolean> {
+export function canEncodeNatively(type: string): Promise<boolean> {
   const cached = nativeSupport.get(type)
   if (cached) return cached
   const probe = (async () => {
@@ -184,5 +184,24 @@ export async function describeRenderer(
       return 'WASM · avif'
     case 'heic':
       return 'WASM · libheif/kvazaar'
+  }
+}
+
+/**
+ * Human-readable decoder path for a format, for the diagnostics page. Every
+ * format tries the browser's native decoder first; only PNG, AVIF, and HEIC
+ * ship a WASM fallback (`decodeImageData` in `lib/image.ts`).
+ */
+export function describeDecoder(format: OutputFormat): string {
+  switch (format) {
+    case 'jpeg':
+    case 'webp':
+      return 'native (browser)'
+    case 'png':
+      return 'native · @jsquash/png fallback'
+    case 'avif':
+      return 'native · @jsquash/avif fallback'
+    case 'heic':
+      return 'native (Safari) · libheif fallback'
   }
 }

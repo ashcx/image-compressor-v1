@@ -1,0 +1,316 @@
+import { useEffect, useState } from 'preact/hooks'
+import { FORMAT_ORDER } from './lib/codecs/formats'
+import {
+  canEncodeNatively,
+  describeDecoder,
+  describeRenderer,
+} from './lib/codecs/registry'
+import {
+  describePlatform,
+  getAutoWorkerCount,
+  getDeviceProfile,
+  getDeviceSignals,
+} from './lib/device'
+import { formatBytes } from './lib/format'
+import {
+  applyTheme,
+  compatibilityMode,
+  maxWorkers,
+  type ThemePreference,
+  themePreference,
+} from './lib/preferences'
+import { appVersion } from './lib/version'
+
+interface StatRow {
+  label: string
+  value: string
+}
+
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: 'auto', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+]
+
+interface NavigatorWithMemory extends Navigator {
+  deviceMemory?: number
+}
+
+interface WindowWithDirectoryPicker extends Window {
+  showDirectoryPicker?: () => Promise<unknown>
+}
+
+function canvasAreaLabel(area: number): string {
+  return Number.isFinite(area) ? `${area.toLocaleString()} px²` : 'unbounded'
+}
+
+/** Native codec availability plus the platform APIs the app can use. */
+async function capabilityRows(): Promise<StatRow[]> {
+  const nav = typeof navigator === 'undefined' ? undefined : navigator
+  const memory = (nav as NavigatorWithMemory | undefined)?.deviceMemory
+  const storage = nav?.storage as
+    | (StorageManager & { getDirectory?: () => Promise<unknown> })
+    | undefined
+  const picker =
+    typeof window === 'undefined'
+      ? undefined
+      : (window as WindowWithDirectoryPicker).showDirectoryPicker
+
+  const [jpeg, png, webp] = await Promise.all([
+    canEncodeNatively('image/jpeg'),
+    canEncodeNatively('image/png'),
+    canEncodeNatively('image/webp'),
+  ])
+
+  return [
+    {
+      label: 'WebAssembly',
+      value: typeof WebAssembly === 'undefined' ? 'No' : 'Yes',
+    },
+    {
+      label: 'OffscreenCanvas',
+      value: typeof OffscreenCanvas === 'undefined' ? 'No' : 'Yes',
+    },
+    { label: 'Native JPEG encoder', value: jpeg ? 'Yes' : 'No' },
+    { label: 'Native PNG encoder', value: png ? 'Yes' : 'No' },
+    { label: 'Native WebP encoder', value: webp ? 'Yes' : 'No' },
+    {
+      label: 'File System Access (save to folder)',
+      value: typeof picker === 'function' ? 'Yes' : 'No',
+    },
+    {
+      label: 'Origin private file system',
+      value: typeof storage?.getDirectory === 'function' ? 'Yes' : 'No',
+    },
+    {
+      label: 'navigator.deviceMemory',
+      value:
+        typeof memory === 'number'
+          ? `${memory} GB`
+          : 'Not exposed by this browser',
+    },
+  ]
+}
+
+/** Encoder backend per output format (PNG is listed per compression mode). */
+async function encoderRows(): Promise<StatRow[]> {
+  const [jpeg, pngNative, pngLossless, pngLossy, webp] = await Promise.all([
+    describeRenderer('jpeg'),
+    describeRenderer('png', 0),
+    describeRenderer('png', 1),
+    describeRenderer('png', 2),
+    describeRenderer('webp'),
+  ])
+
+  return [
+    { label: 'JPEG', value: jpeg },
+    { label: 'PNG · uncompressed', value: pngNative },
+    { label: 'PNG · lossless', value: pngLossless },
+    { label: 'PNG · lossy', value: pngLossy },
+    { label: 'WebP', value: webp },
+    { label: 'AVIF', value: await describeRenderer('avif') },
+    { label: 'HEIC', value: await describeRenderer('heic') },
+  ]
+}
+
+function StatsRow({ row }: { row: StatRow }) {
+  return (
+    <div class="stats__row">
+      <dt>{row.label}</dt>
+      <dd>{row.value}</dd>
+    </div>
+  )
+}
+
+function StatsGroup({ title, rows }: { title: string; rows: StatRow[] }) {
+  return (
+    <div class="stats-group">
+      <h3>{title}</h3>
+      <dl class="stats">
+        {rows.map((row) => (
+          <StatsRow row={row} key={row.label} />
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+export function SettingsPage({
+  onClose,
+  onWorkerSettingsChange,
+}: {
+  onClose: () => void
+  onWorkerSettingsChange: () => void
+}) {
+  const [asyncStats, setAsyncStats] = useState<{
+    encoders: StatRow[]
+    capabilities: StatRow[]
+  }>({ encoders: [], capabilities: [] })
+
+  useEffect(() => {
+    let active = true
+    void Promise.all([encoderRows(), capabilityRows()]).then(
+      ([encoders, capabilities]) => {
+        if (active) setAsyncStats({ encoders, capabilities })
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const signals = getDeviceSignals()
+  const platform = describePlatform(signals)
+  const profile = getDeviceProfile()
+  const autoWorkers = Math.max(1, getAutoWorkerCount())
+  const compat = compatibilityMode.value
+  const selectedWorkers = compat
+    ? 1
+    : Math.min(maxWorkers.value ?? autoWorkers, autoWorkers)
+
+  const deviceRows: StatRow[] = [
+    { label: 'Device', value: `${platform.deviceType} · ${platform.os}` },
+    {
+      label: 'Browser',
+      value: platform.browserVersion
+        ? `${platform.browser} ${platform.browserVersion}`
+        : platform.browser,
+    },
+    {
+      label: 'CPU cores (reported)',
+      value: signals.hardwareConcurrency
+        ? String(signals.hardwareConcurrency)
+        : 'Not exposed',
+    },
+    {
+      label: 'Device memory',
+      value:
+        typeof signals.deviceMemory === 'number'
+          ? `${signals.deviceMemory} GB`
+          : 'Not exposed',
+    },
+    {
+      label: 'Canvas ceiling',
+      value: `${profile.canvasLimits.maxSide.toLocaleString()} px max side · ${canvasAreaLabel(profile.canvasLimits.maxArea)}`,
+    },
+    {
+      label: 'Canvas memory budget',
+      value: formatBytes(profile.canvasMemoryBudget),
+    },
+    { label: 'Archive (ZIP) budget', value: formatBytes(profile.maxZipBytes) },
+    {
+      label: 'Workers',
+      value: `${profile.workerCount} light · ${profile.heavyWorkerCount} heavy`,
+    },
+    { label: 'App version', value: appVersion },
+  ]
+
+  const decoderRows: StatRow[] = FORMAT_ORDER.map((format) => ({
+    label: format.toUpperCase(),
+    value: describeDecoder(format),
+  }))
+
+  return (
+    <div class="settings-page">
+      <header class="settings-page__header">
+        <button
+          type="button"
+          class="button button--secondary"
+          onClick={onClose}
+        >
+          Back
+        </button>
+        <h1>Settings</h1>
+      </header>
+
+      <section class="settings-card" aria-labelledby="settings-appearance">
+        <h2 id="settings-appearance">Appearance</h2>
+        <div class="field">
+          <span class="field__label">Theme</span>
+          <div class="segmented">
+            {THEME_OPTIONS.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                aria-pressed={themePreference.value === option.value}
+                class={
+                  themePreference.value === option.value
+                    ? 'segmented__option segmented__option--active'
+                    : 'segmented__option'
+                }
+                onClick={() => {
+                  themePreference.value = option.value
+                  applyTheme(option.value)
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <span class="field__hint">
+            System follows your operating system's light or dark setting.
+          </span>
+        </div>
+      </section>
+
+      <section class="settings-card" aria-labelledby="settings-performance">
+        <h2 id="settings-performance">Performance</h2>
+        <label class="field">
+          <span class="field__label">
+            Maximum workers: {compat ? 1 : selectedWorkers}
+            {!compat && selectedWorkers >= autoWorkers ? ' (auto)' : ''}
+          </span>
+          <input
+            type="range"
+            min={1}
+            max={autoWorkers}
+            step={1}
+            value={selectedWorkers}
+            disabled={compat}
+            aria-label="Maximum workers"
+            onInput={(event) => {
+              maxWorkers.value = Number(event.currentTarget.value)
+              onWorkerSettingsChange()
+            }}
+          />
+          <span class="field__hint">
+            Images are processed in parallel across workers. Higher values are
+            faster on capable devices; lower values leave more headroom for the
+            rest of your system. Heavy formats (AVIF, compressed PNG, HEIC) use
+            fewer workers because each one needs more memory.
+          </span>
+        </label>
+
+        <label class="toggle">
+          <input
+            type="checkbox"
+            checked={compat}
+            onChange={(event) => {
+              compatibilityMode.value = event.currentTarget.checked
+              onWorkerSettingsChange()
+            }}
+          />
+          <span class="toggle__text">
+            <strong>Compatibility mode</strong>
+            <span class="field__hint">
+              Limits processing to a single image at a time. Use this if your
+              device runs out of memory or the tab crashes during large batches.
+              It reduces processing speed.
+            </span>
+          </span>
+        </label>
+      </section>
+
+      <section class="settings-card" aria-labelledby="settings-stats">
+        <h2 id="settings-stats">Stats for nerds</h2>
+        <StatsGroup title="Device" rows={deviceRows} />
+        <StatsGroup
+          title="Encoder backend by format"
+          rows={asyncStats.encoders}
+        />
+        <StatsGroup title="Decoder backend by format" rows={decoderRows} />
+        <StatsGroup title="Capabilities" rows={asyncStats.capabilities} />
+      </section>
+    </div>
+  )
+}
