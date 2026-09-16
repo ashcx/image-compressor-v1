@@ -1145,7 +1145,8 @@ function dimensionsLabel(job: BatchJob): string {
 function AddIcon() {
   return (
     <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M10 4v12M4 10h12" />
+      <rect x="3" y="4" width="11" height="12" rx="2" />
+      <path d="m4.5 13 2.5-2.5 2 2 1.5-1.5 3.5 3.5M15 4v5M12.5 6.5h5" />
     </svg>
   )
 }
@@ -1154,6 +1155,18 @@ function SettingsIcon() {
   return (
     <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
       <path d="M10 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM4.4 6.3l1.1.6a6 6 0 0 0-.1 1.1l-1.2.5a1 1 0 0 0-.5 1.4l.6 1a1 1 0 0 0 1.4.4l1.1-.6c.3.3.7.6 1.1.8l-.1 1.3a1 1 0 0 0 1 1.1h1.2a1 1 0 0 0 1-1l-.1-1.3c.4-.2.8-.5 1.1-.8l1.1.6a1 1 0 0 0 1.4-.4l.6-1a1 1 0 0 0-.5-1.4l-1.2-.5a6 6 0 0 0-.1-1.1l1.1-.6a1 1 0 0 0 .4-1.4l-.6-1a1 1 0 0 0-1.4-.4l-1.1.6a5.5 5.5 0 0 0-1.1-.7l.1-1.3a1 1 0 0 0-1-1H9.8a1 1 0 0 0-1 1l.1 1.3c-.4.2-.8.4-1.1.7l-1.1-.6a1 1 0 0 0-1.4.4l-.6 1a1 1 0 0 0 .4 1.4Z" />
+    </svg>
+  )
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      class={`chevron-icon${open ? ' chevron-icon--open' : ''}`}
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+    >
+      <path d="m5 7.5 5 5 5-5" />
     </svg>
   )
 }
@@ -1330,6 +1343,18 @@ function JobList() {
 // The panel reads the aggregate computeds, isolating those re-renders from the
 // list and the app shell.
 function Panel() {
+  const [advancedOpen, setAdvancedOpen] = useState(() =>
+    typeof window === 'undefined' ? true : window.innerWidth >= 744,
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 744px)')
+    const update = () => setAdvancedOpen(media.matches)
+    update()
+    media.addEventListener?.('change', update)
+    return () => media.removeEventListener?.('change', update)
+  }, [])
+
   return (
     <aside class="panel settings-panel" aria-label="Compression settings">
       <div class="settings-panel__heading">
@@ -1354,75 +1379,128 @@ function Panel() {
         </select>
       </label>
 
-      {activeControls.value.map((control) => (
-        <div class="field" key={control.key}>
-          <span class="field__label">
-            {control.label}
-            {control.kind === 'range' ? `: ${settings.value[control.key]}` : ''}
-          </span>
-          {control.kind === 'range' ? (
+      <button
+        type="button"
+        class="mobile-settings-toggle"
+        aria-expanded={advancedOpen}
+        onClick={() => setAdvancedOpen((open) => !open)}
+      >
+        <span>More settings</span>
+        <ChevronIcon open={advancedOpen} />
+      </button>
+
+      {advancedOpen && (
+        <div class="settings-panel__advanced">
+          {activeControls.value.map((control) => (
+            <div class="field" key={control.key}>
+              <span class="field__label">
+                {control.label}
+                {control.kind === 'range'
+                  ? `: ${settings.value[control.key]}`
+                  : ''}
+              </span>
+              {control.kind === 'range' ? (
+                <input
+                  type="range"
+                  aria-label={control.label}
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  value={settings.value[control.key]}
+                  disabled={busy.value}
+                  onInput={(event) =>
+                    changeControl(
+                      control.key,
+                      Number(event.currentTarget.value),
+                    )
+                  }
+                />
+              ) : (
+                <select
+                  class="select"
+                  aria-label={control.label}
+                  value={String(settings.value[control.key])}
+                  disabled={busy.value}
+                  onChange={(event) =>
+                    changeControl(
+                      control.key,
+                      Number(event.currentTarget.value),
+                    )
+                  }
+                >
+                  {control.options.map((option) => (
+                    <option value={option.value} key={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {controlHint(control, settings.value[control.key]) && (
+                <span class="field__hint">
+                  {controlHint(control, settings.value[control.key])}
+                </span>
+              )}
+            </div>
+          ))}
+
+          <label class="field">
+            <span class="field__label">Resize - Max long edge (px)</span>
             <input
-              type="range"
-              aria-label={control.label}
-              min={control.min}
-              max={control.max}
-              step={control.step}
-              value={settings.value[control.key]}
-              disabled={busy.value}
-              onInput={(event) =>
-                changeControl(control.key, Number(event.currentTarget.value))
-              }
-            />
-          ) : (
-            <select
-              class="select"
-              aria-label={control.label}
-              value={String(settings.value[control.key])}
+              class="input"
+              type="number"
+              min={0}
+              placeholder="Original size"
+              value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
               disabled={busy.value}
               onChange={(event) =>
-                changeControl(control.key, Number(event.currentTarget.value))
+                changeResize(Number(event.currentTarget.value))
               }
-            >
-              {control.options.map((option) => (
-                <option value={option.value} key={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            />
+          </label>
+
+          {settingsWarning.value && (
+            <p class="field__warning" role="alert">
+              {settingsWarning.value}
+            </p>
           )}
-          {controlHint(control, settings.value[control.key]) && (
-            <span class="field__hint">
-              {controlHint(control, settings.value[control.key])}
-            </span>
+
+          {batchWarning.value && (
+            <p class="field__warning" role="alert">
+              {batchWarning.value}
+            </p>
           )}
         </div>
-      ))}
-
-      <label class="field">
-        <span class="field__label">Resize - Max long edge (px)</span>
-        <input
-          class="input"
-          type="number"
-          min={0}
-          placeholder="Original size"
-          value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
-          disabled={busy.value}
-          onChange={(event) => changeResize(Number(event.currentTarget.value))}
-        />
-      </label>
-
-      {settingsWarning.value && (
-        <p class="field__warning" role="alert">
-          {settingsWarning.value}
-        </p>
-      )}
-
-      {batchWarning.value && (
-        <p class="field__warning" role="alert">
-          {batchWarning.value}
-        </p>
       )}
     </aside>
+  )
+}
+
+function QueuePanel() {
+  const [expanded, setExpanded] = useState(() =>
+    typeof window === 'undefined' ? true : window.innerWidth >= 744,
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 744px)')
+    const update = () => setExpanded(media.matches)
+    update()
+    media.addEventListener?.('change', update)
+    return () => media.removeEventListener?.('change', update)
+  }, [])
+
+  return (
+    <section class="queue-panel">
+      <button
+        type="button"
+        class="queue-toggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((open) => !open)}
+      >
+        <span>{expanded ? 'Hide images' : 'Show images'}</span>
+        <ChevronIcon open={expanded} />
+      </button>
+      {expanded && <JobList />}
+    </section>
   )
 }
 
@@ -1434,8 +1512,13 @@ function BatchSummary() {
       : estimatePhase.value
         ? 'Preparing estimates'
         : needsCompress.value
-          ? 'Ready to compress'
+          ? 'Ready'
           : 'Complete'
+  const estimateLabel = estimatePhase.value
+    ? 'Calculating…'
+    : batchEstimate.value > 0
+      ? formatBytes(batchEstimate.value)
+      : '—'
   const reduction =
     originalTotal.value > 0 && batchEstimate.value > 0
       ? `${savingsLabel(originalTotal.value, batchEstimate.value)} smaller`
@@ -1459,7 +1542,8 @@ function BatchSummary() {
           </p>
         </div>
         <div class="summary-card__estimate">
-          <strong>{reduction}</strong>
+          <strong>{estimateLabel}</strong>
+          <em>{reduction}</em>
         </div>
       </div>
 
@@ -1655,7 +1739,7 @@ export function App() {
             IC
           </span>
           <div>
-            <h1>Image Compressor</h1>
+            <h1>Compressor</h1>
             <p>Private, fast image compression in your browser.</p>
           </div>
         </div>
@@ -1663,22 +1747,26 @@ export function App() {
           <button
             type="button"
             class="button button--secondary"
+            aria-label="Add images"
+            title="Add images"
             disabled={busy.value}
             onClick={() => inputRef.current?.click()}
           >
             <AddIcon />
-            Add images
+            <span class="button__label">Add images</span>
           </button>
           {jobCount > 0 && (
             <button
               type="button"
               class={`button button--secondary${settingsOpen ? ' button--selected' : ''}`}
+              aria-label="Settings"
+              title="Settings"
               aria-expanded={settingsOpen}
               aria-controls="compression-settings"
               onClick={() => setSettingsOpen((open) => !open)}
             >
               <SettingsIcon />
-              Settings
+              <span class="button__label">Settings</span>
             </button>
           )}
         </div>
@@ -1711,9 +1799,7 @@ export function App() {
         <div class="app__workspace">
           <div class="workspace__main">
             <BatchSummary />
-            <section class="queue-panel">
-              <JobList />
-            </section>
+            <QueuePanel />
           </div>
           {settingsOpen && (
             <div id="compression-settings">

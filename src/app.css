@@ -190,6 +190,21 @@ select:focus-visible {
   stroke-width: 1.7;
 }
 
+.chevron-icon {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform 0.15s ease;
+}
+
+.chevron-icon--open {
+  transform: rotate(180deg);
+}
+
 .update-banner {
   display: flex;
   align-items: center;
@@ -316,10 +331,17 @@ select:focus-visible {
 }
 
 .summary-card__estimate strong {
-  color: var(--success);
-  font-size: 1rem;
+  font-size: 1.45rem;
   font-weight: 760;
   letter-spacing: -0.04em;
+}
+
+.summary-card__estimate em {
+  margin-top: 0.15rem;
+  color: var(--success);
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .progress {
@@ -359,6 +381,16 @@ select:focus-visible {
   flex-direction: column;
   gap: 1rem;
   padding: 1.15rem;
+}
+
+.settings-panel__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mobile-settings-toggle {
+  display: none;
 }
 
 .settings-panel__heading {
@@ -436,6 +468,10 @@ input[type="range"]:disabled {
 .queue-panel {
   min-width: 0;
   overflow: hidden;
+}
+
+.queue-toggle {
+  display: none;
 }
 
 .queue {
@@ -666,16 +702,61 @@ input[type="range"]:disabled {
   }
 
   .app__header {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
   .app__header-actions {
-    width: 100%;
+    flex: none;
+    width: auto;
+    gap: 0.35rem;
+  }
+
+  .app__header p {
+    display: none;
   }
 
   .app__header-actions .button {
-    flex: 1;
+    width: 2.55rem;
+    min-width: 2.55rem;
+    padding: 0.62rem;
+  }
+
+  .app__header-actions .button__label {
+    display: none;
+  }
+
+  .mobile-settings-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.1rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted-strong);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .queue-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 3.1rem;
+    padding: 0.8rem 1rem;
+    border: 0;
+    background: var(--surface);
+    color: var(--muted-strong);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .queue-panel:has(.queue-toggle[aria-expanded="true"]) .queue-toggle {
+    border-bottom: 1px solid var(--border);
   }
 
   .summary-card,
@@ -693,6 +774,10 @@ input[type="range"]:disabled {
 
   .summary-card__actions .button--primary {
     flex-basis: 100%;
+  }
+
+  .summary-card__estimate {
+    padding-top: 0;
   }
 
   .job {
