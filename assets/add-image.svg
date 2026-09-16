@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Add image</title>
-  <desc id="desc">A photo frame with mountains and sun, and a plus badge in the top-right corner.</desc>
+  <desc id="desc">A bold photo frame with filled mountains and sun, and a solid plus badge in the top-right corner.</desc>
   <defs>
     <linearGradient id="strokeGrad" x1="88" y1="112" x2="424" y2="416" gradientUnits="userSpaceOnUse">
       <stop stop-color="#1fa48a" />
@@ -11,23 +11,23 @@
       <stop offset="1" stop-color="#2b3a72" />
     </linearGradient>
     <clipPath id="frameClip">
-      <rect x="90" y="130" width="332" height="256" rx="24" />
+      <rect x="98" y="144" width="316" height="228" rx="20" />
     </clipPath>
   </defs>
 
   <!-- photo frame -->
-  <rect x="72" y="112" width="368" height="288" rx="40" fill="none" stroke="url(#strokeGrad)" stroke-width="30" />
+  <rect x="68" y="114" width="376" height="288" rx="52" fill="none" stroke="url(#strokeGrad)" stroke-width="60" />
 
-  <!-- sun + mountains -->
+  <!-- sun + filled mountains -->
   <g clip-path="url(#frameClip)">
-    <circle cx="176" cy="204" r="28" fill="#ffcf5c" />
-    <path d="M88 372l104-116 68 68 76-84 108 132" fill="none" stroke="url(#strokeGrad)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="196" cy="216" r="40" fill="#ffcf5c" />
+    <path d="M98 372l102-118 66 66 74-84 74 136z" fill="url(#strokeGrad)" />
   </g>
 
   <!-- plus badge -->
-  <circle cx="392" cy="124" r="58" fill="url(#badgeGrad)" stroke="#f6fffc" stroke-width="10" />
-  <g stroke="#f6fffc" stroke-width="20" stroke-linecap="round">
-    <path d="M392 100v48" />
-    <path d="M368 124h48" />
+  <circle cx="396" cy="122" r="66" fill="url(#badgeGrad)" stroke="#f6fffc" stroke-width="14" />
+  <g stroke="#f6fffc" stroke-width="28" stroke-linecap="round">
+    <path d="M396 94v56" />
+    <path d="M368 122h56" />
   </g>
 </svg>
