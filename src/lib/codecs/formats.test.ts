@@ -20,11 +20,6 @@ describe('format specs', () => {
   it('gives every control valid defaults and options', () => {
     for (const format of FORMAT_ORDER) {
       const spec = FORMAT_SPECS[format]
-      if (format === 'heic') {
-        // The bundled encoder has a single fixed quality, so no controls.
-        expect(spec.controls).toEqual([])
-        continue
-      }
       expect(spec.controls.length).toBeGreaterThan(0)
       for (const control of spec.controls) {
         expect(ALL_KEYS).toContain(control.key)
@@ -55,6 +50,7 @@ describe('format specs', () => {
 
   it('classifies heavy codecs for the reduced worker pool', () => {
     expect(isHeavyFormat('avif', 0)).toBe(true)
+    expect(isHeavyFormat('heic', 0)).toBe(true)
     expect(isHeavyFormat('png', 0)).toBe(false)
     expect(isHeavyFormat('png', 1)).toBe(true)
     expect(isHeavyFormat('png', 2)).toBe(true)

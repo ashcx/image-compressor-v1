@@ -1,0 +1,9 @@
+{
+  "name": "elheif",
+  "version": "0.1.0-heic08",
+  "description": "WASM HEIC encoder/decoder (libheif + libde265 + kvazaar) with quality and preset controls",
+  "type": "module",
+  "main": "pkg/index.js",
+  "types": "pkg/index.d.ts",
+  "license": "MIT"
+}

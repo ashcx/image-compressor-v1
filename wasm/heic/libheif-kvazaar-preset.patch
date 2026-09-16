@@ -1,0 +1,56 @@
+diff --git a/libheif/plugins/encoder_kvazaar.cc b/libheif/plugins/encoder_kvazaar.cc
+index 158f174..96a8930 100644
+--- a/libheif/plugins/encoder_kvazaar.cc
++++ b/libheif/plugins/encoder_kvazaar.cc
+@@ -43,6 +43,7 @@ struct encoder_struct_kvazaar
+ {
+   int quality = 75;
+   bool lossless = false;
++  std::string preset = "medium";
+ 
+   std::vector<uint8_t> output_data;
+   size_t output_idx = 0;
+@@ -249,8 +250,26 @@ static struct heif_error kvazaar_get_parameter_boolean(void* encoder, const char
+ */
+ 
+ 
++static const char* const kParam_preset_valid_values[] = {
++  "ultrafast", "superfast", "veryfast", "faster", "fast",
++  "medium", "slow", "slower", "veryslow", "placebo", nullptr
++};
++
++
+ static struct heif_error kvazaar_set_parameter_string(void* encoder_raw, const char* name, const char* value)
+ {
++  struct encoder_struct_kvazaar* encoder = (struct encoder_struct_kvazaar*) encoder_raw;
++
++  if (strcmp(name, "preset") == 0) {
++    for (const char* const* v = kParam_preset_valid_values; *v; v++) {
++      if (strcmp(*v, value) == 0) {
++        encoder->preset = value;
++        return heif_error_ok;
++      }
++    }
++    return heif_error_invalid_parameter_value;
++  }
++
+   return heif_error_unsupported_parameter;
+ }
+ 
+@@ -390,9 +409,14 @@ static struct heif_error kvazaar_encode_image(void* encoder_raw, const struct he
+   kvz_config* config = uconfig.get();
+   api->config_init(config); // param, encoder->preset.c_str(), encoder->tune.c_str());
+ 
+-#if HAVE_KVAZAAR_ENABLE_LOGGING
+   config->enable_logging_output = 0;
+-#endif
++  if (!api->config_parse(config, "preset", encoder->preset.c_str())) {
++    return {
++      heif_error_Encoder_plugin_error,
++      heif_suberror_Unspecified,
++      "Unsupported encoder preset"
++    };
++  }
+ 
+ #if !ENABLE_MULTITHREADING_SUPPORT
+   // 0: Process everything with main thread

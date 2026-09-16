@@ -1,0 +1,55 @@
+diff --git a/core/include/impl.h b/core/include/impl.h
+index f6de05f..33150d4 100644
+--- a/core/include/impl.h
++++ b/core/include/impl.h
+@@ -23,5 +23,5 @@ struct EncodeResult {
+ 
+ DecodeResult decode(const std::uint8_t *buffer, int byteSize);
+ EncodeResult encode(const std::uint8_t *buffer, int byteSize, int width,
+-                    int height);
++                    int height, int quality, const std::string &preset);
+ } // namespace Elheif
+\ No newline at end of file
+diff --git a/core/src/impl.cpp b/core/src/impl.cpp
+index cb18547..703f66c 100644
+--- a/core/src/impl.cpp
++++ b/core/src/impl.cpp
+@@ -97,7 +97,7 @@ static heif_error write_impl(heif_context *ctx, const void *data, size_t size,
+ }
+ 
+ EncodeResult encode(const std::uint8_t *buffer, int byteSize, int width,
+-                    int height) {
++                    int height, int quality, const std::string &preset) {
+   constexpr auto CHANNEL = heif_channel::heif_channel_interleaved;
+   auto _ = CallerGuard();
+ 
+@@ -131,6 +131,11 @@ EncodeResult encode(const std::uint8_t *buffer, int byteSize, int width,
+                heif_context_get_encoder_for_format(
+                    ctx.get(), heif_compression_format::heif_compression_HEVC,
+                    encoder.data()));
++  WRAP_ERR_RET("set quality",
++               heif_encoder_set_lossy_quality(encoder.get(), quality));
++  WRAP_ERR_RET("set preset",
++               heif_encoder_set_parameter_string(encoder.get(), "preset",
++                                                 preset.c_str()));
+   WRAP_ERR_RET("encode image",
+                heif_context_encode_image(ctx.get(), img.get(), encoder.get(),
+                                          nullptr, nullptr));
+diff --git a/wasm/src/impl.cpp b/wasm/src/impl.cpp
+index c29a3da..ab13e43 100644
+--- a/wasm/src/impl.cpp
++++ b/wasm/src/impl.cpp
+@@ -32,10 +32,11 @@ emscripten::val jsDecodeImage(const std::string &buffer) {
+ }
+ 
+ emscripten::val jsEncodeImage(const std::string &buffer, int width,
+-                              int height) {
++                              int height, int quality,
++                              const std::string &preset) {
+   auto res =
+       Elheif::encode(reinterpret_cast<const std::uint8_t *>(buffer.data()),
+-                     buffer.size(), width, height);
++                     buffer.size(), width, height, quality, preset);
+ 
+   auto ret = emscripten::val::object();
+   ret.set("err", res.err);
