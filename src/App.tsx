@@ -9,6 +9,7 @@ import {
   FORMAT_SPECS,
   type FormatControl,
   isHeavyFormat,
+  listFormatLabels,
 } from './lib/codecs/formats'
 import { describeRenderer } from './lib/codecs/registry'
 import type { OutputFormat, ResizeOptions } from './lib/codecs/types'
@@ -746,7 +747,7 @@ async function addFiles(fileList: FileList | File[] | null) {
         .join(', ')
       const extra =
         rejected.length > 3 ? ` and ${rejected.length - 3} more` : ''
-      notice.value = `Skipped ${rejected.length} unsupported file${rejected.length === 1 ? '' : 's'}: ${listed}${extra}. Supported inputs are JPEG, PNG, WebP, and AVIF.`
+      notice.value = `Skipped ${rejected.length} unsupported file${rejected.length === 1 ? '' : 's'}: ${listed}${extra}. Supported inputs are ${listFormatLabels()}.`
     }
     if (accepted.length === 0) return
 
@@ -1810,6 +1811,7 @@ export function App() {
           </span>
           <span class="dropzone__title">Compress your images</span>
           <span class="dropzone__hint">Click or drag to compress images</span>
+          <span class="dropzone__formats">Supports {listFormatLabels()}</span>
         </button>
       )}
 

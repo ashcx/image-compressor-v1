@@ -139,6 +139,18 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   },
 }
 
+export const SUPPORTED_FORMAT_LABELS = FORMAT_ORDER.map((format) =>
+  FORMAT_SPECS[format].mimeType.replace(/^image\//, '').toUpperCase(),
+)
+
+export function listFormatLabels(
+  labels: string[] = SUPPORTED_FORMAT_LABELS,
+): string {
+  if (labels.length < 2) return labels[0] ?? ''
+  if (labels.length === 2) return labels.join(' and ')
+  return `${labels.slice(0, -1).join(', ')}, and ${labels.at(-1)}`
+}
+
 /**
  * Heavy codecs keep a large WASM heap and decoded canvas per worker, so they
  * run on a reduced (halved) worker pool. AVIF always qualifies; PNG qualifies
