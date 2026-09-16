@@ -288,10 +288,10 @@ Scaled decoding is not meaningfully cheaper than a full decode in Chrome:
 - 16.6 MP: 512 px **137 ms** versus full **145 ms**.
 
 The estimate decode cap is therefore **2048 px**, capped at the image's natural size, so
-small images are never upscaled. The sample encodes are the real cost. Moving from 192/448
-to 384/896 samples cost about **33 ms → 81 ms** per light image and improved median error
-from about **25% → ~11%**. Larger samples — 512/1024 and 768/1792 — added little accuracy
-for **30–200%** more time.
+small images are never upscaled. The sample encodes are the real cost. Ordinary images use
+384/896 samples; images that reach the 2048 px estimate decode cap use 512/1536 samples so
+high-resolution photographs retain more detail. The larger window is limited to those images
+to avoid adding cost to ordinary inputs.
 
 Measured against a real full-resolution encode on a 25-image corpus of photos from 0.3–26 MP,
 plus screenshots, text, graphics, gradients, noise, and alpha:

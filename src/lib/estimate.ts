@@ -8,6 +8,8 @@ import { encodeImageSource } from './convert'
 const SAMPLE_QUALITIES = [50, 75, 85, 94]
 const SMALL_LONG_EDGE = 384
 const LARGE_LONG_EDGE = 896
+const HIGH_RES_SMALL_LONG_EDGE = 512
+const HIGH_RES_LARGE_LONG_EDGE = 1536
 
 // Exponent bounds keep pathological inputs from producing wild sizes.
 const MIN_EXPONENT = 0.2
@@ -15,7 +17,10 @@ const MAX_EXPONENT = 1.6
 
 // Calibration fitted on a 25-image corpus (photographs from 0.3-26 MP plus UI
 // screenshots, scanned text, flat graphics, gradients, noise and alpha images)
-// using the estimate decode cap (<=2048px) and 384/896 sample encodes.
+// using 384/896 sample encodes for ordinary images and 512/1536 samples when
+// the estimate decode reaches its 2048px cap. The larger window preserves more
+// detail for high-resolution photographs without making small-image estimates
+// more expensive.
 //
 // Encoded size does not scale linearly with pixel count: downscaled samples
 // lose high-frequency detail, so a naive pixel-ratio overestimates. We sample
@@ -70,6 +75,16 @@ function lightRow(
     if (Math.abs(q - quality) < Math.abs(best - quality)) best = q
   }
   return table[best]
+}
+
+export function estimateSampleEdges(
+  width: number,
+  height: number,
+): { small: number; large: number } {
+  const highResolution = Math.max(width, height) >= 2048
+  return highResolution
+    ? { small: HIGH_RES_SMALL_LONG_EDGE, large: HIGH_RES_LARGE_LONG_EDGE }
+    : { small: SMALL_LONG_EDGE, large: LARGE_LONG_EDGE }
 }
 
 export function sampleBeta(
@@ -154,8 +169,12 @@ export async function buildEstimateSamples(
   format: OutputFormat,
   options: EstimateOptions = {},
 ): Promise<EstimateSample[]> {
-  const small = scaleImage(source, SMALL_LONG_EDGE)
-  const large = scaleImage(source, LARGE_LONG_EDGE)
+  const sampleEdges = estimateSampleEdges(
+    options.fullWidth ?? source.width,
+    options.fullHeight ?? source.height,
+  )
+  const small = scaleImage(source, sampleEdges.small)
+  const large = scaleImage(source, sampleEdges.large)
 
   const smallPixels = small.width * small.height
   const largePixels = large.width * large.height

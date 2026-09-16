@@ -53,9 +53,12 @@ change the app so future runs have a comparison point.
 | `jpeg-photo` | JPEG q75 | photo | Native encode baseline. |
 | `jpeg-photo-resize` | JPEG q75 | photo | Resize-aware path, max long edge 1024. |
 | `webp-photo` | WebP q75 | photo | Native WebP, WASM fallback. |
+| `jpeg-large` / `webp-large` | JPEG/WebP q75 | large-hires | High-resolution calibration. |
+| `jpeg-large-noise` / `webp-large-noise` | JPEG/WebP q75 | large-noise | High-resolution high-frequency calibration. |
 | `png-screenshot` | PNG mode 0 | screenshot | Native lossless. |
 | `png-screenshot-lossless` | PNG mode 1 | screenshot | `@jsquash/png` + oxipng. |
 | `avif-photo` | AVIF q50 speed 8 | photo | WASM; capped at 25 files by default. |
+| `avif-large` / `avif-large-noise` | AVIF q50 speed 8 | large-hires / large-noise | High-resolution calibration; capped at 4 / 2 files. |
 | `jpeg-mixed` | JPEG q75 | all cohorts | Representative batch content. |
 
 ## Fixture cohorts
@@ -69,6 +72,9 @@ the QA corpus definition in [../docs/TEST-MATRIX.md](../docs/TEST-MATRIX.md):
 - **transparency** — alpha shapes on a transparent background (800×800 PNG).
 - **noise** — per-pixel high-frequency content, the worst case for size (1200×1200 JPEG).
 - **large** — 4000×3000 JPEG to exercise decode/resize and memory.
+- **large-hires** — 6240×4160 JPEG with broad and fine detail to exercise high-resolution
+  estimate calibration.
+- **large-noise** — 6240×4160 per-pixel random JPEG to exercise worst-case output sizing.
 
 The generator produces a bounded pool of unique images per cohort and reuses them
 to reach the requested count, which keeps generation fast while still measuring
@@ -84,6 +90,8 @@ per-file processing cost.
 - **Peak rows** — max job rows mounted in the DOM (virtualization check).
 - **Busy/size** — sampled app worker meter (busy workers / pool size).
 - **Heap** — peak `performance.memory.usedJSHeapSize` where available (Chromium).
+- **Estimate ratio** — exact output bytes divided by the estimate captured immediately before
+  compression; 1.0 is a perfect estimate.
 
 ## Baseline
 

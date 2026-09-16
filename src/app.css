@@ -257,6 +257,12 @@ select:focus-visible {
   line-height: 1.5;
 }
 
+.dropzone__formats {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
 .welcome-visual {
   position: relative;
   display: grid;
@@ -270,7 +276,7 @@ select:focus-visible {
 .welcome-visual__halo {
   position: absolute;
   inset: 1.25rem;
-  border: 1px solid rgba(52, 113, 90, 0.18);
+  border: 2px solid rgba(52, 113, 90, 0.18);
   border-radius: 50%;
   box-shadow: 0 0 0 1rem rgba(52, 113, 90, 0.035);
   animation: welcome-pulse 3.6s ease-in-out infinite;
@@ -278,7 +284,7 @@ select:focus-visible {
 
 .welcome-visual__orbit {
   position: absolute;
-  border: 1px solid rgba(52, 113, 90, 0.2);
+  border: 2px solid rgba(52, 113, 90, 0.2);
   border-radius: 50%;
 }
 
@@ -306,7 +312,7 @@ select:focus-visible {
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.6;
+  stroke-width: 2;
   animation: welcome-float 4.2s ease-in-out infinite;
 }
 
