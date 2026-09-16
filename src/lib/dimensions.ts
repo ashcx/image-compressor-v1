@@ -1,4 +1,5 @@
 import { detectFormat } from './detect'
+import { orientationSwapsAxes, readExifOrientation } from './orientation'
 
 export interface Dimensions {
   width: number
@@ -287,18 +288,28 @@ export function parseDimensions(buffer: ArrayBuffer): Dimensions | null {
 
   try {
     const view = new DataView(buffer)
-    switch (format) {
-      case 'png':
-        return parsePng(view)
-      case 'jpeg':
-        return parseJpeg(view)
-      case 'webp':
-        return parseWebp(view)
-      case 'avif':
-        return parseAvif(view)
-      case 'heic':
-        return parseHeif(view)
-    }
+    const dimensions = ((): Dimensions | null => {
+      switch (format) {
+        case 'png':
+          return parsePng(view)
+        case 'jpeg':
+          return parseJpeg(view)
+        case 'webp':
+          return parseWebp(view)
+        case 'avif':
+          return parseAvif(view)
+        case 'heic':
+          return parseHeif(view)
+      }
+    })()
+    if (dimensions === null) return null
+
+    // Header dimensions are stored unrotated; swap them for orientations that
+    // transpose the image so they match the oriented pixels.
+    const orientation = readExifOrientation(buffer, format)
+    return orientationSwapsAxes(orientation)
+      ? { width: dimensions.height, height: dimensions.width }
+      : dimensions
   } catch {
     return null
   }
