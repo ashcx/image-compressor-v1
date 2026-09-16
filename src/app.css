@@ -288,10 +288,17 @@ select:focus-visible {
 }
 
 .summary-card__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  align-items: baseline;
+}
+
+.summary-card__primary,
+.summary-card__estimate {
+  display: contents;
 }
 
 .eyebrow {
@@ -305,7 +312,9 @@ select:focus-visible {
 }
 
 .summary-card__count {
-  margin-top: 0.5rem;
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
   font-size: clamp(2rem, 5vw, 2.7rem);
   font-weight: 760;
   letter-spacing: -0.06em;
@@ -318,27 +327,28 @@ select:focus-visible {
 }
 
 .summary-card__status {
-  margin: 0.5rem 0 0;
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
   color: var(--muted-strong);
   font-size: 0.82rem;
 }
 
-.summary-card__estimate {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+.summary-card__estimate strong {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
   padding-top: 0.2rem;
   text-align: right;
-}
-
-.summary-card__estimate strong {
   font-size: 1.45rem;
   font-weight: 760;
   letter-spacing: -0.04em;
 }
 
 .summary-card__estimate em {
-  margin-top: 0.15rem;
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
   color: var(--success);
   font-size: 0.8rem;
   font-style: normal;
@@ -480,6 +490,7 @@ input[type="range"]:disabled {
 }
 
 .queue {
+  min-height: 0;
   max-height: min(58vh, 40rem);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -576,8 +587,14 @@ input[type="range"]:disabled {
   flex: 1;
   flex-direction: column;
   gap: 0.2rem;
-  align-self: flex-end;
-  margin-bottom: 0.1rem;
+  align-self: center;
+}
+
+.job__details {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.75rem;
 }
 
 .job__name {
@@ -590,6 +607,8 @@ input[type="range"]:disabled {
 }
 
 .job__meta {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   color: var(--muted);
   font-size: 0.74rem;
@@ -607,8 +626,7 @@ input[type="range"]:disabled {
   align-items: center;
   gap: 0.3rem;
   margin-left: auto;
-  align-self: flex-end;
-  margin-bottom: 0.1rem;
+  align-self: auto;
   color: var(--muted-strong);
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
@@ -819,8 +837,8 @@ input[type="range"]:disabled {
   }
 
   .queue {
-    flex: 1;
-    min-height: calc(3 * 4rem + 2 * 0.5rem);
+    flex: 1 1 0;
+    min-height: 0;
     max-height: none;
   }
 }

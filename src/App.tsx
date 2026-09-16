@@ -1234,23 +1234,25 @@ const JobRow = memo(function JobRow({
         <span class="job__name" title={job.name}>
           {job.name}
         </span>
-        <span
-          class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
-        >
-          {dimensions}
-          {label && `${dimensions ? ' · ' : ''}${label}`}
-        </span>
-      </div>
-      <div class="job__size">
-        <span>{formatBytes(job.originalSize)}</span>
-        {job.outputSize > 0 && (
-          <>
-            <span class="job__size-arrow" aria-hidden="true">
-              →
-            </span>
-            <span>{formatBytes(job.outputSize)}</span>
-          </>
-        )}
+        <div class="job__details">
+          <span
+            class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
+          >
+            {dimensions}
+            {label && `${dimensions ? ' · ' : ''}${label}`}
+          </span>
+          <div class="job__size">
+            <span>{formatBytes(job.originalSize)}</span>
+            {job.outputSize > 0 && (
+              <>
+                <span class="job__size-arrow" aria-hidden="true">
+                  →
+                </span>
+                <span>{formatBytes(job.outputSize)}</span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
       <div class="job__actions">
         {current && job.outputStored ? (
@@ -1513,7 +1515,7 @@ function BatchSummary() {
   return (
     <section class="summary-card">
       <div class="summary-card__top">
-        <div>
+        <div class="summary-card__primary">
           <div class="summary-card__count">
             {finished.value} <span>/ {total.value}</span>
           </div>
@@ -1548,7 +1550,7 @@ function BatchSummary() {
       </div>
 
       <div class="summary-card__actions">
-        {needsCompress.value && (
+        {!cancellable.value && needsCompress.value && (
           <button
             type="button"
             class="button button--primary"
@@ -1570,31 +1572,30 @@ function BatchSummary() {
           </button>
         )}
 
-        {canDownloadAll.value && (
+        {!cancellable.value && !delivery.value && canDownloadAll.value && (
           <button
             type="button"
             class="button"
             onClick={downloadAll}
             disabled={busy.value}
           >
-            {delivery.value?.kind === 'zip'
-              ? `Zipping ${delivery.value.processed}/${delivery.value.total}…`
-              : `Download ${readyDownloadable.value} as zip`}
+            Download {readyDownloadable.value} as zip
           </button>
         )}
 
-        {canDownloadAll.value && supportsDirectoryPicker && (
-          <button
-            type="button"
-            class="button"
-            disabled={busy.value}
-            onClick={saveToFolder}
-          >
-            {delivery.value?.kind === 'folder'
-              ? `Saving ${delivery.value.processed}/${delivery.value.total}…`
-              : 'Save to folder'}
-          </button>
-        )}
+        {!cancellable.value &&
+          !delivery.value &&
+          canDownloadAll.value &&
+          supportsDirectoryPicker && (
+            <button
+              type="button"
+              class="button"
+              disabled={busy.value}
+              onClick={saveToFolder}
+            >
+              Save to folder
+            </button>
+          )}
 
         <button
           type="button"
