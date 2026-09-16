@@ -91,7 +91,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
             hint: 'Slow to process, but fully lossless (30–50% smaller).',
           },
           {
-            label: 'Compressed (lower quality, slowest)',
+            label: 'Compressed (best for graphics, slowest)',
             value: 2,
             hint: 'Slow. Not recommended for photos — use JPEG for those. Can be acceptable for graphics with solid colours.',
           },
