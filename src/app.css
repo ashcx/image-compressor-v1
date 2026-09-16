@@ -777,7 +777,7 @@ input[type="range"]:disabled {
   }
 
   .summary-card__actions .button {
-    flex: 1 1 0;
+    flex: 1 1 calc(50% - 0.275rem);
     min-width: 0;
   }
 
