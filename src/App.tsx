@@ -349,6 +349,10 @@ const canDownloadAll = computed(
   () => total.value > 1 && readyDownloadable.value > 0,
 )
 
+const readyToCompress = computed(() =>
+  Math.max(0, stats.value.active - stats.value.ready),
+)
+
 function downloadableList(): BatchJob[] {
   const key = outputKey.value
   return listJobs().filter(
@@ -1128,15 +1132,19 @@ function statusLabel(job: BatchJob): string {
   }
 }
 
-// Reads poolStats/renderer itself so frequent pool notifications re-render only
-// this meter, not the whole job list.
-function PoolMeter() {
-  const stats = poolStats.value
+function AddIcon() {
   return (
-    <span class="panel__value" title="Encoder backend and worker pool">
-      {renderer.value ? `${renderer.value} · ` : ''}workers {stats.busy}/
-      {stats.size}
-    </span>
+    <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 4v12M4 10h12" />
+    </svg>
+  )
+}
+
+function SettingsIcon() {
+  return (
+    <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM4.4 6.3l1.1.6a6 6 0 0 0-.1 1.1l-1.2.5a1 1 0 0 0-.5 1.4l.6 1a1 1 0 0 0 1.4.4l1.1-.6c.3.3.7.6 1.1.8l-.1 1.3a1 1 0 0 0 1 1.1h1.2a1 1 0 0 0 1-1l-.1-1.3c.4-.2.8-.5 1.1-.8l1.1.6a1 1 0 0 0 1.4-.4l.6-1a1 1 0 0 0-.5-1.4l-1.2-.5a6 6 0 0 0-.1-1.1l1.1-.6a1 1 0 0 0 .4-1.4l-.6-1a1 1 0 0 0-1.4-.4l-1.1.6a5.5 5.5 0 0 0-1.1-.7l.1-1.3a1 1 0 0 0-1-1H9.8a1 1 0 0 0-1 1l.1 1.3c-.4.2-.8.4-1.1.7l-1.1-.6a1 1 0 0 0-1.4.4l-.6 1a1 1 0 0 0 .4 1.4Z" />
+    </svg>
   )
 }
 
@@ -1205,14 +1213,12 @@ const JobRow = memo(function JobRow({
         <span
           class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
         >
-          {job.width > 0 && `${job.width}×${job.height}px · `}
+          {job.width > 0 && `${job.width}×${job.height} · `}
           {formatBytes(job.originalSize)}
           {job.outputSize > 0 && (
             <>
               {' → '}
-              {job.sizeIsExact ? '' : '~'}
-              {formatBytes(job.outputSize)} (
-              {savingsLabel(job.originalSize, job.outputSize)})
+              {formatBytes(job.outputSize)}
             </>
           )}
           {label && ` · ${label}`}
@@ -1309,11 +1315,21 @@ function JobList() {
 
 // The panel reads the aggregate computeds, isolating those re-renders from the
 // list and the app shell.
-function Panel({ onAddImages }: { onAddImages: () => void }) {
+function Panel() {
   return (
-    <section class="panel">
+    <aside class="panel settings-panel" aria-label="Compression settings">
+      <div class="settings-panel__heading">
+        <div>
+          <p class="eyebrow">Configuration</p>
+          <h2>Compression settings</h2>
+        </div>
+        <span class="settings-panel__format">
+          {FORMAT_SPECS[targetFormat.value].label}
+        </span>
+      </div>
+
       <label class="field">
-        <span class="field__label">Output format</span>
+        <span class="field__label">Format</span>
         <select
           class="select"
           value={targetFormat.value}
@@ -1375,24 +1391,17 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
       ))}
 
       <label class="field">
-        <span class="field__label">Resize — max long edge (px)</span>
+        <span class="field__label">Resize - Max long edge (px)</span>
         <input
           class="input"
           type="number"
           min={0}
-          placeholder="original"
+          placeholder="Original size"
           value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
           disabled={busy.value}
           onChange={(event) => changeResize(Number(event.currentTarget.value))}
         />
       </label>
-
-      <div class="progress" aria-hidden="true">
-        <div
-          class="progress__bar"
-          style={{ width: `${phasePercent.value}%` }}
-        />
-      </div>
 
       {settingsWarning.value && (
         <p class="field__warning" role="alert">
@@ -1405,73 +1414,110 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
           {batchWarning.value}
         </p>
       )}
+    </aside>
+  )
+}
 
-      <div class="panel__row">
-        <span class="panel__label">{phaseLabel.value}</span>
-        <PoolMeter />
+function BatchSummary() {
+  const workerStats = poolStats.value
+  const status =
+    stats.value.processing > 0
+      ? 'Compressing'
+      : estimatePhase.value
+        ? 'Preparing estimates'
+        : needsCompress.value
+          ? 'Ready to compress'
+          : 'Complete'
+  const estimateLabel = estimatePhase.value
+    ? 'Calculating…'
+    : batchEstimate.value > 0
+      ? formatBytes(batchEstimate.value)
+      : '—'
+  const reduction =
+    originalTotal.value > 0 && batchEstimate.value > 0
+      ? `${savingsLabel(originalTotal.value, batchEstimate.value)} smaller`
+      : '—'
+
+  return (
+    <section class="summary-card">
+      <div class="summary-card__top">
+        <div>
+          <p class="eyebrow">Batch progress</p>
+          <div class="summary-card__count">
+            {finished.value} <span>/ {total.value}</span>
+          </div>
+          <p class="summary-card__status">
+            {status} <span aria-hidden="true">·</span> {workerStats.size}{' '}
+            workers
+          </p>
+        </div>
+        <div class="summary-card__estimate">
+          <span>Estimated size</span>
+          <strong>{estimateLabel}</strong>
+          <em>{reduction}</em>
+        </div>
       </div>
 
-      {batchMode.value && total.value > 0 && (
-        <div class="panel__row">
-          <span class="panel__label">Estimated file size</span>
-          <span class="panel__value">
-            {estimatePhase.value ? (
-              'Calculating…'
-            ) : (
-              <>
-                {needsCompress.value ? '~' : ''}
-                {formatBytes(batchEstimate.value)}
-                {originalTotal.value > 0
-                  ? ` (${savingsLabel(originalTotal.value, batchEstimate.value)})`
-                  : ''}
-              </>
-            )}
-          </span>
-        </div>
-      )}
+      <div
+        class="progress"
+        role="progressbar"
+        aria-label="Compression progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progressPercent.value}
+      >
+        <div
+          class="progress__bar"
+          style={{ width: `${phasePercent.value}%` }}
+        />
+      </div>
 
-      {needsCompress.value && (
-        <button
-          type="button"
-          class="button button--primary"
-          disabled={busy.value}
-          onClick={compressAll}
-        >
-          Compress {total.value > 1 ? `all ${total.value} images` : 'image'}
-        </button>
-      )}
+      <div class="summary-card__details">
+        <span>
+          {readyToCompress.value > 0
+            ? `${readyToCompress.value} ready to compress`
+            : `${readyDownloadable.value} ready to download`}
+        </span>
+        <span>
+          {stats.value.processing > 0
+            ? `${stats.value.processing} in progress`
+            : phaseLabel.value}
+        </span>
+      </div>
 
-      {cancellable.value && (
-        <button
-          type="button"
-          class="button"
-          disabled={delivering.value}
-          onClick={cancelAllWork}
-        >
-          Cancel
-        </button>
-      )}
+      <div class="summary-card__actions">
+        {needsCompress.value && (
+          <button
+            type="button"
+            class="button button--primary"
+            disabled={busy.value}
+            onClick={compressAll}
+          >
+            Compress {total.value > 1 ? `${total.value} images` : 'image'}
+          </button>
+        )}
 
-      <div class="panel__actions">
-        <button
-          type="button"
-          class="button"
-          disabled={busy.value}
-          onClick={onAddImages}
-        >
-          Add images
-        </button>
+        {cancellable.value && (
+          <button
+            type="button"
+            class="button"
+            disabled={delivering.value}
+            onClick={cancelAllWork}
+          >
+            Cancel
+          </button>
+        )}
 
         {canDownloadAll.value && (
           <button
             type="button"
-            class="button button--primary"
+            class="button"
             onClick={downloadAll}
             disabled={busy.value}
           >
             {delivery.value?.kind === 'zip'
               ? `Zipping ${delivery.value.processed}/${delivery.value.total}…`
-              : `Download all (${readyDownloadable.value}) as zip`}
+              : `Download ${readyDownloadable.value} as zip`}
           </button>
         )}
 
@@ -1484,13 +1530,13 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
           >
             {delivery.value?.kind === 'folder'
               ? `Saving ${delivery.value.processed}/${delivery.value.total}…`
-              : 'Save to folder…'}
+              : 'Save to folder'}
           </button>
         )}
 
         <button
           type="button"
-          class="button"
+          class="button button--quiet"
           disabled={busy.value}
           onClick={clearAll}
         >
@@ -1513,6 +1559,7 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [settingsOpen, setSettingsOpen] = useState(true)
 
   useEffect(() => {
     const profile = getDeviceProfile()
@@ -1611,11 +1658,38 @@ export function App() {
       )}
 
       <header class="app__header">
-        <h1>Image Compressor</h1>
-        <p>
-          Convert and compress images entirely in your browser. Nothing is
-          uploaded — your files never leave this device.
-        </p>
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true">
+            IC
+          </span>
+          <div>
+            <h1>Image Compressor</h1>
+            <p>Private, fast image compression in your browser.</p>
+          </div>
+        </div>
+        <div class="app__header-actions">
+          <button
+            type="button"
+            class="button button--secondary"
+            disabled={busy.value}
+            onClick={() => inputRef.current?.click()}
+          >
+            <AddIcon />
+            Add images
+          </button>
+          {jobCount > 0 && (
+            <button
+              type="button"
+              class={`button button--secondary${settingsOpen ? ' button--selected' : ''}`}
+              aria-expanded={settingsOpen}
+              aria-controls="compression-settings"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              <SettingsIcon />
+              Settings
+            </button>
+          )}
+        </div>
       </header>
 
       {jobCount === 0 && (
@@ -1642,10 +1716,28 @@ export function App() {
       />
 
       {jobCount > 0 && (
-        <>
-          <Panel onAddImages={() => inputRef.current?.click()} />
-          <JobList />
-        </>
+        <div class="app__workspace">
+          <div class="workspace__main">
+            <BatchSummary />
+            <section class="queue-panel">
+              <div class="queue-panel__header">
+                <div>
+                  <p class="eyebrow">Queue</p>
+                  <h2>Images</h2>
+                </div>
+                <span class="queue-panel__count">
+                  {total.value} {total.value === 1 ? 'image' : 'images'}
+                </span>
+              </div>
+              <JobList />
+            </section>
+          </div>
+          {settingsOpen && (
+            <div id="compression-settings">
+              <Panel />
+            </div>
+          )}
+        </div>
       )}
 
       <footer class="app__footer">v{appVersion}</footer>
