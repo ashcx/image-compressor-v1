@@ -60,6 +60,13 @@ const AVIF_CALIBRATION: readonly [number, number, number, number, number] = [
   0.3285, 0.5225, -0.0697, 0.0182, 0.0383,
 ]
 
+// HEIC uses a fixed encoder setting with no quality/speed controls, so the
+// exponent depends only on the sample scaling: e = a + b * beta. Calibration
+// is provisional until measured against a representative HEIC corpus.
+const HEIC_CALIBRATION: readonly [number, number, number] = [
+  0.3285, 0.5225, 0.0383,
+]
+
 function clampExponent(value: number): number {
   return Math.min(MAX_EXPONENT, Math.max(MIN_EXPONENT, value))
 }
@@ -134,6 +141,10 @@ export function estimateFullBytes(
     const row = PNG_CALIBRATION[target.mode ?? 0] ?? PNG_CALIBRATION[0]
     exponent = clampExponent(row[0] + row[1] * beta)
     correction = row[2]
+  } else if (format === 'heic') {
+    const [a, b, lnCal] = HEIC_CALIBRATION
+    exponent = clampExponent(a + b * beta)
+    correction = lnCal
   } else if (format === 'avif') {
     const [a, b, g, h, lnCal] = AVIF_CALIBRATION
     const quality = (target.quality ?? 50) / 100
@@ -222,6 +233,12 @@ export async function buildEstimateSamples(
   // the slider.
   if (format === 'avif') {
     const quality = options.quality ?? 50
+    return [{ quality, bytes: await estimate(quality) }]
+  }
+
+  // HEIC has a single fixed encoder quality, so one measurement is enough.
+  if (format === 'heic') {
+    const quality = options.quality ?? 75
     return [{ quality, bytes: await estimate(quality) }]
   }
 

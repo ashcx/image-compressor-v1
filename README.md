@@ -40,6 +40,7 @@ selected settings, and the browser codec.
 | PNG | Screenshots, graphics, and transparency | Native lossless mode by default; slower lossless and lossy modes are available |
 | WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality |
 | AVIF | Very small modern web images | Can produce excellent sizes, but encoding is slower and browser support is newer |
+| HEIC | Apple-ecosystem compatibility | Decoding and encoding run through a WebAssembly codec, so every browser can read and write it; encoding is slower and currently uses one fixed quality |
 
 If an output is larger than the original, that is expected for some images and settings.
 Compression is not always a size reduction.
@@ -55,8 +56,10 @@ Safari. Browser capabilities differ, especially for AVIF, large batches, folder 
 available memory. ZIP download is the compatibility fallback when folder saving is not
 available.
 
-The app does not edit, crop, watermark, catalogue, or store an image history. HEIC, animated
-GIF, TIFF, and SVG are not current output targets.
+The app does not edit, crop, watermark, catalogue, or store an image history. Animated GIF,
+TIFF, and SVG are not current output targets. HEIC/HEIF input is decoded natively where the
+browser supports it (Safari) and through WebAssembly everywhere else; HEIC output always uses
+the WebAssembly encoder.
 
 ## For developers
 

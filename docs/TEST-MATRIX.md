@@ -9,8 +9,9 @@ to release Image Compressor. It defines *what* is tested; the automated harness 
 The corpus is defined by cohort and count. Fixtures are generated deterministically
 (seeded) from the same cohort descriptions the benchmark uses, so a given seed and
 count always produce the same images. Input fixtures are JPEG, PNG, and WebP.
-AVIF/HEIC decoding fixtures are produced by the encoder under test and validated
-with the tools below.
+A committed HEIC fixture (`bench/fixtures/sample.heic`) drives the browser round trip
+in `bench/output-check.mjs`; additional AVIF/HEIC decode fixtures are produced by the
+encoder under test and validated with the tools below.
 
 | Cohort | Content | Dimensions | Input type | What it exercises |
 | --- | --- | --- | --- | --- |

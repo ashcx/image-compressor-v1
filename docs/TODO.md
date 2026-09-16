@@ -429,30 +429,45 @@ WASM fallback elsewhere.
 
 ### TODO
 
-- [ ] **HEIC-02 — Format detection and model support (3 points)**
+- [x] **HEIC-02 — Format detection and model support (3 points)**
   - Add `heic` and `heif` input recognition using container brands and magic bytes.
   - Add the extension, MIME, and format labels.
   - Add dimension parsing or safe decoder-backed dimension discovery.
   - Ensure renamed files are still detected correctly.
 
-- [ ] **HEIC-03 — Build and lazy-load the WASM decoder (13 points)**
+- [x] **HEIC-03 — Build and lazy-load the WASM decoder (13 points)**
   - Pin a maintained libheif/libde265 build.
   - Build a worker-compatible ESM/WASM bundle.
   - Load it only when HEIC decoding is required.
   - Avoid initializing the module on the main thread.
   - Configure security limits and bounded dimensions.
 
-- [ ] **HEIC-04 — Integrate HEIC decoding into the worker pipeline (8 points)**
+- [x] **HEIC-04 — Integrate HEIC decoding into the worker pipeline (8 points)**
   - Implement `decode(buffer)` in the codec adapter.
   - Decode the primary still image into RGBA pixels.
   - Convert the pixels into the existing `ImageSource` abstraction.
   - Reuse resize, thumbnail, estimate, and output pipelines.
   - Handle orientation consistently.
 
-- [ ] **HEIC-05 — Decoder fixtures and browser tests (5 points)**
+- [x] **HEIC-05 — Decoder fixtures and browser tests (5 points)**
   - Test iPhone and Android HEIC fixtures.
   - Test portrait orientation, alpha, large images, malformed files, and multiple-image files.
   - Test native Safari behavior versus WASM fallback behavior.
+
+Delivered:
+
+- HEIC/HEIF detection in `detect.ts` (major + compatible `ftyp` brands), `ispe` dimension
+  parsing that picks the largest box when a thumbnail is present, and intake acceptance, all
+  unit-tested.
+- `src/lib/codecs/heic.ts` lazily imports and initialises `elheif` on the first HEIC job; the
+  ~1.5 MB module chunk is code-split and worker-only. Decode trims the duplicated RGBA plane
+  elheif returns.
+- Worker decode fallback feeds the existing resize/thumbnail/estimate/encode pipeline, and the
+  metadata worker gained a WASM thumbnail fallback for browsers without native HEIC decode.
+- Committed fixture `bench/fixtures/sample.heic` plus a Chromium round trip in
+  `bench/output-check.mjs` that decodes a HEIC input and writes a `.heic` output.
+- Remaining: iPhone/Android portrait, alpha, multi-image, and malformed fixtures; Safari
+  native-vs-WASM comparison; 25/100/500-file HEIC batch runs.
 
 ### Expected output
 
@@ -484,14 +499,14 @@ available.
 
 ### TODO
 
-- [ ] **HEIC-06 — Build the HEIC encoder backend (13 points)**
+- [x] **HEIC-06 — Build the HEIC encoder backend (13 points)**
   - Select and document the HEVC encoder backend.
   - Prefer a minimal libheif build with only the required HEIC components.
   - Confirm Emscripten compatibility, worker execution, and output size.
   - Resolve LGPL/GPL, codec-patent, and distribution requirements before release.
   - Expose a small wrapper for RGBA input, quality, speed, and encoded output.
 
-- [ ] **HEIC-07 — Add the encoder adapter (8 points)**
+- [x] **HEIC-07 — Add the encoder adapter (8 points)**
   - Add a lazy HEIC codec loader to the registry.
   - Convert the existing `ImageSource` canvas into encoder input.
   - Return a correctly typed `image/heic` Blob with a `.heic` extension.
@@ -508,6 +523,17 @@ available.
   - Bake orientation into pixels or preserve the orientation metadata consistently.
   - Decide whether EXIF, GPS, depth, burst, and auxiliary metadata are preserved.
   - Document any metadata removed during conversion.
+
+Delivered:
+
+- The bundled `elheif` (libheif + kvazaar) gives HEIC encoding in a worker on every browser.
+- The registry `heic` adapter encodes the existing `ImageSource` to an `image/heic` Blob; HEIC
+  is in `FORMAT_ORDER`/`FORMAT_SPECS` with no controls, is classified as a heavy codec, and
+  gets an AVIF-class worker memory weight.
+- Estimates use a dedicated (provisional) HEIC calibration with a single sample because the
+  encoder quality is fixed.
+- Remaining: adjustable quality/speed presets (HEIC-08) and the orientation/metadata policy
+  (HEIC-09), deferred until a purpose-built encoder build exposes parameters.
 
 ### Expected output
 
@@ -541,7 +567,7 @@ owner for this sprint.
 
 ### TODO
 
-- [ ] **HEIC-10 — Integrate HEIC with batch storage and delivery (8 points)**
+- [x] **HEIC-10 — Integrate HEIC with batch storage and delivery (8 points)**
   - Ensure HEIC outputs work with individual downloads, ZIP delivery, folder saving, and OPFS.
   - Include HEIC in output-size summaries and estimates.
   - Ensure thumbnails are generated from decoded source pixels rather than re-decoding output.
@@ -564,6 +590,16 @@ owner for this sprint.
   - Provide retry or remove actions without losing the rest of the batch.
   - Explain that browser preview support and downloaded-file support are separate concerns.
   - Show when metadata may not be preserved.
+
+Delivered so far:
+
+- HEIC outputs flow through the existing single-download, ZIP, folder, and OPFS paths
+  unchanged; estimates and summaries include HEIC, and thumbnails come from decoded source
+  pixels.
+- `elheif` is pinned in `package.json`; the codec is lazy-loaded and never initialised on the
+  main thread.
+- Remaining: cross-browser/device matrix (HEIC-11), malformed/crafted HEIC fixtures and the
+  dependency advisory process (SEC-01), and HEIC-specific error/support copy (UX-05).
 
 ### Expected output
 
@@ -721,6 +757,6 @@ enabled, pin patched releases, and monitor the [libheif security releases](https
 - [x] True virtualized queue.
 - [x] Output storage/backpressure for very large completed batches.
 - [x] Responsive desktop/tablet/mobile UI implementation (Sprint 5 accepted by product review).
-- [ ] HEIC decoder.
-- [ ] HEIC encoder.
+- [x] HEIC decoder.
+- [x] HEIC encoder.
 - [ ] HEIC licensing and security release gate.

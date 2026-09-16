@@ -128,6 +128,18 @@ function avif(width: number, height: number): ArrayBuffer {
   return concat(ftyp, meta)
 }
 
+function ispeBox(width: number, height: number): number[] {
+  return box('ispe', [0, 0, 0, 0, ...u32be(width), ...u32be(height)])
+}
+
+function heic(...ispes: number[][]): ArrayBuffer {
+  const ipco = box('ipco', ispes.flat())
+  const iprp = box('iprp', ipco)
+  const meta = box('meta', [0, 0, 0, 0, ...iprp])
+  const ftyp = box('ftyp', [...ascii('heic'), ...u32be(0), ...ascii('heic')])
+  return concat(ftyp, meta)
+}
+
 describe('parseDimensions', () => {
   it('parses PNG dimensions from IHDR', () => {
     expect(parseDimensions(png(640, 480))).toEqual({
@@ -162,6 +174,19 @@ describe('parseDimensions', () => {
       width: 1920,
       height: 1080,
     })
+  })
+
+  it('parses HEIC dimensions from the ispe box', () => {
+    expect(parseDimensions(heic(ispeBox(4032, 3024)))).toEqual({
+      width: 4032,
+      height: 3024,
+    })
+  })
+
+  it('uses the largest ispe when a HEIC also carries a thumbnail', () => {
+    expect(
+      parseDimensions(heic(ispeBox(160, 120), ispeBox(4032, 3024))),
+    ).toEqual({ width: 4032, height: 3024 })
   })
 
   it('returns null for an empty buffer', () => {

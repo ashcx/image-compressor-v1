@@ -7,6 +7,9 @@ const WEBP = [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]
 const AVIF = [
   0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66, 0, 0, 0, 0,
 ]
+const HEIC = [
+  0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0,
+]
 
 function file(bytes: number[], name: string): File {
   return new File([new Uint8Array(bytes)], name)
@@ -14,7 +17,7 @@ function file(bytes: number[], name: string): File {
 
 describe('validateImageFile', () => {
   it('accepts each supported magic-byte signature', async () => {
-    for (const bytes of [PNG, JPEG, WEBP, AVIF]) {
+    for (const bytes of [PNG, JPEG, WEBP, AVIF, HEIC]) {
       await expect(
         validateImageFile(file(bytes, 'image.bin')),
       ).resolves.toEqual({ accepted: true })

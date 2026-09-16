@@ -1,19 +1,20 @@
 # HEIC feasibility, licensing, and security decision (HEIC-01)
 
-Status: **spike complete** — decoder recommended, encoder gated.
-Probed: 2026-09-13.
+Status: **implemented** — HEIC decode and encode ship through `elheif`.
+Probed: 2026-09-13. Implemented: 2026-09-17.
 
 ## Decision
 
-1. **HEIC/HEIF decoding: proceed** (`HEIC-02` … `HEIC-05`). `libheif-js` is a viable,
-   worker-hosted WASM decoder and fits the existing codec abstraction.
-2. **HEIC encoding: gate remains closed** (`HEIC-06` … `HEIC-08`). The available
-   `libheif-js` build has **no HEIC encoder backend**, and every realistic backend
-   carries a licensing or patent obligation. Do not schedule encoding until a
-   licensing/patent review and a purpose-built WASM build are approved.
+1. **HEIC/HEIF decoding: shipped.** `elheif` (libheif + libde265) decodes HEIC/HEIF inside the
+   worker. Safari's native decoder is tried first; the WASM path covers Chrome, Firefox, and
+   older WebKit.
+2. **HEIC encoding: shipped.** The same `elheif` package bundles libheif + kvazaar, so HEIC
+   output runs in the worker on every browser. The bundle exposes a single fixed encoder
+   quality, so HEIC has no adjustable quality preset yet; the format is classified as a heavy
+   codec and uses the reduced worker pool.
 
-This satisfies the Sprint 1 gate: the project may commit to HEIC *input* now and
-must treat HEIC *output* as unresolved.
+The original feasibility spike (below) is retained as the record of why a purpose-built
+libheif WASM build was required for encoding.
 
 ## Evidence
 

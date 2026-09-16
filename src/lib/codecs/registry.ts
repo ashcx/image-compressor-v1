@@ -140,6 +140,16 @@ const loaders: Record<OutputFormat, CodecLoader> = {
       },
     }
   },
+  heic: async () => {
+    const { decodeHeic, encodeHeic } = await import('./heic')
+    return {
+      format: 'heic',
+      mimeType: 'image/heic',
+      extension: 'heic',
+      encode: async (source) => encodeHeic(toImageData(source)),
+      decode: async (buffer) => decodeHeic(buffer),
+    }
+  },
 }
 
 export async function getCodec(format: OutputFormat): Promise<Codec> {
@@ -172,5 +182,7 @@ export async function describeRenderer(
       return (mode ?? 0) === 1 ? 'WASM · oxipng' : 'WASM · libimagequant'
     case 'avif':
       return 'WASM · avif'
+    case 'heic':
+      return 'WASM · libheif/kvazaar'
   }
 }

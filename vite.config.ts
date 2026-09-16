@@ -38,6 +38,7 @@ export default defineConfig(() => {
         '@jsquash/png',
         '@jsquash/webp',
         'imagequant',
+        'elheif',
       ],
     },
     build: {

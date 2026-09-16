@@ -1,4 +1,4 @@
-export type OutputFormat = 'jpeg' | 'png' | 'webp' | 'avif'
+export type OutputFormat = 'jpeg' | 'png' | 'webp' | 'avif' | 'heic'
 
 export interface ResizeOptions {
   width?: number

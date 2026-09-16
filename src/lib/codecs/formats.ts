@@ -39,7 +39,13 @@ export interface FormatSpec {
   controls: FormatControl[]
 }
 
-export const FORMAT_ORDER: OutputFormat[] = ['jpeg', 'png', 'webp', 'avif']
+export const FORMAT_ORDER: OutputFormat[] = [
+  'jpeg',
+  'png',
+  'webp',
+  'avif',
+  'heic',
+]
 
 const QUALITY_PRESETS: SelectControl = {
   kind: 'select',
@@ -137,6 +143,16 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
       },
     ],
   },
+  heic: {
+    format: 'heic',
+    label: 'HEIC',
+    mimeType: 'image/heic',
+    extension: 'heic',
+    lossless: false,
+    // The bundled libheif/kvazaar encoder exposes a single fixed quality, so
+    // HEIC has no adjustable controls yet.
+    controls: [],
+  },
 }
 
 export const SUPPORTED_FORMAT_LABELS = FORMAT_ORDER.map((format) =>
@@ -159,6 +175,7 @@ export function listFormatLabels(
  */
 export function isHeavyFormat(format: OutputFormat, mode: number): boolean {
   if (format === 'avif') return true
+  if (format === 'heic') return true
   if (format === 'png') return mode >= 1
   return false
 }
