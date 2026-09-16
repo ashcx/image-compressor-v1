@@ -18,8 +18,7 @@ already have.
   download results individually, as a ZIP, or into a folder where supported.
 
 The application is designed to be one of the fastest image-processing tools available in a
-browser. The architecture supports that goal, but the absolute fastest-tool claim will be
-confirmed with real-world benchmarks across browsers and devices.
+browser. 
 
 ## How to use it
 
