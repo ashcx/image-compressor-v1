@@ -344,9 +344,6 @@ effect(() => {
 })
 
 const readyDownloadable = computed(() => displayStats.value.readyDownloadable)
-const canDownloadAll = computed(
-  () => total.value > 1 && readyDownloadable.value > 0,
-)
 
 function downloadableList(): BatchJob[] {
   const key = outputKey.value
@@ -1020,6 +1017,11 @@ async function downloadJob(job: BatchJob) {
   }
 }
 
+async function downloadSingle() {
+  const job = downloadableList()[0]
+  if (job) await downloadJob(job)
+}
+
 async function downloadAll() {
   if (delivering.value) return
   const list = downloadableList()
@@ -1588,20 +1590,28 @@ function BatchSummary() {
           </button>
         )}
 
-        {!cancellable.value && !delivery.value && canDownloadAll.value && (
-          <button
-            type="button"
-            class="button"
-            onClick={downloadAll}
-            disabled={busy.value}
-          >
-            Download {readyDownloadable.value} as zip
-          </button>
-        )}
+        {!cancellable.value &&
+          !delivery.value &&
+          readyDownloadable.value > 0 && (
+            <button
+              type="button"
+              class="button"
+              onClick={() => {
+                if (batchMode.value) void downloadAll()
+                else void downloadSingle()
+              }}
+              disabled={busy.value}
+            >
+              {batchMode.value
+                ? `Download ${readyDownloadable.value} as zip`
+                : 'Download image'}
+            </button>
+          )}
 
         {!cancellable.value &&
           !delivery.value &&
-          canDownloadAll.value &&
+          batchMode.value &&
+          readyDownloadable.value > 0 &&
           supportsDirectoryPicker && (
             <button
               type="button"
