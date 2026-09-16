@@ -45,6 +45,7 @@ import {
   type OutputStore,
   resetOutputStorage,
 } from './lib/outputStore'
+import { compatibilityMode } from './lib/preferences'
 import {
   resolveDecodeTargetSize,
   resolveResize,
@@ -76,6 +77,7 @@ import {
   ZipTooLargeError,
 } from './lib/zip'
 import { resetZipStore } from './lib/zipStore'
+import { SettingsPage } from './Settings'
 
 interface BatchJob {
   id: string
@@ -176,6 +178,7 @@ const delivering = computed(() => delivery.value !== null)
 const outputPressure = signal(false)
 const batchWarning = signal('')
 const importing = signal(false)
+const settingsOpen = signal(false)
 
 // Ratios of estimated output to original size, averaged over the sampled
 // images, used to extrapolate estimates for unmeasured rows in a big batch.
@@ -196,7 +199,7 @@ const settingsWarning = computed(() => {
   const values = settings.value
 
   if (format === 'avif' && values.speed <= 6) {
-    return 'AVIF at the Slow preset can take a very long time to process. Use Balanced or Fast for better performance.'
+    return 'AVIF at the Slowest preset can take a very long time to process. Use Default for better performance.'
   }
   return ''
 })
@@ -389,7 +392,10 @@ function applyWorkerBudget() {
   configureWorkers(workers)
   // Read-ahead concurrency is separate from codec concurrency and tracks the
   // device budget, so constrained phones do not read several files at once.
-  configureFileReadConcurrency(Math.max(2, Math.min(4, workers + 1)))
+  // Compatibility mode pins it to one for a genuinely single-threaded pipeline.
+  configureFileReadConcurrency(
+    compatibilityMode.value ? 1 : Math.max(2, Math.min(4, workers + 1)),
+  )
 }
 
 // Estimates decode at most this long edge in the worker (mirrors
@@ -1723,128 +1729,141 @@ export function App() {
         isDragging.value = false
       }}
     >
-      {newVersion.value && (
-        <div class="update-banner" role="status">
-          <span>A new version is available.</span>
-          <button
-            type="button"
-            class="button button--small"
-            onClick={() => location.reload()}
-          >
-            Reload
-          </button>
-        </div>
-      )}
+      {settingsOpen.value ? (
+        <SettingsPage
+          onClose={() => {
+            settingsOpen.value = false
+          }}
+          onWorkerSettingsChange={applyWorkerBudget}
+        />
+      ) : (
+        <>
+          {newVersion.value && (
+            <div class="update-banner" role="status">
+              <span>A new version is available.</span>
+              <button
+                type="button"
+                class="button button--small"
+                onClick={() => location.reload()}
+              >
+                Reload
+              </button>
+            </div>
+          )}
 
-      {importing.value && (
-        <div class="update-banner" role="status">
-          <span>Checking files…</span>
-        </div>
-      )}
+          {importing.value && (
+            <div class="update-banner" role="status">
+              <span>Checking files…</span>
+            </div>
+          )}
 
-      {notice.value && (
-        <div class="update-banner" role="status">
-          <span>{notice.value}</span>
-          <button
-            type="button"
-            class="button button--small"
-            onClick={() => {
-              notice.value = ''
-            }}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
+          {notice.value && (
+            <div class="update-banner" role="status">
+              <span>{notice.value}</span>
+              <button
+                type="button"
+                class="button button--small"
+                onClick={() => {
+                  notice.value = ''
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
-      <header class="app__header">
-        <div class="brand">
-          <img
-            class="brand__mark"
-            src={`${import.meta.env.BASE_URL}app-icon.webp`}
-            alt=""
-            width="42"
-            height="42"
-          />
-          <div>
-            <h1>Compressor</h1>
-            <p>Private, fast image compression in your browser.</p>
-          </div>
-        </div>
-        <div class="app__header-actions">
-          <button
-            type="button"
-            class="button button--secondary"
-            aria-label="Add images"
-            title="Add images"
-            disabled={busy.value}
-            onClick={() => inputRef.current?.click()}
-          >
-            <AddIcon />
-            <span class="button__label">Add images</span>
-          </button>
-          {jobCount > 0 && (
+          <header class="app__header">
+            <div class="brand">
+              <img
+                class="brand__mark"
+                src={`${import.meta.env.BASE_URL}app-icon.webp`}
+                alt=""
+                width="42"
+                height="42"
+              />
+              <div>
+                <h1>Compressor</h1>
+                <p>Private, fast image compression in your browser.</p>
+              </div>
+            </div>
+            <div class="app__header-actions">
+              <button
+                type="button"
+                class="button button--secondary"
+                aria-label="Add images"
+                title="Add images"
+                disabled={busy.value}
+                onClick={() => inputRef.current?.click()}
+              >
+                <AddIcon />
+                <span class="button__label">Add images</span>
+              </button>
+              <button
+                type="button"
+                class="button button--secondary"
+                aria-label="Settings"
+                title="Settings"
+                onClick={() => {
+                  settingsOpen.value = true
+                }}
+              >
+                <SettingsIcon />
+                <span class="button__label">Settings</span>
+              </button>
+            </div>
+          </header>
+
+          {jobCount === 0 && (
             <button
               type="button"
-              class="button button--secondary"
-              aria-label="Settings"
-              title="Settings page coming soon"
-              onClick={() => {
-                notice.value = 'The settings page is coming soon.'
-              }}
+              class={`dropzone${isDragging.value ? ' dropzone--active' : ''}`}
+              onClick={() => inputRef.current?.click()}
             >
-              <SettingsIcon />
-              <span class="button__label">Settings</span>
+              <span class="welcome-visual" aria-hidden="true">
+                <span class="welcome-visual__halo" />
+                <span class="welcome-visual__orbit welcome-visual__orbit--one" />
+                <span class="welcome-visual__orbit welcome-visual__orbit--two" />
+                <span class="welcome-visual__spark welcome-visual__spark--one" />
+                <span class="welcome-visual__spark welcome-visual__spark--two" />
+                <svg class="welcome-visual__icon" viewBox="0 0 96 96">
+                  <title>Image compression illustration</title>
+                  <rect x="18" y="16" width="60" height="64" rx="12" />
+                  <path d="m28 63 13-15 10 10 8-9 9 14" />
+                  <circle cx="61" cy="33" r="5" />
+                  <path d="M78 48h12M84 42v12" />
+                </svg>
+              </span>
+              <span class="dropzone__title">Compress your images</span>
+              <span class="dropzone__hint">
+                Click or drag to compress images
+              </span>
+              <span class="dropzone__formats">
+                Supports {listFormatLabels()}
+              </span>
             </button>
           )}
-        </div>
-      </header>
 
-      {jobCount === 0 && (
-        <button
-          type="button"
-          class={`dropzone${isDragging.value ? ' dropzone--active' : ''}`}
-          onClick={() => inputRef.current?.click()}
-        >
-          <span class="welcome-visual" aria-hidden="true">
-            <span class="welcome-visual__halo" />
-            <span class="welcome-visual__orbit welcome-visual__orbit--one" />
-            <span class="welcome-visual__orbit welcome-visual__orbit--two" />
-            <span class="welcome-visual__spark welcome-visual__spark--one" />
-            <span class="welcome-visual__spark welcome-visual__spark--two" />
-            <svg class="welcome-visual__icon" viewBox="0 0 96 96">
-              <title>Image compression illustration</title>
-              <rect x="18" y="16" width="60" height="64" rx="12" />
-              <path d="m28 63 13-15 10 10 8-9 9 14" />
-              <circle cx="61" cy="33" r="5" />
-              <path d="M78 48h12M84 42v12" />
-            </svg>
-          </span>
-          <span class="dropzone__title">Compress your images</span>
-          <span class="dropzone__hint">Click or drag to compress images</span>
-          <span class="dropzone__formats">Supports {listFormatLabels()}</span>
-        </button>
-      )}
+          <input
+            ref={inputRef}
+            class="visually-hidden"
+            type="file"
+            accept="image/*,.heic,.heif"
+            multiple
+            onChange={onInputChange}
+          />
 
-      <input
-        ref={inputRef}
-        class="visually-hidden"
-        type="file"
-        accept="image/*,.heic,.heif"
-        multiple
-        onChange={onInputChange}
-      />
-
-      {jobCount > 0 && (
-        <div class="app__workspace">
-          <div class="workspace__main">
-            <BatchSummary />
-            <QueuePanel />
-          </div>
-          <div id="compression-settings">
-            <Panel />
-          </div>
-        </div>
+          {jobCount > 0 && (
+            <div class="app__workspace">
+              <div class="workspace__main">
+                <BatchSummary />
+                <QueuePanel />
+              </div>
+              <div id="compression-settings">
+                <Panel />
+              </div>
+            </div>
+          )}
+        </>
       )}
     </main>
   )

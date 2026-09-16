@@ -73,8 +73,12 @@ describe('format specs', () => {
     const avifSpeed = byKey(FORMAT_SPECS.avif.controls, 'speed')
     expect(
       avifSpeed?.kind === 'select' ? avifSpeed.options.map((o) => o.label) : [],
-    ).toEqual(['Slow', 'Balanced', 'Fast'])
-    expect(avifSpeed?.default).toBe(8)
+    ).toEqual([
+      'Default',
+      'Slow (slightly smaller size)',
+      'Slowest (smallest size)',
+    ])
+    expect(avifSpeed?.default).toBe(10)
 
     const pngMode = byKey(FORMAT_SPECS.png.controls, 'mode')
     expect(

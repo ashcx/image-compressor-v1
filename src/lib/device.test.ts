@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
+  configureWorkerPreferences,
+  describePlatform,
+  getAutoWorkerCount,
+  getDeviceProfile,
   heavyWorkerCount,
   MAX_WORKERS_HIGH_MEMORY,
   platformCanvasLimits,
@@ -169,6 +173,65 @@ describe('profileFromSignals', () => {
   it('applies the override while preserving platform limits', () => {
     const profile = profileFromSignals({ userAgent: IPHONE_UA }, 99)
     expect(profile.workerCount).toBe(MAX_WORKERS_HIGH_MEMORY)
+  })
+})
+
+describe('worker preferences', () => {
+  afterEach(() => {
+    configureWorkerPreferences({
+      maxWorkers: null,
+      compatibilityMode: false,
+    })
+  })
+
+  it('caps the worker budget to the stored maximum', () => {
+    configureWorkerPreferences({ maxWorkers: 2 })
+    expect(getDeviceProfile().workerCount).toBe(2)
+  })
+
+  it('forces a single light and heavy worker in compatibility mode', () => {
+    configureWorkerPreferences({ compatibilityMode: true, maxWorkers: 8 })
+    const profile = getDeviceProfile()
+    expect(profile.workerCount).toBe(1)
+    expect(profile.heavyWorkerCount).toBe(1)
+  })
+
+  it('keeps the auto worker count free of the stored maximum', () => {
+    configureWorkerPreferences({ maxWorkers: 1 })
+    expect(getAutoWorkerCount()).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('describePlatform', () => {
+  it('parses a Windows Chrome user agent', () => {
+    expect(
+      describePlatform({
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      }),
+    ).toEqual({
+      deviceType: 'Desktop',
+      os: 'Windows',
+      browser: 'Chrome',
+      browserVersion: '120.0.0.0',
+    })
+  })
+
+  it('parses an iPhone Safari user agent', () => {
+    const info = describePlatform({ userAgent: IPHONE_UA, maxTouchPoints: 5 })
+    expect(info.deviceType).toBe('Phone')
+    expect(info.os).toBe('iOS 17.0')
+    expect(info.browser).toBe('Safari')
+  })
+
+  it('detects Android tablets without the Mobile token', () => {
+    const info = describePlatform({
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+      maxTouchPoints: 10,
+    })
+    expect(info.deviceType).toBe('Tablet')
+    expect(info.os).toBe('Android 14')
   })
 })
 

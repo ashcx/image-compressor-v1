@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FORMAT_ORDER } from './formats'
-import { getCodec } from './registry'
+import { describeDecoder, getCodec } from './registry'
 import type { OutputFormat } from './types'
 
 const EXPECTED: Record<OutputFormat, { mimeType: string; extension: string }> =
@@ -29,4 +29,11 @@ describe('codec registry', () => {
       }
     },
   )
+
+  it('describes a decoder backend for every format', () => {
+    for (const format of FORMAT_ORDER) {
+      expect(describeDecoder(format)).toBeTruthy()
+    }
+    expect(describeDecoder('heic')).toContain('libheif')
+  })
 })
