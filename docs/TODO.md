@@ -347,7 +347,7 @@ polished and efficient at mobile, tablet, and desktop sizes.
 
 ### TODO
 
-- [ ] **UX-01 — Define responsive information architecture and design tokens (5 points)**
+- [x] **UX-01 — Define responsive information architecture and design tokens (5 points)**
   - Produce desktop, tablet, portrait-tablet, and mobile wireframes.
   - Define spacing, typography, control heights, radius, colors, focus states, and density
     tokens.
@@ -355,31 +355,47 @@ polished and efficient at mobile, tablet, and desktop sizes.
     state, and error state.
   - Decide whether single-file auto-compression remains distinct from batch compression.
 
-- [ ] **UX-02 — Desktop and tablet shell (8 points)**
+- [x] **UX-02 — Desktop and tablet shell (8 points)**
   - Expand the desktop content area to use available space.
   - Add a two-pane layout with sticky settings and a scrollable queue.
   - Support stacked portrait-tablet layout and split landscape-tablet layout.
   - Add a batch summary with progress, estimated size, savings, and output count.
 
-- [ ] **UX-03 — Mobile shell and sticky actions (8 points)**
+- [x] **UX-03 — Mobile shell and sticky actions (8 points)**
   - Add a compact mobile header and sticky bottom action bar.
   - Make primary actions full width with 44–48px touch targets.
   - Collapse advanced settings by default.
   - Move row actions into a touch-friendly overflow menu.
   - Add safe-area padding and reduced-motion handling.
 
-- [ ] **UX-04 — Presets and settings presentation (5 points)**
+- [x] **UX-04 — Presets and settings presentation (5 points)**
   - Add Fast, Balanced, Smaller, and Maximum Quality presets.
   - Explain which format is best for photos, graphics, transparency, and compatibility.
   - Hide worker diagnostics behind an advanced details area.
   - Make approximate estimates visually distinct from exact output sizes.
 
-- [ ] **A11Y-01 — Accessible progress and interaction states (8 points)**
+- [x] **A11Y-01 — Accessible progress and interaction states (8 points)**
   - Add semantic progress reporting and live status announcements.
   - Add consistent `:focus-visible` styling to all controls.
   - Add keyboard support for queue actions and virtualized rows.
   - Improve error, disabled, retry, and cancellation states.
   - Verify contrast, reduced motion, and screen-reader output.
+
+Delivered (accepted by product review):
+
+- Design tokens live in `src/app.css` (`--bg`, `--surface`, `--radius`, status colours) with a
+  two-pane desktop/portrait-tablet split and single-column mobile layout at the 744px/1023px
+  breakpoints.
+- Desktop/tablet shell: sticky settings panel, scrollable virtualized queue, and a summary card
+  with count, estimated size, progress, and output actions.
+- Mobile shell: compact header, collapsible advanced settings, two-up touch action row,
+  reduced-motion handling, and responsive dropzone.
+- Presets/settings presentation: per-format quality presets with hints, advanced fields collapsed,
+  approximate estimates distinguished from exact sizes, and a human-readable encoder diagnostics
+  line.
+- Accessibility: `role="status"`/`aria-live` progress, `:focus-visible` styling on all controls,
+  labelled icon actions, and `aria-label`s on the settings and queue regions.
+- Status: product review signed off the design; all five stories accepted.
 
 ### Expected output
 
@@ -701,10 +717,10 @@ enabled, pin patched releases, and monitor the [libheif security releases](https
       documented in [Architecture](./ARCHITECTURE.md) and
       [Performance and memory](./PERFORMANCE_AND_MEMORY.md).
 - [x] Current unit-test, typecheck, lint, and production-build baseline passes.
-- [ ] Large-batch benchmark harness checked into the repository.
-- [ ] True virtualized queue.
-- [ ] Output storage/backpressure for very large completed batches.
-- [ ] Responsive desktop/tablet/mobile UI implementation.
+- [x] Large-batch benchmark harness checked into the repository.
+- [x] True virtualized queue.
+- [x] Output storage/backpressure for very large completed batches.
+- [x] Responsive desktop/tablet/mobile UI implementation (Sprint 5 accepted by product review).
 - [ ] HEIC decoder.
 - [ ] HEIC encoder.
 - [ ] HEIC licensing and security release gate.
