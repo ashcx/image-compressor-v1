@@ -8,40 +8,68 @@
  * Private File System when available, otherwise a bounded in-memory fallback.
  *
  * Outputs are written per app session and are only needed for downloads, so
- * they can be read back on demand and deleted when a job is removed.
+ * they can be read back on demand and deleted when a job is removed. The memory
+ * fallback reports its retained bytes and whether it is over the configured
+ * budget so the app can stop starting new work instead of growing without
+ * bound.
  */
 export interface OutputStore {
   /** True when outputs are held outside JS memory (OPFS). */
   readonly persistent: boolean
+  /** Bytes currently retained in JS memory (fallback or failed OPFS writes). */
+  readonly memoryBytes: number
+  /** True when retained memory bytes exceed the configured budget. */
+  readonly overBudget: boolean
   put(id: string, blob: Blob): Promise<void>
   get(id: string): Promise<Blob | null>
   delete(id: string): Promise<void>
   clear(): Promise<void>
 }
 
-const SESSION_PREFIX = 'image-compressor-outputs-'
-const STALE_SESSION_MS = 24 * 60 * 60 * 1000
+export interface OutputStoreOptions {
+  /** Memory ceiling for non-persistent (or fallback) blobs, in bytes. */
+  maxMemoryBytes?: number
+}
+
+export const SESSION_PREFIX = 'image-compressor-outputs-'
+export const STALE_SESSION_MS = 24 * 60 * 60 * 1000
 
 function fileNames(id: string): string {
   return `${encodeURIComponent(id)}.bin`
 }
 
-/** In-memory fallback. Bounded only by the caller clearing the queue. */
-export function createMemoryOutputStore(): OutputStore {
+/** In-memory fallback. Bounded by `maxBytes` and cleared with the queue. */
+export function createMemoryOutputStore(
+  maxBytes = Number.POSITIVE_INFINITY,
+): OutputStore {
   const files = new Map<string, Blob>()
+  let bytes = 0
   return {
     persistent: false,
+    get memoryBytes() {
+      return bytes
+    },
+    get overBudget() {
+      return bytes > maxBytes
+    },
     async put(id, blob) {
+      const previous = files.get(id)
+      if (previous) bytes -= previous.size
       files.set(id, blob)
+      bytes += blob.size
     },
     async get(id) {
       return files.get(id) ?? null
     },
     async delete(id) {
+      const previous = files.get(id)
+      if (!previous) return
+      bytes -= previous.size
       files.delete(id)
     },
     async clear() {
       files.clear()
+      bytes = 0
     },
   }
 }
@@ -70,7 +98,7 @@ async function removeStaleSessions(
   }
 }
 
-async function createOpfsStore(): Promise<OutputStore | null> {
+async function createOpfsStore(maxBytes: number): Promise<OutputStore | null> {
   if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) {
     return null
   }
@@ -80,11 +108,30 @@ async function createOpfsStore(): Promise<OutputStore | null> {
     const directory = await root.getDirectoryHandle(name, { create: true })
     // Quota or write failures degrade to memory instead of failing the job.
     const fallback = new Map<string, Blob>()
+    let fallbackBytes = 0
 
     void removeStaleSessions(root, name)
 
+    const forgetFallback = (id: string) => {
+      const previous = fallback.get(id)
+      if (!previous) return
+      fallbackBytes -= previous.size
+      fallback.delete(id)
+    }
+    const rememberFallback = (id: string, blob: Blob) => {
+      forgetFallback(id)
+      fallback.set(id, blob)
+      fallbackBytes += blob.size
+    }
+
     return {
       persistent: true,
+      get memoryBytes() {
+        return fallbackBytes
+      },
+      get overBudget() {
+        return fallbackBytes > maxBytes
+      },
       async put(id, blob) {
         try {
           const handle = await directory.getFileHandle(fileNames(id), {
@@ -93,9 +140,9 @@ async function createOpfsStore(): Promise<OutputStore | null> {
           const writable = await handle.createWritable()
           await writable.write(blob)
           await writable.close()
-          fallback.delete(id)
+          forgetFallback(id)
         } catch {
-          fallback.set(id, blob)
+          rememberFallback(id, blob)
         }
       },
       async get(id) {
@@ -110,7 +157,7 @@ async function createOpfsStore(): Promise<OutputStore | null> {
         }
       },
       async delete(id) {
-        fallback.delete(id)
+        forgetFallback(id)
         try {
           await directory.removeEntry(fileNames(id))
         } catch {
@@ -119,6 +166,7 @@ async function createOpfsStore(): Promise<OutputStore | null> {
       },
       async clear() {
         fallback.clear()
+        fallbackBytes = 0
         for await (const [entry] of directory.entries()) {
           try {
             await directory.removeEntry(entry)
@@ -133,9 +181,12 @@ async function createOpfsStore(): Promise<OutputStore | null> {
   }
 }
 
-/** OPFS when available, otherwise a memory fallback. */
-export async function createOutputStore(): Promise<OutputStore> {
-  return (await createOpfsStore()) ?? createMemoryOutputStore()
+/** OPFS when available, otherwise a bounded memory fallback. */
+export async function createOutputStore(
+  options: OutputStoreOptions = {},
+): Promise<OutputStore> {
+  const maxBytes = options.maxMemoryBytes ?? Number.POSITIVE_INFINITY
+  return (await createOpfsStore(maxBytes)) ?? createMemoryOutputStore(maxBytes)
 }
 
 /**

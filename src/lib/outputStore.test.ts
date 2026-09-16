@@ -27,6 +27,35 @@ describe('memory output store', () => {
     const store = createMemoryOutputStore()
     expect(await store.get('missing')).toBeNull()
   })
+
+  it('tracks retained bytes and flags when over budget', async () => {
+    const store = createMemoryOutputStore(10)
+    expect(store.memoryBytes).toBe(0)
+    expect(store.overBudget).toBe(false)
+
+    await store.put('a', blob('hello'))
+    expect(store.memoryBytes).toBe(5)
+    expect(store.overBudget).toBe(false)
+
+    await store.put('b', blob('world!'))
+    expect(store.memoryBytes).toBe(11)
+    expect(store.overBudget).toBe(true)
+
+    await store.delete('a')
+    expect(store.memoryBytes).toBe(6)
+
+    await store.clear()
+    expect(store.memoryBytes).toBe(0)
+    expect(store.overBudget).toBe(false)
+  })
+
+  it('replaces an existing blob without double-counting its bytes', async () => {
+    const store = createMemoryOutputStore(100)
+    await store.put('a', blob('hello'))
+    await store.put('a', blob('hi'))
+    expect(store.memoryBytes).toBe(2)
+    expect(await (await store.get('a'))?.text()).toBe('hi')
+  })
 })
 
 describe('createOutputStore', () => {

@@ -91,6 +91,13 @@ interface BatchJob {
   capped: boolean
 }
 
+interface DeliveryProgress {
+  kind: 'zip' | 'folder'
+  processed: number
+  total: number
+  bytes: number
+}
+
 interface Settings {
   quality: number
   effort: number
@@ -151,7 +158,13 @@ const poolStats = signal(getPoolStats())
 const renderer = signal('')
 const newVersion = signal('')
 const notice = signal('')
-const zipping = signal(false)
+const OUTPUT_PRESSURE_NOTICE =
+  'Output memory is full for this device. Download or clear completed images to keep compressing.'
+const delivery = signal<DeliveryProgress | null>(null)
+const delivering = computed(() => delivery.value !== null)
+// True when the in-memory output fallback has exceeded its device budget, so
+// no further compression should start until the user downloads or clears.
+const outputPressure = signal(false)
 const batchWarning = signal('')
 const importing = signal(false)
 
@@ -226,11 +239,26 @@ function listJobs(): BatchJob[] {
 }
 
 // Finished outputs go to OPFS (or a memory fallback) instead of accumulating
-// in the queue, so repeated batches in one tab do not grow JS memory.
+// in the queue, so repeated batches in one tab do not grow JS memory. The
+// memory fallback is bounded by the device ZIP budget.
 let outputStorePromise: Promise<OutputStore> | null = null
 function getOutputStore(): Promise<OutputStore> {
-  if (!outputStorePromise) outputStorePromise = createOutputStore()
+  if (!outputStorePromise) {
+    outputStorePromise = createOutputStore({
+      maxMemoryBytes: getDeviceProfile().maxZipBytes,
+    })
+  }
   return outputStorePromise
+}
+
+/** Re-evaluates output backpressure after a store mutation. */
+function syncOutputPressure(store: OutputStore): void {
+  outputPressure.value = store.overBudget
+  if (store.overBudget) {
+    notice.value = OUTPUT_PRESSURE_NOTICE
+  } else if (notice.value === OUTPUT_PRESSURE_NOTICE) {
+    notice.value = ''
+  }
 }
 
 function raf(callback: () => void): number {
@@ -288,7 +316,7 @@ const phaseLabel = computed(
 // Active/ready come straight from the incremental counters, so the Compress
 // button and the busy state are correct without scanning the batch.
 const needsCompress = computed(() => stats.value.active - stats.value.ready > 0)
-const busy = computed(() => zipping.value || stats.value.processing > 0)
+const busy = computed(() => delivering.value || stats.value.processing > 0)
 
 function estimateFor(job: BatchJob, quality: number): number {
   if (job.sampleKey !== sampleKey.value) return 0
@@ -319,6 +347,10 @@ effect(() => {
 const readyDownloadable = computed(() => displayStats.value.readyDownloadable)
 const canDownloadAll = computed(
   () => total.value > 1 && readyDownloadable.value > 0,
+)
+
+const readyToCompress = computed(() =>
+  Math.max(0, stats.value.active - stats.value.ready),
 )
 
 function downloadableList(): BatchJob[] {
@@ -422,7 +454,7 @@ function scheduleIdleTeardown() {
   idleTeardownTimer = setTimeout(() => {
     idleTeardownTimer = undefined
     const active = stats.value.pending + stats.value.processing > 0
-    if (active || zipping.value) return
+    if (active || delivering.value) return
     // Keep a warmed codec pool alive while a batch still needs compressing, so
     // the preload is not thrown away before the user presses Compress.
     if (!isPoolWarm() || stats.value.active <= stats.value.ready) {
@@ -571,6 +603,14 @@ async function compressJob(id: string) {
   const job = getJob(id)
   if (!job) return
 
+  // Output backpressure: stop starting work while the memory fallback is over
+  // budget, so the user can download or clear before more blobs accumulate.
+  if (outputPressure.value) {
+    updateJob(id, { status: 'estimated', error: '' })
+    notice.value = OUTPUT_PRESSURE_NOTICE
+    return
+  }
+
   cancelEstimate(id)
 
   const format = targetFormat.value
@@ -621,8 +661,9 @@ async function compressJob(id: string) {
     const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
     const store = await getOutputStore()
     await store.put(id, result.outputBlob)
+    syncOutputPressure(store)
     if (jobTokens.get(id) !== token) {
-      void store.delete(id)
+      void store.delete(id).then(() => syncOutputPressure(store))
       return
     }
     updateJob(id, {
@@ -866,6 +907,10 @@ function changeResize(value: number) {
 
 function compressAll() {
   if (busy.value) return
+  if (outputPressure.value) {
+    notice.value = OUTPUT_PRESSURE_NOTICE
+    return
+  }
   cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   for (const id of jobIds.value) {
@@ -911,7 +956,10 @@ function removeJob(id: string) {
   nextToken(id)
   jobTokens.delete(id)
   forgetFile(id)
-  void getOutputStore().then((store) => store.delete(id))
+  void getOutputStore().then(async (store) => {
+    await store.delete(id)
+    syncOutputPressure(store)
+  })
   const job = getJob(id)
   if (job?.thumbnailUrl) URL.revokeObjectURL(job.thumbnailUrl)
   dropJob(id)
@@ -934,6 +982,8 @@ function clearAll() {
   averageRatios.value = []
   sampledIds.value = new Set()
   notice.value = ''
+  outputPressure.value = false
+  delivery.value = null
   cancelIdleTeardown()
   disposePool()
   disposeMetadataWorker()
@@ -960,23 +1010,29 @@ function triggerDownload(blob: Blob, name: string) {
 // hold (or decode) a multi-megapixel blob.
 async function downloadJob(job: BatchJob) {
   if (!job.outputStored) return
-  const store = await getOutputStore()
-  const blob = await store.get(job.id)
-  if (!blob) return
-  triggerDownload(blob, replaceExtension(job.name, job.outputExtension))
+  try {
+    const store = await getOutputStore()
+    const blob = await store.get(job.id)
+    if (!blob) return
+    triggerDownload(blob, replaceExtension(job.name, job.outputExtension))
+  } catch (error) {
+    notice.value =
+      error instanceof Error ? error.message : 'Could not download the image.'
+  }
 }
 
 async function downloadAll() {
-  if (zipping.value) return
+  if (delivering.value) return
   const list = downloadableList()
   if (list.length === 0) return
 
-  zipping.value = true
+  delivery.value = { kind: 'zip', processed: 0, total: list.length, bytes: 0 }
   notice.value = ''
   try {
     const store = await getOutputStore()
     const zip = await createStreamingZip(getDeviceProfile().maxZipBytes)
     const used = new Set<string>()
+    let processed = 0
     for (const job of list) {
       const blob = await store.get(job.id)
       if (!blob) continue
@@ -985,6 +1041,13 @@ async function downloadAll() {
         used,
       )
       await zip.add(name, blob)
+      processed += 1
+      delivery.value = {
+        kind: 'zip',
+        processed,
+        total: list.length,
+        bytes: zip.size,
+      }
     }
     const blob = await zip.finish()
     triggerDownload(blob, 'images.zip')
@@ -994,17 +1057,27 @@ async function downloadAll() {
         ? error.message
         : 'Could not build the zip.'
   } finally {
-    zipping.value = false
+    delivery.value = null
   }
 }
 
 async function saveToFolder() {
-  if (!directoryPicker) return
+  if (!directoryPicker || delivering.value) return
+  const list = downloadableList()
+  if (list.length === 0) return
   try {
     const store = await getOutputStore()
     const directory = await directoryPicker()
+    delivery.value = {
+      kind: 'folder',
+      processed: 0,
+      total: list.length,
+      bytes: 0,
+    }
     const used = new Set<string>()
-    for (const job of downloadableList()) {
+    let processed = 0
+    let bytes = 0
+    for (const job of list) {
       const blob = await store.get(job.id)
       if (!blob) continue
       const name = uniqueEntryName(
@@ -1015,11 +1088,24 @@ async function saveToFolder() {
       const writable = await handle.createWritable()
       await writable.write(blob)
       await writable.close()
+      processed += 1
+      bytes += blob.size
+      delivery.value = {
+        kind: 'folder',
+        processed,
+        total: list.length,
+        bytes,
+      }
     }
   } catch (error) {
     // The user dismissing the picker is not an error worth surfacing.
     if (error instanceof DOMException && error.name === 'AbortError') return
-    throw error
+    notice.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not save to the selected folder.'
+  } finally {
+    delivery.value = null
   }
 }
 
@@ -1046,15 +1132,19 @@ function statusLabel(job: BatchJob): string {
   }
 }
 
-// Reads poolStats/renderer itself so frequent pool notifications re-render only
-// this meter, not the whole job list.
-function PoolMeter() {
-  const stats = poolStats.value
+function AddIcon() {
   return (
-    <span class="panel__value" title="Encoder backend and worker pool">
-      {renderer.value ? `${renderer.value} · ` : ''}workers {stats.busy}/
-      {stats.size}
-    </span>
+    <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 4v12M4 10h12" />
+    </svg>
+  )
+}
+
+function SettingsIcon() {
+  return (
+    <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM4.4 6.3l1.1.6a6 6 0 0 0-.1 1.1l-1.2.5a1 1 0 0 0-.5 1.4l.6 1a1 1 0 0 0 1.4.4l1.1-.6c.3.3.7.6 1.1.8l-.1 1.3a1 1 0 0 0 1 1.1h1.2a1 1 0 0 0 1-1l-.1-1.3c.4-.2.8-.5 1.1-.8l1.1.6a1 1 0 0 0 1.4-.4l.6-1a1 1 0 0 0-.5-1.4l-1.2-.5a6 6 0 0 0-.1-1.1l1.1-.6a1 1 0 0 0 .4-1.4l-.6-1a1 1 0 0 0-1.4-.4l-1.1.6a5.5 5.5 0 0 0-1.1-.7l.1-1.3a1 1 0 0 0-1-1H9.8a1 1 0 0 0-1 1l.1 1.3c-.4.2-.8.4-1.1.7l-1.1-.6a1 1 0 0 0-1.4.4l-.6 1a1 1 0 0 0 .4 1.4Z" />
+    </svg>
   )
 }
 
@@ -1123,14 +1213,12 @@ const JobRow = memo(function JobRow({
         <span
           class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
         >
-          {job.width > 0 && `${job.width}×${job.height}px · `}
+          {job.width > 0 && `${job.width}×${job.height} · `}
           {formatBytes(job.originalSize)}
           {job.outputSize > 0 && (
             <>
               {' → '}
-              {job.sizeIsExact ? '' : '~'}
-              {formatBytes(job.outputSize)} (
-              {savingsLabel(job.originalSize, job.outputSize)})
+              {formatBytes(job.outputSize)}
             </>
           )}
           {label && ` · ${label}`}
@@ -1227,11 +1315,21 @@ function JobList() {
 
 // The panel reads the aggregate computeds, isolating those re-renders from the
 // list and the app shell.
-function Panel({ onAddImages }: { onAddImages: () => void }) {
+function Panel() {
   return (
-    <section class="panel">
+    <aside class="panel settings-panel" aria-label="Compression settings">
+      <div class="settings-panel__heading">
+        <div>
+          <p class="eyebrow">Configuration</p>
+          <h2>Compression settings</h2>
+        </div>
+        <span class="settings-panel__format">
+          {FORMAT_SPECS[targetFormat.value].label}
+        </span>
+      </div>
+
       <label class="field">
-        <span class="field__label">Output format</span>
+        <span class="field__label">Format</span>
         <select
           class="select"
           value={targetFormat.value}
@@ -1293,24 +1391,17 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
       ))}
 
       <label class="field">
-        <span class="field__label">Resize — max long edge (px)</span>
+        <span class="field__label">Resize - Max long edge (px)</span>
         <input
           class="input"
           type="number"
           min={0}
-          placeholder="original"
+          placeholder="Original size"
           value={maxLongEdge.value > 0 ? String(maxLongEdge.value) : ''}
           disabled={busy.value}
           onChange={(event) => changeResize(Number(event.currentTarget.value))}
         />
       </label>
-
-      <div class="progress" aria-hidden="true">
-        <div
-          class="progress__bar"
-          style={{ width: `${phasePercent.value}%` }}
-        />
-      </div>
 
       {settingsWarning.value && (
         <p class="field__warning" role="alert">
@@ -1323,73 +1414,110 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
           {batchWarning.value}
         </p>
       )}
+    </aside>
+  )
+}
 
-      <div class="panel__row">
-        <span class="panel__label">{phaseLabel.value}</span>
-        <PoolMeter />
+function BatchSummary() {
+  const workerStats = poolStats.value
+  const status =
+    stats.value.processing > 0
+      ? 'Compressing'
+      : estimatePhase.value
+        ? 'Preparing estimates'
+        : needsCompress.value
+          ? 'Ready to compress'
+          : 'Complete'
+  const estimateLabel = estimatePhase.value
+    ? 'Calculating…'
+    : batchEstimate.value > 0
+      ? formatBytes(batchEstimate.value)
+      : '—'
+  const reduction =
+    originalTotal.value > 0 && batchEstimate.value > 0
+      ? `${savingsLabel(originalTotal.value, batchEstimate.value)} smaller`
+      : '—'
+
+  return (
+    <section class="summary-card">
+      <div class="summary-card__top">
+        <div>
+          <p class="eyebrow">Batch progress</p>
+          <div class="summary-card__count">
+            {finished.value} <span>/ {total.value}</span>
+          </div>
+          <p class="summary-card__status">
+            {status} <span aria-hidden="true">·</span> {workerStats.size}{' '}
+            workers
+          </p>
+        </div>
+        <div class="summary-card__estimate">
+          <span>Estimated size</span>
+          <strong>{estimateLabel}</strong>
+          <em>{reduction}</em>
+        </div>
       </div>
 
-      {batchMode.value && total.value > 0 && (
-        <div class="panel__row">
-          <span class="panel__label">Estimated file size</span>
-          <span class="panel__value">
-            {estimatePhase.value ? (
-              'Calculating…'
-            ) : (
-              <>
-                {needsCompress.value ? '~' : ''}
-                {formatBytes(batchEstimate.value)}
-                {originalTotal.value > 0
-                  ? ` (${savingsLabel(originalTotal.value, batchEstimate.value)})`
-                  : ''}
-              </>
-            )}
-          </span>
-        </div>
-      )}
+      <div
+        class="progress"
+        role="progressbar"
+        aria-label="Compression progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progressPercent.value}
+      >
+        <div
+          class="progress__bar"
+          style={{ width: `${phasePercent.value}%` }}
+        />
+      </div>
 
-      {needsCompress.value && (
-        <button
-          type="button"
-          class="button button--primary"
-          disabled={busy.value}
-          onClick={compressAll}
-        >
-          Compress {total.value > 1 ? `all ${total.value} images` : 'image'}
-        </button>
-      )}
+      <div class="summary-card__details">
+        <span>
+          {readyToCompress.value > 0
+            ? `${readyToCompress.value} ready to compress`
+            : `${readyDownloadable.value} ready to download`}
+        </span>
+        <span>
+          {stats.value.processing > 0
+            ? `${stats.value.processing} in progress`
+            : phaseLabel.value}
+        </span>
+      </div>
 
-      {cancellable.value && (
-        <button
-          type="button"
-          class="button"
-          disabled={zipping.value}
-          onClick={cancelAllWork}
-        >
-          Cancel
-        </button>
-      )}
+      <div class="summary-card__actions">
+        {needsCompress.value && (
+          <button
+            type="button"
+            class="button button--primary"
+            disabled={busy.value}
+            onClick={compressAll}
+          >
+            Compress {total.value > 1 ? `${total.value} images` : 'image'}
+          </button>
+        )}
 
-      <div class="panel__actions">
-        <button
-          type="button"
-          class="button"
-          disabled={busy.value}
-          onClick={onAddImages}
-        >
-          Add images
-        </button>
+        {cancellable.value && (
+          <button
+            type="button"
+            class="button"
+            disabled={delivering.value}
+            onClick={cancelAllWork}
+          >
+            Cancel
+          </button>
+        )}
 
         {canDownloadAll.value && (
           <button
             type="button"
-            class="button button--primary"
+            class="button"
             onClick={downloadAll}
-            disabled={zipping.value || busy.value}
+            disabled={busy.value}
           >
-            {zipping.value
-              ? 'Building zip…'
-              : `Download all (${readyDownloadable.value}) as zip`}
+            {delivery.value?.kind === 'zip'
+              ? `Zipping ${delivery.value.processed}/${delivery.value.total}…`
+              : `Download ${readyDownloadable.value} as zip`}
           </button>
         )}
 
@@ -1400,25 +1528,38 @@ function Panel({ onAddImages }: { onAddImages: () => void }) {
             disabled={busy.value}
             onClick={saveToFolder}
           >
-            Save to folder…
+            {delivery.value?.kind === 'folder'
+              ? `Saving ${delivery.value.processed}/${delivery.value.total}…`
+              : 'Save to folder'}
           </button>
         )}
 
         <button
           type="button"
-          class="button"
+          class="button button--quiet"
           disabled={busy.value}
           onClick={clearAll}
         >
           Clear all
         </button>
       </div>
+
+      {delivery.value && (
+        <p class="panel__progress" role="status" aria-live="polite">
+          {delivery.value.kind === 'zip' ? 'Building zip' : 'Saving to folder'}{' '}
+          {delivery.value.processed}/{delivery.value.total}
+          {delivery.value.bytes > 0
+            ? ` · ${formatBytes(delivery.value.bytes)}`
+            : ''}
+        </p>
+      )}
     </section>
   )
 }
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [settingsOpen, setSettingsOpen] = useState(true)
 
   useEffect(() => {
     const profile = getDeviceProfile()
@@ -1517,11 +1658,38 @@ export function App() {
       )}
 
       <header class="app__header">
-        <h1>Image Compressor</h1>
-        <p>
-          Convert and compress images entirely in your browser. Nothing is
-          uploaded — your files never leave this device.
-        </p>
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true">
+            IC
+          </span>
+          <div>
+            <h1>Image Compressor</h1>
+            <p>Private, fast image compression in your browser.</p>
+          </div>
+        </div>
+        <div class="app__header-actions">
+          <button
+            type="button"
+            class="button button--secondary"
+            disabled={busy.value}
+            onClick={() => inputRef.current?.click()}
+          >
+            <AddIcon />
+            Add images
+          </button>
+          {jobCount > 0 && (
+            <button
+              type="button"
+              class={`button button--secondary${settingsOpen ? ' button--selected' : ''}`}
+              aria-expanded={settingsOpen}
+              aria-controls="compression-settings"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              <SettingsIcon />
+              Settings
+            </button>
+          )}
+        </div>
       </header>
 
       {jobCount === 0 && (
@@ -1548,10 +1716,28 @@ export function App() {
       />
 
       {jobCount > 0 && (
-        <>
-          <Panel onAddImages={() => inputRef.current?.click()} />
-          <JobList />
-        </>
+        <div class="app__workspace">
+          <div class="workspace__main">
+            <BatchSummary />
+            <section class="queue-panel">
+              <div class="queue-panel__header">
+                <div>
+                  <p class="eyebrow">Queue</p>
+                  <h2>Images</h2>
+                </div>
+                <span class="queue-panel__count">
+                  {total.value} {total.value === 1 ? 'image' : 'images'}
+                </span>
+              </div>
+              <JobList />
+            </section>
+          </div>
+          {settingsOpen && (
+            <div id="compression-settings">
+              <Panel />
+            </div>
+          )}
+        </div>
       )}
 
       <footer class="app__footer">v{appVersion}</footer>

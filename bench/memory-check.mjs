@@ -55,9 +55,8 @@ try {
   async function waitTotal(total) {
     await page.waitForFunction(
       (n) => {
-        const text = [...document.querySelectorAll('.panel__label')]
-          .map((el) => el.textContent ?? '')
-          .join(' ')
+        const text =
+          document.querySelector('.summary-card__details')?.textContent ?? ''
         return new RegExp(`${n} / ${n} compressed`).test(text)
       },
       total,
