@@ -135,27 +135,6 @@ function StatsGroup({ title, rows }: { title: string; rows: StatRow[] }) {
   )
 }
 
-function BackIcon() {
-  return (
-    <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M12 5.5 7.5 10l4.5 4.5" />
-      <path d="M7.5 10H16" />
-    </svg>
-  )
-}
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      class={`chevron-icon${open ? ' chevron-icon--open' : ''}`}
-      viewBox="0 0 20 20"
-      aria-hidden="true"
-    >
-      <path d="m5 7.5 5 5 5-5" />
-    </svg>
-  )
-}
-
 export function SettingsPage({
   onClose,
   onWorkerSettingsChange,
@@ -167,7 +146,6 @@ export function SettingsPage({
     encoders: StatRow[]
     capabilities: StatRow[]
   }>({ encoders: [], capabilities: [] })
-  const [statsOpen, setStatsOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -190,7 +168,7 @@ export function SettingsPage({
     ? 1
     : Math.min(maxWorkers.value ?? autoWorkers, autoWorkers)
 
-  const deviceSummaryRows: StatRow[] = [
+  const deviceRows: StatRow[] = [
     { label: 'Device', value: `${platform.deviceType} · ${platform.os}` },
     {
       label: 'Browser',
@@ -211,10 +189,6 @@ export function SettingsPage({
           ? `${signals.deviceMemory} GB`
           : 'Not exposed',
     },
-    { label: 'App version', value: appVersion },
-  ]
-
-  const deviceDetailRows: StatRow[] = [
     {
       label: 'Canvas ceiling',
       value: `${profile.canvasLimits.maxSide.toLocaleString()} px max side · ${canvasAreaLabel(profile.canvasLimits.maxArea)}`,
@@ -228,11 +202,8 @@ export function SettingsPage({
       label: 'Workers',
       value: `${profile.workerCount} light · ${profile.heavyWorkerCount} heavy`,
     },
+    { label: 'App version', value: appVersion },
   ]
-
-  const deviceRows = statsOpen
-    ? [...deviceSummaryRows, ...deviceDetailRows]
-    : deviceSummaryRows
 
   const decoderRows: StatRow[] = FORMAT_ORDER.map((format) => ({
     label: format.toUpperCase(),
@@ -244,12 +215,10 @@ export function SettingsPage({
       <header class="settings-page__header">
         <button
           type="button"
-          class="settings-back"
-          aria-label="Back"
-          title="Back"
+          class="button button--secondary"
           onClick={onClose}
         >
-          <BackIcon />
+          Back
         </button>
         <h1>Settings</h1>
       </header>
@@ -335,25 +304,12 @@ export function SettingsPage({
       <section class="settings-card" aria-labelledby="settings-stats">
         <h2 id="settings-stats">Stats for nerds</h2>
         <StatsGroup title="Device" rows={deviceRows} />
-        {statsOpen && (
-          <>
-            <StatsGroup
-              title="Encoder backend by format"
-              rows={asyncStats.encoders}
-            />
-            <StatsGroup title="Decoder backend by format" rows={decoderRows} />
-            <StatsGroup title="Capabilities" rows={asyncStats.capabilities} />
-          </>
-        )}
-        <button
-          type="button"
-          class="stats-toggle"
-          aria-expanded={statsOpen}
-          onClick={() => setStatsOpen((open) => !open)}
-        >
-          <span>{statsOpen ? 'Show less' : 'Show more'}</span>
-          <ChevronIcon open={statsOpen} />
-        </button>
+        <StatsGroup
+          title="Encoder backend by format"
+          rows={asyncStats.encoders}
+        />
+        <StatsGroup title="Decoder backend by format" rows={decoderRows} />
+        <StatsGroup title="Capabilities" rows={asyncStats.capabilities} />
       </section>
     </div>
   )
