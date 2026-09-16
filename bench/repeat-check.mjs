@@ -60,10 +60,14 @@ try {
   async function waitDone(expectedTotal) {
     await page.waitForFunction(
       (total) => {
-        const text = [...document.querySelectorAll('.panel__label')]
-          .map((element) => element.textContent ?? '')
-          .join(' ')
-        return new RegExp(`${total} / ${total} compressed`).test(text)
+        const count =
+          document.querySelector('.summary-card__count')?.textContent ?? ''
+        const status =
+          document.querySelector('.summary-card__status')?.textContent ?? ''
+        return (
+          new RegExp(`${total} / ${total}`).test(count) &&
+          /Complete/.test(status)
+        )
       },
       expectedTotal,
       { timeout: 180_000 },
@@ -84,10 +88,7 @@ try {
           (candidate) =>
             (candidate.textContent ?? '').trim().startsWith('Compress'),
         )
-        const calculating = (
-          document.querySelector('.panel')?.textContent ?? ''
-        ).includes('Calculating')
-        return button && !button.disabled && !calculating
+        return button && !button.disabled
       },
       undefined,
       { timeout: 180_000 },

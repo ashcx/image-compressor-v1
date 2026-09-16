@@ -42,7 +42,11 @@ import {
   type OutputStore,
   resetOutputStorage,
 } from './lib/outputStore'
-import { resolveDecodeTargetSize, type SizeLimits } from './lib/resize'
+import {
+  resolveDecodeTargetSize,
+  resolveResize,
+  type SizeLimits,
+} from './lib/resize'
 import { appVersion, watchForUpdates } from './lib/version'
 import {
   computeWindow,
@@ -83,6 +87,8 @@ interface BatchJob {
   sizeIsExact: boolean
   outputKey: string
   sampleKey: string
+  sourceWidth: number
+  sourceHeight: number
   width: number
   height: number
   samples: EstimateSample[]
@@ -289,7 +295,6 @@ const displayStats = throttleSignal(stats)
 const total = computed(() => stats.value.total)
 const batchMode = computed(() => stats.value.total > 1)
 const finished = computed(() => displayStats.value.finished)
-const failed = computed(() => displayStats.value.failed)
 const originalTotal = computed(() => displayStats.value.originalBytes)
 const progressPercent = computed(() => {
   const value = displayStats.value
@@ -298,7 +303,6 @@ const progressPercent = computed(() => {
     : Math.round((value.finished / value.total) * 100)
 })
 const pendingEstimate = computed(() => displayStats.value.pending)
-const cancelledCount = computed(() => displayStats.value.cancelled)
 const estimatePhase = computed(
   () => batchMode.value && pendingEstimate.value > 0,
 )
@@ -308,11 +312,6 @@ const cancellable = computed(
 // The bar only reflects compression; estimates happen quietly in the
 // background so the app looks ready to compress immediately.
 const phasePercent = computed(() => progressPercent.value)
-const phaseLabel = computed(
-  () =>
-    `${finished.value} / ${total.value} compressed${failed.value > 0 ? ` · ${failed.value} failed` : ''}${cancelledCount.value > 0 ? ` · ${cancelledCount.value} cancelled` : ''}`,
-)
-
 // Active/ready come straight from the incremental counters, so the Compress
 // button and the busy state are correct without scanning the batch.
 const needsCompress = computed(() => stats.value.active - stats.value.ready > 0)
@@ -347,10 +346,6 @@ effect(() => {
 const readyDownloadable = computed(() => displayStats.value.readyDownloadable)
 const canDownloadAll = computed(
   () => total.value > 1 && readyDownloadable.value > 0,
-)
-
-const readyToCompress = computed(() =>
-  Math.max(0, stats.value.active - stats.value.ready),
 )
 
 function downloadableList(): BatchJob[] {
@@ -771,6 +766,8 @@ async function addFiles(fileList: FileList | File[] | null) {
       sizeIsExact: false,
       outputKey: '',
       sampleKey: '',
+      sourceWidth: 0,
+      sourceHeight: 0,
       width: 0,
       height: 0,
       samples: [],
@@ -790,6 +787,8 @@ async function addFiles(fileList: FileList | File[] | null) {
       void readDimensions(job.file).then((dimensions) => {
         if (dimensions) {
           updateJob(job.id, {
+            sourceWidth: dimensions.width,
+            sourceHeight: dimensions.height,
             width: dimensions.width,
             height: dimensions.height,
           })
@@ -1118,11 +1117,9 @@ function statusLabel(job: BatchJob): string {
   switch (job.status) {
     case 'queued':
     case 'estimating':
-      return ''
     case 'estimated':
-      return 'not compressed yet'
     case 'processing':
-      return 'compressing…'
+      return ''
     case 'done':
       return isCurrent(job) ? '' : 'settings changed — re-compress'
     case 'cancelled':
@@ -1130,6 +1127,19 @@ function statusLabel(job: BatchJob): string {
     case 'error':
       return job.error
   }
+}
+
+function dimensionsLabel(job: BatchJob): string {
+  const width = job.sourceWidth || job.width
+  const height = job.sourceHeight || job.height
+  if (!width || !height) return ''
+
+  const edge = maxLongEdge.value
+  if (!edge) return `${width}×${height}`
+
+  const resized = resolveResize(width, height, { maxLongEdge: edge })
+  if (!resized) return `${width}×${height}`
+  return `${width}×${height} → ${resized.width}×${resized.height}`
 }
 
 function AddIcon() {
@@ -1177,6 +1187,7 @@ const JobRow = memo(function JobRow({
   if (!job) return null
   const current = isCurrent(job)
   const label = statusLabel(job)
+  const dimensions = dimensionsLabel(job)
   const isBusy = busy.value
   return (
     <li
@@ -1213,17 +1224,20 @@ const JobRow = memo(function JobRow({
         <span
           class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
         >
-          {job.width > 0 && `${job.width}×${job.height} · `}
-          {formatBytes(job.originalSize)}
-          {job.outputSize > 0 && (
-            <>
-              {' → '}
-              {formatBytes(job.outputSize)}
-            </>
-          )}
-          {label && ` · ${label}`}
-          {job.capped && ' · downscaled to device limit'}
+          {dimensions}
+          {label && `${dimensions ? ' · ' : ''}${label}`}
         </span>
+      </div>
+      <div class="job__size">
+        <span>{formatBytes(job.originalSize)}</span>
+        {job.outputSize > 0 && (
+          <>
+            <span class="job__size-arrow" aria-hidden="true">
+              →
+            </span>
+            <span>{formatBytes(job.outputSize)}</span>
+          </>
+        )}
       </div>
       <div class="job__actions">
         {current && job.outputStored ? (
@@ -1319,13 +1333,7 @@ function Panel() {
   return (
     <aside class="panel settings-panel" aria-label="Compression settings">
       <div class="settings-panel__heading">
-        <div>
-          <p class="eyebrow">Configuration</p>
-          <h2>Compression settings</h2>
-        </div>
-        <span class="settings-panel__format">
-          {FORMAT_SPECS[targetFormat.value].label}
-        </span>
+        <h2>Compression settings</h2>
       </div>
 
       <label class="field">
@@ -1428,11 +1436,6 @@ function BatchSummary() {
         : needsCompress.value
           ? 'Ready to compress'
           : 'Complete'
-  const estimateLabel = estimatePhase.value
-    ? 'Calculating…'
-    : batchEstimate.value > 0
-      ? formatBytes(batchEstimate.value)
-      : '—'
   const reduction =
     originalTotal.value > 0 && batchEstimate.value > 0
       ? `${savingsLabel(originalTotal.value, batchEstimate.value)} smaller`
@@ -1442,26 +1445,28 @@ function BatchSummary() {
     <section class="summary-card">
       <div class="summary-card__top">
         <div>
-          <p class="eyebrow">Batch progress</p>
           <div class="summary-card__count">
             {finished.value} <span>/ {total.value}</span>
           </div>
-          <p class="summary-card__status">
+          <p
+            class="summary-card__status"
+            data-estimating={estimatePhase.value}
+            data-workers-busy={workerStats.busy}
+            data-workers-size={workerStats.size}
+          >
             {status} <span aria-hidden="true">·</span> {workerStats.size}{' '}
             workers
           </p>
         </div>
         <div class="summary-card__estimate">
-          <span>Estimated size</span>
-          <strong>{estimateLabel}</strong>
-          <em>{reduction}</em>
+          <strong>{reduction}</strong>
         </div>
       </div>
 
       <div
         class="progress"
         role="progressbar"
-        aria-label="Compression progress"
+        aria-label="Progress"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={progressPercent.value}
@@ -1470,19 +1475,6 @@ function BatchSummary() {
           class="progress__bar"
           style={{ width: `${phasePercent.value}%` }}
         />
-      </div>
-
-      <div class="summary-card__details">
-        <span>
-          {readyToCompress.value > 0
-            ? `${readyToCompress.value} ready to compress`
-            : `${readyDownloadable.value} ready to download`}
-        </span>
-        <span>
-          {stats.value.processing > 0
-            ? `${stats.value.processing} in progress`
-            : phaseLabel.value}
-        </span>
       </div>
 
       <div class="summary-card__actions">
@@ -1720,15 +1712,6 @@ export function App() {
           <div class="workspace__main">
             <BatchSummary />
             <section class="queue-panel">
-              <div class="queue-panel__header">
-                <div>
-                  <p class="eyebrow">Queue</p>
-                  <h2>Images</h2>
-                </div>
-                <span class="queue-panel__count">
-                  {total.value} {total.value === 1 ? 'image' : 'images'}
-                </span>
-              </div>
               <JobList />
             </section>
           </div>

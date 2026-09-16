@@ -307,7 +307,7 @@ async function applySettings(page, scenario) {
       .selectOption(String(scenario.quality ?? 75))
   } else if (scenario.format === 'png') {
     await page
-      .getByLabel('Compression')
+      .getByLabel('Compression', { exact: true })
       .selectOption(String(scenario.mode ?? 0))
   } else if (scenario.format === 'avif') {
     await page.evaluate((quality) => {
@@ -338,7 +338,7 @@ function parseMeter(text) {
 }
 
 // The queue is virtualized, so counting DOM rows no longer reflects batch
-// progress. Read the panel's aggregate phase label instead.
+// progress. Read the compact batch summary instead.
 function parsePhase(text) {
   const match =
     /(\d+)\s*\/\s*(\d+)\s*compressed(?:\s*·\s*(\d+)\s*failed)?/.exec(text ?? '')
@@ -352,24 +352,20 @@ function parsePhase(text) {
 
 async function snapshot(page) {
   return page.evaluate(() => {
-    const labels = [...document.querySelectorAll('.panel__label')].map(
-      (element) => element.textContent ?? '',
-    )
-    const label = labels.find((text) => text.includes('compressed')) ?? ''
-    const meter = document.querySelector(
-      '[title="Encoder backend and worker pool"]',
-    )
+    const count =
+      document.querySelector('.summary-card__count')?.textContent ?? ''
+    const status = document.querySelector('.summary-card__status')
+    const workersBusy = status?.getAttribute('data-workers-busy') ?? ''
+    const workersSize = status?.getAttribute('data-workers-size') ?? ''
     const compress = [...document.querySelectorAll('button')].find((button) =>
       (button.textContent ?? '').trim().startsWith('Compress'),
     )
     return {
-      label,
-      meter: meter?.textContent ?? '',
+      label: `${count} compressed`,
+      meter: `workers ${workersBusy}/${workersSize}`,
       mountedRows: document.querySelectorAll('.job').length,
       compressEnabled: Boolean(compress) && !compress.disabled,
-      estimating: (
-        document.querySelector('.panel')?.textContent ?? ''
-      ).includes('Calculating'),
+      estimating: status?.getAttribute('data-estimating') === 'true',
     }
   })
 }
