@@ -75,17 +75,13 @@ select:focus-visible {
 }
 
 .brand__mark {
-  display: grid;
+  display: block;
   flex: none;
   width: 2.6rem;
   height: 2.6rem;
-  place-items: center;
   border-radius: 12px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
+  object-fit: cover;
+  box-shadow: 0 0.35rem 0.9rem rgba(84, 37, 59, 0.16);
 }
 
 .app__header h1 {

@@ -1144,17 +1144,34 @@ function dimensionsLabel(job: BatchJob): string {
 
 function AddIcon() {
   return (
-    <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
-      <rect x="3" y="4" width="11" height="12" rx="2" />
-      <path d="m4.5 13 2.5-2.5 2 2 1.5-1.5 3.5 3.5M15 4v5M12.5 6.5h5" />
+    <svg class="button__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3.5" y="5" width="13.5" height="14.5" rx="2.75" />
+      <path d="m6.5 15.5 3.2-3.2 2.5 2.5 1.8-1.8 2.7 2.7" />
+      <circle cx="18.5" cy="7" r="3.5" fill="currentColor" stroke="none" />
+      <path d="M18.5 5.25v3.5M16.75 7h3.5" stroke="#fff" stroke-width="1.5" />
     </svg>
   )
 }
 
 function SettingsIcon() {
   return (
+    <svg class="button__icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10.25 3.25h3.5l.7 2.18c.52.18 1.02.39 1.49.68l2.04-.88 2.48 2.48-.88 2.04c.29.47.5.97.68 1.49l2.18.7v3.5l-2.18.7a7.6 7.6 0 0 1-.68 1.49l.88 2.04-2.48 2.48-2.04-.88a7.6 7.6 0 0 1-1.49.68l-.7 2.18h-3.5l-.7-2.18a7.6 7.6 0 0 1-1.49-.68l-2.04.88-2.48-2.48.88-2.04a7.6 7.6 0 0 1-.68-1.49l-2.18-.7v-3.5l2.18-.7c.18-.52.39-1.02.68-1.49l-.88-2.04 2.48-2.48 2.04.88c.47-.29.97-.5 1.49-.68l.7-2.18Z" />
+      <circle
+        cx="12"
+        cy="13.02"
+        r="3.55"
+        fill="var(--accent-soft)"
+        stroke="none"
+      />
+    </svg>
+  )
+}
+
+function RemoveIcon() {
+  return (
     <svg class="button__icon" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M10 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM4.4 6.3l1.1.6a6 6 0 0 0-.1 1.1l-1.2.5a1 1 0 0 0-.5 1.4l.6 1a1 1 0 0 0 1.4.4l1.1-.6c.3.3.7.6 1.1.8l-.1 1.3a1 1 0 0 0 1 1.1h1.2a1 1 0 0 0 1-1l-.1-1.3c.4-.2.8-.5 1.1-.8l1.1.6a1 1 0 0 0 1.4-.4l.6-1a1 1 0 0 0-.5-1.4l-1.2-.5a6 6 0 0 0-.1-1.1l1.1-.6a1 1 0 0 0 .4-1.4l-.6-1a1 1 0 0 0-1.4-.4l-1.1.6a5.5 5.5 0 0 0-1.1-.7l.1-1.3a1 1 0 0 0-1-1H9.8a1 1 0 0 0-1 1l.1 1.3c-.4.2-.8.4-1.1.7l-1.1-.6a1 1 0 0 0-1.4.4l-.6 1a1 1 0 0 0 .4 1.4Z" />
+      <path d="m6 6 8 8M14 6l-8 8" />
     </svg>
   )
 }
@@ -1273,7 +1290,7 @@ const JobRow = memo(function JobRow({
           disabled={isBusy}
           onClick={() => onRemove(job.id)}
         >
-          ×
+          <RemoveIcon />
         </button>
       </div>
     </li>
@@ -1721,9 +1738,13 @@ export function App() {
 
       <header class="app__header">
         <div class="brand">
-          <span class="brand__mark" aria-hidden="true">
-            IC
-          </span>
+          <img
+            class="brand__mark"
+            src={`${import.meta.env.BASE_URL}favicon.svg`}
+            alt=""
+            width="42"
+            height="42"
+          />
           <div>
             <h1>Compressor</h1>
             <p>Private, fast image compression in your browser.</p>

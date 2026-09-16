@@ -1,5 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Image Compressor">
-  <rect width="32" height="32" rx="7" fill="#4c8dff" />
-  <circle cx="11" cy="11" r="2.6" fill="#06101f" />
-  <path d="M6 24l6-7 4 4 3.5-3.5L26 24z" fill="#06101f" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Image Compressor</title>
+  <desc id="desc">A warm gradient tile with a compacted image mark.</desc>
+  <defs>
+    <linearGradient id="surface" x1="112" y1="62" x2="390" y2="472" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4c72e" />
+      <stop offset="0.38" stop-color="#bd8212" />
+      <stop offset="0.72" stop-color="#7e3c2c" />
+      <stop offset="1" stop-color="#54253b" />
+    </linearGradient>
+    <linearGradient id="sheen" x1="256" y1="48" x2="256" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff6bd" stop-opacity="0.46" />
+      <stop offset="1" stop-color="#fff6bd" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="glyph" x1="256" y1="142" x2="256" y2="402" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff6a4" />
+      <stop offset="0.48" stop-color="#ffe276" />
+      <stop offset="1" stop-color="#eea927" />
+    </linearGradient>
+    <linearGradient id="glyphShadow" x1="256" y1="200" x2="256" y2="354" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8f5711" />
+      <stop offset="1" stop-color="#632b31" />
+    </linearGradient>
+    <clipPath id="tileClip">
+      <rect x="40" y="40" width="432" height="432" rx="116" />
+    </clipPath>
+    <filter id="tileShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#301b29" flood-opacity="0.28" />
+    </filter>
+    <filter id="glyphShadowFilter" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#5c2a22" flood-opacity="0.42" />
+    </filter>
+  </defs>
+
+  <rect x="40" y="40" width="432" height="432" rx="116" fill="#3d1c31" opacity="0.25" filter="url(#tileShadow)" />
+  <g id="app-icon" clip-path="url(#tileClip)">
+    <rect x="40" y="40" width="432" height="432" fill="url(#surface)" />
+    <path d="M40 40h432v196c-72-40-143-58-216-58S112 196 40 236V40Z" fill="url(#sheen)" />
+    <rect x="40.75" y="40.75" width="430.5" height="430.5" rx="115.25" fill="none" stroke="#fff1a4" stroke-opacity="0.42" stroke-width="1.5" />
+
+    <g filter="url(#glyphShadowFilter)">
+      <path d="M174 151c0-14.9 12.1-27 27-27h110c14.9 0 27 12.1 27 27 0 29.3-23.7 53-53 53h-58c-29.3 0-53-23.7-53-53Z" fill="url(#glyph)" stroke="#fff6bd" stroke-opacity="0.62" stroke-width="5" />
+      <path d="M174 361c0 14.9 12.1 27 27 27h110c14.9 0 27-12.1 27-27 0-29.3-23.7-53-53-53h-58c-29.3 0-53 23.7-53 53Z" fill="url(#glyph)" stroke="#fff6bd" stroke-opacity="0.62" stroke-width="5" />
+      <path d="M136 218c12.8 0 24.7 5 33.8 14.1l35.1 35.1c22.7 22.7 53.5 35.5 85.6 35.5s62.9-12.8 85.6-35.5l35.1-35.1c9.1-9.1 21-14.1 33.8-14.1 9.7 0 17.5 7.8 17.5 17.5v77c0 9.7-7.8 17.5-17.5 17.5-12.8 0-24.7-5-33.8-14.1l-35.1-35.1c-22.7-22.7-53.5-35.5-85.6-35.5s-62.9 12.8-85.6 35.5l-35.1 35.1c-9.1 9.1-21 14.1-33.8 14.1-9.7 0-17.5-7.8-17.5-17.5v-77c0-9.7 7.8-17.5 17.5-17.5Z" fill="url(#glyphShadow)" stroke="url(#glyph)" stroke-width="8" stroke-linejoin="round" />
+      <path d="M137 225c11 0 21.4 4.3 29.2 12.1l35.1 35.1c24.3 24.3 57.2 37.7 89.2 37.7" fill="none" stroke="#fff7c5" stroke-opacity="0.72" stroke-width="4" stroke-linecap="round" />
+    </g>
+  </g>
 </svg>
