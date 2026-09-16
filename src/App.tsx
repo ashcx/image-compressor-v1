@@ -47,7 +47,7 @@ import {
   resolveResize,
   type SizeLimits,
 } from './lib/resize'
-import { appVersion, watchForUpdates } from './lib/version'
+import { watchForUpdates } from './lib/version'
 import {
   computeWindow,
   DEFAULT_OVERSCAN,
@@ -1785,11 +1785,22 @@ export function App() {
           class={`dropzone${isDragging.value ? ' dropzone--active' : ''}`}
           onClick={() => inputRef.current?.click()}
         >
-          <span class="dropzone__title">Drop images here</span>
-          <span class="dropzone__hint">
-            or click to choose files (JPEG, PNG, WebP, AVIF). Single images
-            compress immediately; batches are estimated first.
+          <span class="welcome-visual" aria-hidden="true">
+            <span class="welcome-visual__halo" />
+            <span class="welcome-visual__orbit welcome-visual__orbit--one" />
+            <span class="welcome-visual__orbit welcome-visual__orbit--two" />
+            <span class="welcome-visual__spark welcome-visual__spark--one" />
+            <span class="welcome-visual__spark welcome-visual__spark--two" />
+            <svg class="welcome-visual__icon" viewBox="0 0 96 96">
+              <title>Image compression illustration</title>
+              <rect x="18" y="16" width="60" height="64" rx="12" />
+              <path d="m28 63 13-15 10 10 8-9 9 14" />
+              <circle cx="61" cy="33" r="5" />
+              <path d="M78 48h12M84 42v12" />
+            </svg>
           </span>
+          <span class="dropzone__title">Compress your images</span>
+          <span class="dropzone__hint">Click or drag to compress images</span>
         </button>
       )}
 
@@ -1813,8 +1824,6 @@ export function App() {
           </div>
         </div>
       )}
-
-      <footer class="app__footer">v{appVersion}</footer>
     </main>
   )
 }
