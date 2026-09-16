@@ -19,6 +19,8 @@ with the tools below.
 | transparency | Alpha shapes | 800×800 | PNG | Alpha flattening in thumbnails. |
 | noise | Per-pixel random | 1200×1200 | JPEG | Worst-case output size. |
 | large | Wide gradient + blocks | 4000×3000 | JPEG | Decode/resize memory, resize-aware decode. |
+| large-hires | Wide gradient + fine detail | 6240×4160 | JPEG | High-resolution estimate calibration. |
+| large-noise | Per-pixel random | 6240×4160 | JPEG | High-resolution worst-case output sizing. |
 | orientation | EXIF-oriented photo | 1200×1600 | JPEG/HEIC | Orientation handling. |
 | malformed | Truncated / bad magic bytes | — | mixed | Intake guards and error rows. |
 | duplicate | Same basename, two folders | — | mixed | ZIP/folder name collisions. |

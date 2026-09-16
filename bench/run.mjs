@@ -30,6 +30,34 @@ const SCENARIOS = [
     maxLongEdge: 1024,
   },
   { id: 'webp-photo', format: 'webp', cohort: ['photo'], quality: 75 },
+  {
+    id: 'jpeg-large',
+    format: 'jpeg',
+    cohort: ['large-hires'],
+    quality: 75,
+    maxCount: 4,
+  },
+  {
+    id: 'webp-large',
+    format: 'webp',
+    cohort: ['large-hires'],
+    quality: 75,
+    maxCount: 4,
+  },
+  {
+    id: 'jpeg-large-noise',
+    format: 'jpeg',
+    cohort: ['large-noise'],
+    quality: 75,
+    maxCount: 2,
+  },
+  {
+    id: 'webp-large-noise',
+    format: 'webp',
+    cohort: ['large-noise'],
+    quality: 75,
+    maxCount: 2,
+  },
   { id: 'png-screenshot', format: 'png', cohort: ['screenshot'], mode: 0 },
   {
     id: 'png-screenshot-lossless',
@@ -44,6 +72,22 @@ const SCENARIOS = [
     quality: 50,
     speed: 8,
     maxCount: 25,
+  },
+  {
+    id: 'avif-large',
+    format: 'avif',
+    cohort: ['large-hires'],
+    quality: 50,
+    speed: 8,
+    maxCount: 4,
+  },
+  {
+    id: 'avif-large-noise',
+    format: 'avif',
+    cohort: ['large-noise'],
+    quality: 50,
+    speed: 8,
+    maxCount: 2,
   },
   {
     id: 'jpeg-mixed',
@@ -169,6 +213,20 @@ async function injectFixtures(page, { count, cohorts, seed }) {
         transparency: { w: 800, h: 800, type: 'image/png', bases: 3 },
         noise: { w: 1200, h: 1200, type: 'image/jpeg', q: 0.92, bases: 4 },
         large: { w: 4000, h: 3000, type: 'image/jpeg', q: 0.9, bases: 2 },
+        'large-hires': {
+          w: 6240,
+          h: 4160,
+          type: 'image/jpeg',
+          q: 0.9,
+          bases: 2,
+        },
+        'large-noise': {
+          w: 6240,
+          h: 4160,
+          type: 'image/jpeg',
+          q: 0.92,
+          bases: 2,
+        },
       }
 
       const draw = (canvas, cohort, rnd) => {
@@ -224,20 +282,37 @@ async function injectFixtures(page, { count, cohorts, seed }) {
             image.data[i + 3] = 255
           }
           ctx.putImageData(image, 0, 0)
+        } else if (cohort === 'large-noise') {
+          const image = ctx.createImageData(w, h)
+          for (let i = 0; i < image.data.length; i += 4) {
+            const value = rnd() * 255
+            image.data[i] = value
+            image.data[i + 1] = value
+            image.data[i + 2] = value
+            image.data[i + 3] = 255
+          }
+          ctx.putImageData(image, 0, 0)
         } else {
           const gradient = ctx.createLinearGradient(0, 0, w, h)
           gradient.addColorStop(0, '#112233')
           gradient.addColorStop(1, '#ffdd88')
           ctx.fillStyle = gradient
           ctx.fillRect(0, 0, w, h)
-          for (let i = 0; i < 200; i += 1) {
+          for (let i = 0; i < 900; i += 1) {
             ctx.fillStyle = `hsla(${(rnd() * 360) | 0} 70% 60% / 0.2)`
             ctx.fillRect(
               rnd() * w,
               rnd() * h,
-              200 + rnd() * 600,
-              200 + rnd() * 600,
+              20 + rnd() * 500,
+              20 + rnd() * 500,
             )
+          }
+          // Fine detail makes this cohort exercise the high-resolution scaling
+          // path instead of only measuring a smooth low-frequency gradient.
+          for (let i = 0; i < 12_000; i += 1) {
+            const shade = 20 + ((rnd() * 80) | 0)
+            ctx.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${0.08 + rnd() * 0.2})`
+            ctx.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 4, 1 + rnd() * 4)
           }
         }
       }
@@ -355,6 +430,7 @@ async function snapshot(page) {
     const count =
       document.querySelector('.summary-card__count')?.textContent ?? ''
     const status = document.querySelector('.summary-card__status')
+    const summary = document.querySelector('.summary-card')
     const workersBusy = status?.getAttribute('data-workers-busy') ?? ''
     const workersSize = status?.getAttribute('data-workers-size') ?? ''
     const compress = [...document.querySelectorAll('button')].find((button) =>
@@ -366,6 +442,8 @@ async function snapshot(page) {
       mountedRows: document.querySelectorAll('.job').length,
       compressEnabled: Boolean(compress) && !compress.disabled,
       estimating: status?.getAttribute('data-estimating') === 'true',
+      estimateBytes: Number(summary?.getAttribute('data-estimate-bytes') ?? 0),
+      readyBytes: Number(summary?.getAttribute('data-ready-bytes') ?? 0),
     }
   })
 }
@@ -373,6 +451,7 @@ async function snapshot(page) {
 async function waitAndRun(page, expected, timeout, runStartedAt) {
   const poolSamples = []
   let estimateAt = null
+  let estimateBytes = null
   let firstResultAt = null
   let peakMounted = 0
   const deadline = Date.now() + timeout
@@ -399,6 +478,8 @@ async function waitAndRun(page, expected, timeout, runStartedAt) {
         poolSamples,
         errors: failed,
         peakMounted,
+        estimateBytes,
+        actualBytes: state.readyBytes,
       }
     }
 
@@ -414,6 +495,7 @@ async function waitAndRun(page, expected, timeout, runStartedAt) {
         .first()
         .click()
       estimateAt = Date.now() - runStartedAt
+      estimateBytes = state.estimateBytes
     }
 
     if (Date.now() > deadline) {
@@ -535,6 +617,12 @@ async function runScenario(baseUrl, scenario, count, options) {
       },
       metrics: {
         estimateMs: outcome.estimateAt,
+        estimateBytes: outcome.estimateBytes,
+        actualBytes: outcome.actualBytes,
+        calibrationRatio:
+          outcome.estimateBytes > 0
+            ? round(outcome.actualBytes / outcome.estimateBytes)
+            : null,
         firstResultMs: outcome.firstResultAt,
         completeMs: completeAt,
         errors: outcome.errors,
@@ -562,8 +650,8 @@ function renderMarkdown(report) {
     `- Node: ${report.meta.node} · Chromium: ${report.meta.chromium}`,
     `- Counts: ${report.meta.counts.join(', ')}`,
     '',
-    '| Scenario | Files | Format | First result (ms) | Complete (ms) | Estimate (ms) | Peak rows | Long tasks | Max frame gap (ms) | Busy/size | Errors |',
-    '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| Scenario | Files | Format | Estimate (MB) | Actual (MB) | Actual / estimate | First result (ms) | Complete (ms) | Estimate (ms) | Peak rows | Long tasks | Max frame gap (ms) | Busy/size | Errors |',
+    '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
   ]
   for (const result of report.results) {
     const metrics = result.metrics
@@ -574,6 +662,13 @@ function renderMarkdown(report) {
       result.scenario,
       result.count,
       result.format,
+      result.metrics.estimateBytes
+        ? round(result.metrics.estimateBytes / 1024 / 1024)
+        : '—',
+      result.metrics.actualBytes
+        ? round(result.metrics.actualBytes / 1024 / 1024)
+        : '—',
+      result.metrics.calibrationRatio ?? '—',
       metrics.firstResultMs ?? '—',
       metrics.completeMs,
       metrics.estimateMs ?? '—',

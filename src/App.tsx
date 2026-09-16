@@ -1145,10 +1145,11 @@ function dimensionsLabel(job: BatchJob): string {
 function AddIcon() {
   return (
     <svg class="button__icon" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3.5" y="5" width="13.5" height="14.5" rx="2.75" />
-      <path d="m6.5 15.5 3.2-3.2 2.5 2.5 1.8-1.8 2.7 2.7" />
-      <circle cx="18.5" cy="7" r="3.5" fill="currentColor" stroke="none" />
-      <path d="M18.5 5.25v3.5M16.75 7h3.5" stroke="#fff" stroke-width="1.5" />
+      <path d="M16 5h6" />
+      <path d="M19 2v6" />
+      <path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5" />
+      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+      <circle cx="9" cy="9" r="2" />
     </svg>
   )
 }
@@ -1156,14 +1157,8 @@ function AddIcon() {
 function SettingsIcon() {
   return (
     <svg class="button__icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M10.25 3.25h3.5l.7 2.18c.52.18 1.02.39 1.49.68l2.04-.88 2.48 2.48-.88 2.04c.29.47.5.97.68 1.49l2.18.7v3.5l-2.18.7a7.6 7.6 0 0 1-.68 1.49l.88 2.04-2.48 2.48-2.04-.88a7.6 7.6 0 0 1-1.49.68l-.7 2.18h-3.5l-.7-2.18a7.6 7.6 0 0 1-1.49-.68l-2.04.88-2.48-2.48.88-2.04a7.6 7.6 0 0 1-.68-1.49l-2.18-.7v-3.5l2.18-.7c.18-.52.39-1.02.68-1.49l-.88-2.04 2.48-2.48 2.04.88c.47-.29.97-.5 1.49-.68l.7-2.18Z" />
-      <circle
-        cx="12"
-        cy="13.02"
-        r="3.55"
-        fill="var(--accent-soft)"
-        stroke="none"
-      />
+      <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   )
 }
@@ -1530,7 +1525,11 @@ function BatchSummary() {
       : '—'
 
   return (
-    <section class="summary-card">
+    <section
+      class="summary-card"
+      data-estimate-bytes={batchEstimate.value}
+      data-ready-bytes={stats.value.readyBytes}
+    >
       <div class="summary-card__top">
         <div class="summary-card__primary">
           <div class="summary-card__count">

@@ -26,7 +26,8 @@ interface WorkerScope {
 
 const scope = globalThis as unknown as WorkerScope
 
-// Estimates sample at 384/896px; decoding up to 2048px keeps those samples
+// Estimates sample at 384/896px for ordinary images and 512/1536px when the
+// source reaches the 2048px decode cap. This keeps high-resolution samples
 // representative without decoding tens of megapixels into a large canvas.
 const ESTIMATE_DECODE_EDGE = 2048
 

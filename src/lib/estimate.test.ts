@@ -3,6 +3,7 @@ import {
   averageRatioSamples,
   deriveEstimate,
   estimateFullBytes,
+  estimateSampleEdges,
   interpolate,
   sampleBeta,
   sampleSize,
@@ -51,6 +52,23 @@ describe('sampleBeta', () => {
   it('returns zero for degenerate samples', () => {
     expect(sampleBeta(0, 4000, 400, 1000)).toBe(0)
     expect(sampleBeta(1000, 1000, 400, 1000)).toBe(0)
+  })
+})
+
+describe('estimateSampleEdges', () => {
+  it('keeps ordinary images on the cheaper sample pair', () => {
+    expect(estimateSampleEdges(1600, 1200)).toEqual({ small: 384, large: 896 })
+  })
+
+  it('uses larger samples when the decode reaches the high-resolution cap', () => {
+    expect(estimateSampleEdges(2048, 1365)).toEqual({
+      small: 512,
+      large: 1536,
+    })
+    expect(estimateSampleEdges(6240, 4160)).toEqual({
+      small: 512,
+      large: 1536,
+    })
   })
 })
 
