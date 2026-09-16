@@ -1,4 +1,4 @@
-# [Image Compressor](https://ashcx.github.io/image-compressor-v1/)
+# Image Compressor
 
 [Image Compressor](https://ashcx.github.io/image-compressor-v1/) is a browser app for converting and resizing images in batches. It is
 built around one goal: make image processing fast, private, and useful on the device you
