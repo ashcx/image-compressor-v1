@@ -1,6 +1,7 @@
 import { context2d, createCanvas, imageDataToSource } from './canvas'
 import { getCodec } from './codecs/registry'
 import type { ImageSource, OutputFormat } from './codecs/types'
+import { orientRgba, readExifOrientation } from './orientation'
 
 export interface DecodeTarget {
   /** Exact size to decode at (resize-aware). */
@@ -69,7 +70,24 @@ export async function decodeImageData(
     if (format) {
       try {
         const codec = await getCodec(format)
-        if (codec.decode) return imageDataToSource(await codec.decode(buffer))
+        if (codec.decode) {
+          // WASM decoders ignore the EXIF orientation tag, so bake it in here
+          // to match what the browser's native decoder would have produced.
+          const decoded = await codec.decode(buffer)
+          const orientation = readExifOrientation(buffer, format)
+          if (orientation === 1) return imageDataToSource(decoded)
+          const oriented = orientRgba(
+            {
+              width: decoded.width,
+              height: decoded.height,
+              data: decoded.data,
+            },
+            orientation,
+          )
+          return imageDataToSource(
+            new ImageData(oriented.data, oriented.width, oriented.height),
+          )
+        }
       } catch {
         // Surface the original native error below.
       }

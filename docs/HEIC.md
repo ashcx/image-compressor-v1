@@ -16,6 +16,18 @@ Probed: 2026-09-13. Implemented: 2026-09-17.
 The original feasibility spike (below) is retained as the record of why a purpose-built
 libheif WASM build was required for encoding.
 
+## Orientation and metadata policy (HEIC-09)
+
+- **Orientation is baked into the pixels.** Container `irot`/`imir` transforms are applied by
+  libheif. The EXIF orientation tag, which libheif ignores, is applied on the WebAssembly path
+  in `src/lib/orientation.ts` so Chrome and Firefox match Safari's native decode. Parsed
+  dimensions are swapped for transposing orientations (5-8) so the queue, resize, and estimates
+  match the oriented output.
+- **Metadata is not preserved.** Only the primary still image is decoded and re-encoded from raw
+  pixels, so EXIF, GPS, XMP, ICC colour profiles, depth maps, burst frames, and auxiliary images
+  are dropped. This applies to every output format, not just HEIC.
+- **Multi-image files** contribute their first top-level image; the remaining images are ignored.
+
 ## Evidence
 
 Probed against `libheif-js@1.23.2`:

@@ -519,7 +519,7 @@ available.
   - Measure output size and encode time against representative photos and graphics.
   - Add HEIC estimates without reusing AVIF calibration blindly.
 
-- [ ] **HEIC-09 — Define orientation and metadata policy (5 points)**
+- [x] **HEIC-09 — Define orientation and metadata policy (5 points)**
   - Bake orientation into pixels or preserve the orientation metadata consistently.
   - Decide whether EXIF, GPS, depth, burst, and auxiliary metadata are preserved.
   - Document any metadata removed during conversion.
@@ -532,8 +532,12 @@ Delivered:
   gets an AVIF-class worker memory weight.
 - Estimates use a dedicated (provisional) HEIC calibration with a single sample because the
   encoder quality is fixed.
-- Remaining: adjustable quality/speed presets (HEIC-08) and the orientation/metadata policy
-  (HEIC-09), deferred until a purpose-built encoder build exposes parameters.
+- Orientation is baked into pixels: container `irot`/`imir` via libheif, plus the EXIF
+  orientation tag applied on the WASM path (`src/lib/orientation.ts`), with parsed dimensions
+  swapped for orientations 5-8. Metadata (EXIF/GPS/XMP/ICC/depth/burst/auxiliary) is dropped and
+  documented in the README and [HEIC.md](./HEIC.md).
+- Remaining: adjustable quality/speed presets (HEIC-08), deferred until a purpose-built encoder
+  build exposes parameters.
 
 ### Expected output
 

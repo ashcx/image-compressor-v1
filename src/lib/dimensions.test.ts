@@ -51,7 +51,42 @@ function png(width: number, height: number): ArrayBuffer {
   )
 }
 
-function jpeg(width: number, height: number): ArrayBuffer {
+function exifApp1(orientation: number): number[] {
+  const tiff = [
+    0x49,
+    0x49,
+    0x2a,
+    0,
+    8,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0x12,
+    0x01,
+    3,
+    0,
+    1,
+    0,
+    0,
+    0,
+    orientation,
+    0,
+    0,
+    0,
+    0,
+    0,
+  ]
+  const exif = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff]
+  return [0xff, 0xe1, (exif.length + 2) >> 8, (exif.length + 2) & 0xff, ...exif]
+}
+
+function jpeg(
+  width: number,
+  height: number,
+  orientation?: number,
+): ArrayBuffer {
   const app0 = [
     0xff,
     0xe0,
@@ -85,7 +120,8 @@ function jpeg(width: number, height: number): ArrayBuffer {
     0x11,
     1,
   ]
-  return concat([0xff, 0xd8], app0, sof0, [0xff, 0xd9])
+  const app1 = orientation ? exifApp1(orientation) : []
+  return concat([0xff, 0xd8], app1, app0, sof0, [0xff, 0xd9])
 }
 
 function webpVp8x(width: number, height: number): ArrayBuffer {
@@ -150,6 +186,20 @@ describe('parseDimensions', () => {
 
   it('parses JPEG dimensions from a SOF0 segment', () => {
     expect(parseDimensions(jpeg(800, 600))).toEqual({
+      width: 800,
+      height: 600,
+    })
+  })
+
+  it('swaps JPEG dimensions for a transposing EXIF orientation', () => {
+    expect(parseDimensions(jpeg(800, 600, 6))).toEqual({
+      width: 600,
+      height: 800,
+    })
+  })
+
+  it('keeps the dimensions for a non-transposing EXIF orientation', () => {
+    expect(parseDimensions(jpeg(800, 600, 3))).toEqual({
       width: 800,
       height: 600,
     })
