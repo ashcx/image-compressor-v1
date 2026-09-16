@@ -102,6 +102,13 @@ try {
   // WASM decoder reads it and the WASM encoder writes a .heic row.
   await page.locator('select').first().selectOption('heic')
   await page.setInputFiles('input[type="file"]', ['bench/fixtures/sample.heic'])
+  // The Compress button is available during estimation, so wait for the third
+  // file to be accepted before starting the batch.
+  await page.waitForFunction(() => {
+    const count =
+      document.querySelector('.summary-card__count')?.textContent ?? ''
+    return /\/\s*3/.test(count)
+  })
   await page
     .locator('button', { hasText: /^Compress/ })
     .first()

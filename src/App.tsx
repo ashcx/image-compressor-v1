@@ -312,6 +312,9 @@ const estimatePhase = computed(
 const cancellable = computed(
   () => stats.value.processing + stats.value.pending > 0,
 )
+// Compression that is actually running (as opposed to background estimation),
+// which is what the Cancel action targets.
+const compressing = computed(() => stats.value.processing > 0)
 // The bar only reflects compression; estimates happen quietly in the
 // background so the app looks ready to compress immediately.
 const phasePercent = computed(() => progressPercent.value)
@@ -910,8 +913,13 @@ function compressAll() {
     notice.value = OUTPUT_PRESSURE_NOTICE
     return
   }
-  cancelAllEstimates()
+  // Abort pending and running estimation so compression starts immediately.
   if (reprocessTimer) clearTimeout(reprocessTimer)
+  if (sampleChangeTimer) {
+    clearTimeout(sampleChangeTimer)
+    sampleChangeTimer = undefined
+  }
+  cancelAllEstimates()
   for (const id of jobIds.value) {
     const job = getJob(id)
     if (!job || job.status === 'error' || job.status === 'processing') continue
@@ -1526,7 +1534,7 @@ function BatchSummary() {
       ? formatBytes(batchEstimate.value)
       : '—'
   const reduction =
-    originalTotal.value > 0 && batchEstimate.value > 0
+    !estimatePhase.value && originalTotal.value > 0 && batchEstimate.value > 0
       ? `${savingsLabel(originalTotal.value, batchEstimate.value)} smaller`
       : '—'
 
@@ -1572,7 +1580,7 @@ function BatchSummary() {
       </div>
 
       <div class="summary-card__actions">
-        {!cancellable.value && needsCompress.value && (
+        {!compressing.value && needsCompress.value && (
           <button
             type="button"
             class="button button--primary"
@@ -1583,7 +1591,7 @@ function BatchSummary() {
           </button>
         )}
 
-        {cancellable.value && (
+        {compressing.value && (
           <button
             type="button"
             class="button"
