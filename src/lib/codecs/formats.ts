@@ -145,7 +145,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   },
   heic: {
     format: 'heic',
-    label: 'HEIC',
+    label: 'HEIC (slower)',
     mimeType: 'image/heic',
     extension: 'heic',
     lossless: false,
