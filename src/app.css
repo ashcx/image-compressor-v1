@@ -56,6 +56,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-height: 100dvh;
 }
 
 .app__header {
@@ -389,6 +390,12 @@ select:focus-visible {
   gap: 1rem;
 }
 
+.settings-panel__primary-fields {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
 .mobile-settings-toggle {
   display: none;
 }
@@ -466,12 +473,10 @@ input[type="range"]:disabled {
 }
 
 .queue-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
-}
-
-.queue-toggle {
-  display: none;
 }
 
 .queue {
@@ -571,6 +576,8 @@ input[type="range"]:disabled {
   flex: 1;
   flex-direction: column;
   gap: 0.2rem;
+  align-self: flex-end;
+  margin-bottom: 0.1rem;
 }
 
 .job__name {
@@ -600,6 +607,8 @@ input[type="range"]:disabled {
   align-items: center;
   gap: 0.3rem;
   margin-left: auto;
+  align-self: flex-end;
+  margin-bottom: 0.1rem;
   color: var(--muted-strong);
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
@@ -677,7 +686,11 @@ input[type="range"]:disabled {
 
 @media (max-width: 743px) {
   .app__workspace {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .settings-panel {
@@ -692,6 +705,8 @@ input[type="range"]:disabled {
   .workspace__main {
     grid-column: 1;
     grid-row: 2;
+    height: 100%;
+    min-height: 0;
   }
 }
 
@@ -740,23 +755,16 @@ input[type="range"]:disabled {
     cursor: pointer;
   }
 
-  .queue-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    min-height: 3.1rem;
-    padding: 0.8rem 1rem;
-    border: 0;
-    background: var(--surface);
-    color: var(--muted-strong);
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
+  .settings-panel__heading {
+    display: none;
   }
 
-  .queue-panel:has(.queue-toggle[aria-expanded="true"]) .queue-toggle {
-    border-bottom: 1px solid var(--border);
+  .settings-panel__primary-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-panel__primary-fields > :only-child {
+    grid-column: 1 / -1;
   }
 
   .summary-card,
@@ -769,11 +777,15 @@ input[type="range"]:disabled {
   }
 
   .summary-card__actions .button {
-    flex: 1 1 calc(50% - 0.55rem);
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .summary-card__actions .button--primary {
-    flex-basis: 100%;
+    padding-right: 0.45rem;
+    padding-left: 0.45rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
   }
 
   .summary-card__estimate {
@@ -781,16 +793,15 @@ input[type="range"]:disabled {
   }
 
   .job {
-    align-items: flex-start;
+    align-items: center;
     padding: 0.65rem 0.8rem;
   }
 
   .job__meta {
-    white-space: normal;
+    white-space: nowrap;
   }
 
   .job__size {
-    align-self: center;
     font-size: 0.7rem;
   }
 
@@ -800,5 +811,16 @@ input[type="range"]:disabled {
 
   .job__actions .button--small {
     display: none;
+  }
+
+  .queue-panel {
+    flex: 1;
+    min-height: calc(3 * 4rem + 2 * 0.5rem);
+  }
+
+  .queue {
+    flex: 1;
+    min-height: calc(3 * 4rem + 2 * 0.5rem);
+    max-height: none;
   }
 }

@@ -1340,6 +1340,52 @@ function JobList() {
   )
 }
 
+function ControlField({ control }: { control: FormatControl }) {
+  return (
+    <div class="field" key={control.key}>
+      <span class="field__label">
+        {control.label}
+        {control.kind === 'range' ? `: ${settings.value[control.key]}` : ''}
+      </span>
+      {control.kind === 'range' ? (
+        <input
+          type="range"
+          aria-label={control.label}
+          min={control.min}
+          max={control.max}
+          step={control.step}
+          value={settings.value[control.key]}
+          disabled={busy.value}
+          onInput={(event) =>
+            changeControl(control.key, Number(event.currentTarget.value))
+          }
+        />
+      ) : (
+        <select
+          class="select"
+          aria-label={control.label}
+          value={String(settings.value[control.key])}
+          disabled={busy.value}
+          onChange={(event) =>
+            changeControl(control.key, Number(event.currentTarget.value))
+          }
+        >
+          {control.options.map((option) => (
+            <option value={option.value} key={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      )}
+      {controlHint(control, settings.value[control.key]) && (
+        <span class="field__hint">
+          {controlHint(control, settings.value[control.key])}
+        </span>
+      )}
+    </div>
+  )
+}
+
 // The panel reads the aggregate computeds, isolating those re-renders from the
 // list and the app shell.
 function Panel() {
@@ -1355,29 +1401,38 @@ function Panel() {
     return () => media.removeEventListener?.('change', update)
   }, [])
 
+  const controls = activeControls.value
+  const qualityControl = controls.find((control) => control.key === 'quality')
+  const advancedControls = controls.filter(
+    (control) => control.key !== 'quality',
+  )
+
   return (
     <aside class="panel settings-panel" aria-label="Compression settings">
       <div class="settings-panel__heading">
         <h2>Compression settings</h2>
       </div>
 
-      <label class="field">
-        <span class="field__label">Format</span>
-        <select
-          class="select"
-          value={targetFormat.value}
-          disabled={busy.value}
-          onChange={(event) =>
-            changeFormat(event.currentTarget.value as OutputFormat)
-          }
-        >
-          {FORMAT_ORDER.map((format) => (
-            <option value={format} key={format}>
-              {FORMAT_SPECS[format].label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div class="settings-panel__primary-fields">
+        <label class="field">
+          <span class="field__label">Format</span>
+          <select
+            class="select"
+            value={targetFormat.value}
+            disabled={busy.value}
+            onChange={(event) =>
+              changeFormat(event.currentTarget.value as OutputFormat)
+            }
+          >
+            {FORMAT_ORDER.map((format) => (
+              <option value={format} key={format}>
+                {FORMAT_SPECS[format].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {qualityControl && <ControlField control={qualityControl} />}
+      </div>
 
       <button
         type="button"
@@ -1385,62 +1440,14 @@ function Panel() {
         aria-expanded={advancedOpen}
         onClick={() => setAdvancedOpen((open) => !open)}
       >
-        <span>More settings</span>
+        <span>More compression settings</span>
         <ChevronIcon open={advancedOpen} />
       </button>
 
       {advancedOpen && (
         <div class="settings-panel__advanced">
-          {activeControls.value.map((control) => (
-            <div class="field" key={control.key}>
-              <span class="field__label">
-                {control.label}
-                {control.kind === 'range'
-                  ? `: ${settings.value[control.key]}`
-                  : ''}
-              </span>
-              {control.kind === 'range' ? (
-                <input
-                  type="range"
-                  aria-label={control.label}
-                  min={control.min}
-                  max={control.max}
-                  step={control.step}
-                  value={settings.value[control.key]}
-                  disabled={busy.value}
-                  onInput={(event) =>
-                    changeControl(
-                      control.key,
-                      Number(event.currentTarget.value),
-                    )
-                  }
-                />
-              ) : (
-                <select
-                  class="select"
-                  aria-label={control.label}
-                  value={String(settings.value[control.key])}
-                  disabled={busy.value}
-                  onChange={(event) =>
-                    changeControl(
-                      control.key,
-                      Number(event.currentTarget.value),
-                    )
-                  }
-                >
-                  {control.options.map((option) => (
-                    <option value={option.value} key={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {controlHint(control, settings.value[control.key]) && (
-                <span class="field__hint">
-                  {controlHint(control, settings.value[control.key])}
-                </span>
-              )}
-            </div>
+          {advancedControls.map((control) => (
+            <ControlField control={control} key={control.key} />
           ))}
 
           <label class="field">
@@ -1476,30 +1483,9 @@ function Panel() {
 }
 
 function QueuePanel() {
-  const [expanded, setExpanded] = useState(() =>
-    typeof window === 'undefined' ? true : window.innerWidth >= 744,
-  )
-
-  useEffect(() => {
-    const media = window.matchMedia('(min-width: 744px)')
-    const update = () => setExpanded(media.matches)
-    update()
-    media.addEventListener?.('change', update)
-    return () => media.removeEventListener?.('change', update)
-  }, [])
-
   return (
-    <section class="queue-panel">
-      <button
-        type="button"
-        class="queue-toggle"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((open) => !open)}
-      >
-        <span>{expanded ? 'Hide images' : 'Show images'}</span>
-        <ChevronIcon open={expanded} />
-      </button>
-      {expanded && <JobList />}
+    <section class="queue-panel" aria-label="Image queue">
+      <JobList />
     </section>
   )
 }
@@ -1635,7 +1621,6 @@ function BatchSummary() {
 
 export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [settingsOpen, setSettingsOpen] = useState(true)
 
   useEffect(() => {
     const profile = getDeviceProfile()
@@ -1758,12 +1743,12 @@ export function App() {
           {jobCount > 0 && (
             <button
               type="button"
-              class={`button button--secondary${settingsOpen ? ' button--selected' : ''}`}
+              class="button button--secondary"
               aria-label="Settings"
-              title="Settings"
-              aria-expanded={settingsOpen}
-              aria-controls="compression-settings"
-              onClick={() => setSettingsOpen((open) => !open)}
+              title="Settings page coming soon"
+              onClick={() => {
+                notice.value = 'The settings page is coming soon.'
+              }}
             >
               <SettingsIcon />
               <span class="button__label">Settings</span>
@@ -1801,11 +1786,9 @@ export function App() {
             <BatchSummary />
             <QueuePanel />
           </div>
-          {settingsOpen && (
-            <div id="compression-settings">
-              <Panel />
-            </div>
-          )}
+          <div id="compression-settings">
+            <Panel />
+          </div>
         </div>
       )}
 
