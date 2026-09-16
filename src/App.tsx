@@ -1750,7 +1750,7 @@ export function App() {
         <div class="brand">
           <img
             class="brand__mark"
-            src={`${import.meta.env.BASE_URL}favicon.svg`}
+            src={`${import.meta.env.BASE_URL}app-icon.webp`}
             alt=""
             width="42"
             height="42"
