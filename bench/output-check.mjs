@@ -47,10 +47,11 @@ try {
   async function waitTotal(total) {
     await page.waitForFunction(
       (n) => {
-        const text = [...document.querySelectorAll('.panel__label')]
-          .map((el) => el.textContent ?? '')
-          .join(' ')
-        return new RegExp(`${n} / ${n} compressed`).test(text)
+        const count =
+          document.querySelector('.summary-card__count')?.textContent ?? ''
+        const status =
+          document.querySelector('.summary-card__status')?.textContent ?? ''
+        return new RegExp(`${n} / ${n}`).test(count) && /Complete/.test(status)
       },
       total,
       { timeout: 60_000 },
@@ -78,17 +79,18 @@ try {
     .click()
   await page.waitForFunction(
     () => {
-      const label = [...document.querySelectorAll('.panel__label')]
-        .map((el) => el.textContent ?? '')
-        .join(' ')
-      return /2 \/ 2 compressed/.test(label)
+      const count =
+        document.querySelector('.summary-card__count')?.textContent ?? ''
+      const status =
+        document.querySelector('.summary-card__status')?.textContent ?? ''
+      return /2 \/ 2/.test(count) && /Complete/.test(status)
     },
     undefined,
     { timeout: 60_000 },
   )
   const zipDownload = page.waitForEvent('download')
   await page
-    .locator('button', { hasText: /Download all/ })
+    .locator('button', { hasText: /Download .* as zip/ })
     .first()
     .click()
   const zip = await zipDownload

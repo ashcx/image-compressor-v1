@@ -127,6 +127,11 @@ Inputs can be transferred to workers for one-shot compression, while copies are 
 when a later pass needs the same bytes. Intermediate data is released in the worker, and the
 pool, metadata worker, and codec heaps are torn down after idle time.
 
+Completed outputs do not stay in the queue either: they are written to the output store and
+read back only for a download. When that store is the in-memory fallback, it tracks retained
+bytes against the device budget; exceeding it stops new compression from starting and points
+the user at download or clear, instead of growing the tab without bound.
+
 ### Stored ZIP output
 
 JPEG, PNG, WebP, and AVIF are already compressed formats. Deflating them again generally adds
@@ -136,7 +141,9 @@ stored entries: `level: 0` for the synchronous path and `ZipPassThrough` for the
 Small batches can use an in-memory ZIP. Larger batches are written incrementally to the Origin
 Private File System where available, with an in-memory fallback. ZIP headers and the central
 directory still add a small amount of metadata, but the image payloads are preserved rather
-than compressed a second time.
+than compressed a second time. ZIP and folder delivery report files processed, current size,
+and completion, disable conflicting actions while running, and surface permission or quota
+failures in the UI rather than as unhandled errors.
 
 ### Failure isolation
 
