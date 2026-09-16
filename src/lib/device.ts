@@ -78,7 +78,7 @@ export function profileFromSignals(
     return {
       ...profile,
       workerCount,
-      heavyWorkerCount: isIos(signals) ? 1 : heavyWorkerCount(workerCount),
+      heavyWorkerCount: resolveHeavyWorkerCount(signals, workerCount),
     }
   }
   return profile
@@ -160,11 +160,29 @@ function platformProfile(signals: DeviceSignals): DeviceProfile {
 
   return {
     workerCount,
-    heavyWorkerCount: isIos(signals) ? 1 : heavyWorkerCount(workerCount),
+    heavyWorkerCount: resolveHeavyWorkerCount(signals, workerCount),
     maxZipBytes,
     canvasMemoryBudget,
     canvasLimits,
   }
+}
+
+/**
+ * Heavy-codec pool size. Phones and non-Pro iPads pin to one worker because a
+ * single AVIF/compressed-PNG encode can exhaust their canvas budget; Pro-class
+ * iPads (light worker count ≥ 6) use the normal halved pool and rely on the
+ * decoded-memory gate to bound concurrency.
+ */
+function resolveHeavyWorkerCount(
+  signals: DeviceSignals,
+  workerCount: number,
+): number {
+  const ua = signals.userAgent ?? ''
+  if (isIpad(ua, signals.maxTouchPoints ?? 0)) {
+    return workerCount >= 6 ? heavyWorkerCount(workerCount) : 1
+  }
+  if (isIphone(ua)) return 1
+  return heavyWorkerCount(workerCount)
 }
 
 /** Engine canvas ceiling for the detected browser, with a conservative default. */
@@ -195,8 +213,8 @@ export function platformCanvasLimits(signals: DeviceSignals): CanvasLimits {
 /**
  * Heavy codecs (AVIF, compressed PNG) keep large WASM heaps and decoded
  * canvases per worker, so they run with half the standard pool, rounded to the
- * nearest whole worker (floored at 1). iOS pins heavy work to a single worker:
- * even one AVIF encode can exhaust a tablet's canvas memory budget.
+ * nearest whole worker (floored at 1). See `resolveHeavyWorkerCount` for the
+ * iOS overrides.
  */
 export function heavyWorkerCount(workerCount: number): number {
   return Math.max(1, Math.round(workerCount / 2))
@@ -210,11 +228,6 @@ function isIpad(ua: string, maxTouchPoints: number): boolean {
   return (
     ua.includes('iPad') || (ua.includes('Macintosh') && maxTouchPoints >= 2)
   )
-}
-
-function isIos(signals: DeviceSignals): boolean {
-  const ua = signals.userAgent ?? ''
-  return isIphone(ua) || isIpad(ua, signals.maxTouchPoints ?? 0)
 }
 
 /**
