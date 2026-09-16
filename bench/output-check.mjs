@@ -47,9 +47,8 @@ try {
   async function waitTotal(total) {
     await page.waitForFunction(
       (n) => {
-        const text = [...document.querySelectorAll('.panel__label')]
-          .map((el) => el.textContent ?? '')
-          .join(' ')
+        const text =
+          document.querySelector('.summary-card__details')?.textContent ?? ''
         return new RegExp(`${n} / ${n} compressed`).test(text)
       },
       total,
@@ -78,9 +77,8 @@ try {
     .click()
   await page.waitForFunction(
     () => {
-      const label = [...document.querySelectorAll('.panel__label')]
-        .map((el) => el.textContent ?? '')
-        .join(' ')
+      const label =
+        document.querySelector('.summary-card__details')?.textContent ?? ''
       return /2 \/ 2 compressed/.test(label)
     },
     undefined,
@@ -88,7 +86,7 @@ try {
   )
   const zipDownload = page.waitForEvent('download')
   await page
-    .locator('button', { hasText: /Download all/ })
+    .locator('button', { hasText: /Download .* as zip/ })
     .first()
     .click()
   const zip = await zipDownload
