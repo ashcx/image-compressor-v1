@@ -146,7 +146,8 @@ const loaders: Record<OutputFormat, CodecLoader> = {
       format: 'heic',
       mimeType: 'image/heic',
       extension: 'heic',
-      encode: async (source) => encodeHeic(toImageData(source)),
+      encode: async (source, options) =>
+        encodeHeic(toImageData(source), options),
       decode: async (buffer) => decodeHeic(buffer),
     }
   },

@@ -6,6 +6,8 @@ interface ControlBase {
   key: ControlKey
   label: string
   hint?: string
+  /** Rendered in the primary settings area instead of the advanced section. */
+  primary?: boolean
 }
 
 export interface RangeControl extends ControlBase {
@@ -149,9 +151,30 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
     mimeType: 'image/heic',
     extension: 'heic',
     lossless: false,
-    // The bundled libheif/kvazaar encoder exposes a single fixed quality, so
-    // HEIC has no adjustable controls yet.
-    controls: [],
+    controls: [
+      QUALITY_PRESETS,
+      {
+        kind: 'select',
+        key: 'speed',
+        label: 'Speed',
+        default: 1,
+        primary: true,
+        hint: 'HEIC encoding is heavy; faster presets trade a little size for speed.',
+        options: [
+          {
+            label: 'Fast',
+            value: 0,
+            hint: 'Quickest encode, slightly larger files.',
+          },
+          { label: 'Balanced', value: 1, hint: 'Good speed and size.' },
+          {
+            label: 'Smaller',
+            value: 2,
+            hint: 'Smallest files, slowest encode.',
+          },
+        ],
+      },
+    ],
   },
 }
 

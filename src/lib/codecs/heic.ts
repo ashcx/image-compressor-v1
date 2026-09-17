@@ -6,6 +6,28 @@ export interface DecodedBitmap {
   data: Uint8Array
 }
 
+export interface HeicEncodeOptions {
+  quality?: number
+  speed?: number
+}
+
+/**
+ * UI speed values index this list. The indices are stable because the select
+ * control values are persisted per format; keep new presets append-only.
+ */
+export const HEIC_PRESETS = ['ultrafast', 'faster', 'slow'] as const
+
+const DEFAULT_SPEED = 1
+
+/** Maps a select value to a kvazaar preset name, clamped to the valid range. */
+export function heicPresetForSpeed(speed: number | undefined): string {
+  const index = Math.min(
+    HEIC_PRESETS.length - 1,
+    Math.max(0, Math.round(speed ?? DEFAULT_SPEED)),
+  )
+  return HEIC_PRESETS[index]
+}
+
 let loaded: Promise<ElheifModule> | null = null
 
 /**
@@ -51,12 +73,18 @@ export async function decodeHeic(buffer: ArrayBuffer): Promise<ImageData> {
   return new ImageData(data, fitted.width, fitted.height)
 }
 
-export async function encodeHeic(source: ImageData): Promise<Blob> {
+export async function encodeHeic(
+  source: ImageData,
+  options: HeicEncodeOptions = {},
+): Promise<Blob> {
   const { jsEncodeImage } = await load()
+  const quality = Math.min(100, Math.max(0, Math.round(options.quality ?? 75)))
   const result = jsEncodeImage(
     new Uint8Array(source.data),
     source.width,
     source.height,
+    quality,
+    heicPresetForSpeed(options.speed),
   )
   if (result.err) throw new Error(`Could not encode HEIC: ${result.err}`)
   const output = new Uint8Array(result.data.length)

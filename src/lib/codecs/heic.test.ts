@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { fitDecodedBitmap } from './heic'
+import { fitDecodedBitmap, heicPresetForSpeed } from './heic'
+
+describe('heicPresetForSpeed', () => {
+  it('maps select values to kvazaar presets', () => {
+    expect(heicPresetForSpeed(0)).toBe('ultrafast')
+    expect(heicPresetForSpeed(1)).toBe('faster')
+    expect(heicPresetForSpeed(2)).toBe('slow')
+  })
+
+  it('defaults to the balanced preset', () => {
+    expect(heicPresetForSpeed(undefined)).toBe('faster')
+  })
+
+  it('clamps out-of-range and fractional values', () => {
+    expect(heicPresetForSpeed(-5)).toBe('ultrafast')
+    expect(heicPresetForSpeed(99)).toBe('slow')
+    expect(heicPresetForSpeed(1.6)).toBe('slow')
+  })
+})
 
 describe('fitDecodedBitmap', () => {
   it('trims the duplicated RGBA plane elheif appends', () => {

@@ -1436,9 +1436,11 @@ function Panel() {
   }, [])
 
   const controls = activeControls.value
-  const qualityControl = controls.find((control) => control.key === 'quality')
+  const primaryControls = controls.filter(
+    (control) => control.key === 'quality' || control.primary === true,
+  )
   const advancedControls = controls.filter(
-    (control) => control.key !== 'quality',
+    (control) => control.key !== 'quality' && control.primary !== true,
   )
 
   return (
@@ -1465,7 +1467,9 @@ function Panel() {
             ))}
           </select>
         </label>
-        {qualityControl && <ControlField control={qualityControl} />}
+        {primaryControls.map((control) => (
+          <ControlField control={control} key={control.key} />
+        ))}
       </div>
 
       <button
