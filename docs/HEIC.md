@@ -16,6 +16,17 @@ Probed: 2026-09-13. Implemented: 2026-09-17.
 The original feasibility spike (below) is retained as the record of why a purpose-built
 libheif WASM build was required for encoding.
 
+### Rejected: WebCodecs HEVC encoding
+
+Chrome's `VideoEncoder` HEVC path (`prefer-hardware` and `prefer-software`) was evaluated
+against the same source pixels, HEIC container, and libheif decoder as the WASM/Kvazaar path,
+with the discrete WebCodecs quantizer tuned to the measured Kvazaar PSNR. It was **rejected for
+compression efficiency**: at matched quality the WebCodecs output was larger, so it offered no
+size benefit worth maintaining a second encoder path. Platform HEVC encoders are tuned for
+realtime video rather than still-image rate–distortion, and Linux Chrome exposes no HEVC
+encoder at all. The three-way comparison harness was removed; the evaluation lives in git
+history.
+
 ## Orientation and metadata policy (HEIC-09)
 
 - **Orientation is baked into the pixels.** Container `irot`/`imir` transforms are applied by
