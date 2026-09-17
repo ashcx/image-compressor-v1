@@ -294,15 +294,13 @@ const result = await page.evaluate(async () => {
     }
   }
 
-  async function findCommonCodec() {
+  async function findCodec(hardwareAcceleration) {
     for (const codec of [
       'hvc1.1.6.L180.B0',
       'hvc1.1.6.L153.B0',
       'hvc1.1.6.L120.B0',
     ]) {
-      const hardware = await supportedConfig(codec, 'prefer-hardware')
-      const software = await supportedConfig(codec, 'prefer-software')
-      if (hardware && software) return codec
+      if (await supportedConfig(codec, hardwareAcceleration)) return codec
     }
     return null
   }
@@ -381,14 +379,51 @@ const result = await page.evaluate(async () => {
     (a, b) => a.encodeWallMs - b.encodeWallMs,
   )
   const kvazaar = kvazaarRunsByTime[2]
-  const codec = await findCommonCodec()
   const webcodecs = []
+  const webcodecsCodecs = {}
 
-  if (codec) {
-    const quantizers = [10, 15, 20, 25, 30, 35, 40, 45, 50]
-    for (const hardwareAcceleration of ['prefer-hardware', 'prefer-software']) {
-      const tuningRuns = []
-      for (const quantizer of quantizers) {
+  const quantizers = [10, 15, 20, 25, 30, 35, 40, 45, 50]
+  for (const hardwareAcceleration of ['prefer-hardware', 'prefer-software']) {
+    const codec = await findCodec(hardwareAcceleration)
+    webcodecsCodecs[hardwareAcceleration] = codec
+    if (!codec) {
+      webcodecs.push({
+        codec: `webcodecs-${hardwareAcceleration}`,
+        container: 'HEIC',
+        supported: false,
+        error: `No HEVC encode config supported with hardwareAcceleration="${hardwareAcceleration}"`,
+      })
+      continue
+    }
+    const tuningRuns = []
+    for (const quantizer of quantizers) {
+      try {
+        tuningRuns.push(
+          await runWebCodecs(hardwareAcceleration, codec, quantizer),
+        )
+      } catch (error) {
+        tuningRuns.push({
+          codec: `webcodecs-${hardwareAcceleration}`,
+          quantizer,
+          error: String(error),
+        })
+      }
+    }
+    const coarseUsable = tuningRuns.filter((run) => Number.isFinite(run.psnrDb))
+    if (coarseUsable.length) {
+      coarseUsable.sort(
+        (a, b) =>
+          Math.abs(a.psnrDb - kvazaar.psnrDb) -
+          Math.abs(b.psnrDb - kvazaar.psnrDb),
+      )
+      const refinement = Array.from(
+        { length: 5 },
+        (_, index) => coarseUsable[0].quantizer - 2 + index,
+      ).filter(
+        (quantizer) =>
+          quantizer >= 0 && quantizer <= 51 && !quantizers.includes(quantizer),
+      )
+      for (const quantizer of refinement) {
         try {
           tuningRuns.push(
             await runWebCodecs(hardwareAcceleration, codec, quantizer),
@@ -401,74 +436,55 @@ const result = await page.evaluate(async () => {
           })
         }
       }
-      const coarseUsable = tuningRuns.filter((run) =>
-        Number.isFinite(run.psnrDb),
-      )
-      if (coarseUsable.length) {
-        coarseUsable.sort(
-          (a, b) =>
-            Math.abs(a.psnrDb - kvazaar.psnrDb) -
-            Math.abs(b.psnrDb - kvazaar.psnrDb),
-        )
-        const refinement = Array.from(
-          { length: 5 },
-          (_, index) => coarseUsable[0].quantizer - 2 + index,
-        ).filter(
-          (quantizer) =>
-            quantizer >= 0 &&
-            quantizer <= 51 &&
-            !quantizers.includes(quantizer),
-        )
-        for (const quantizer of refinement) {
-          try {
-            tuningRuns.push(
-              await runWebCodecs(hardwareAcceleration, codec, quantizer),
-            )
-          } catch (error) {
-            tuningRuns.push({
-              codec: `webcodecs-${hardwareAcceleration}`,
-              quantizer,
-              error: String(error),
-            })
-          }
-        }
-      }
-      const usable = tuningRuns.filter((run) => Number.isFinite(run.psnrDb))
-      usable.sort(
-        (a, b) =>
-          Math.abs(a.psnrDb - kvazaar.psnrDb) -
-          Math.abs(b.psnrDb - kvazaar.psnrDb),
-      )
-      if (usable[0]) {
-        const selected = usable[0]
-        const measured = []
-        await runWebCodecs(hardwareAcceleration, codec, selected.quantizer)
-        for (let run = 0; run < 5; run++) {
-          measured.push(
-            await runWebCodecs(hardwareAcceleration, codec, selected.quantizer),
-          )
-        }
-        measured.sort((a, b) => a.encodeWallMs - b.encodeWallMs)
-        webcodecs.push({
-          ...measured[2],
-          targetPsnrDb: kvazaar.psnrDb,
-          tuningCandidates: tuningRuns.map((run) => run.quantizer),
-          tuningPsnrDb: tuningRuns.map((run) => ({
-            quantizer: run.quantizer,
-            psnrDb: run.psnrDb,
-            error: run.error,
-          })),
-        })
-      }
     }
+    const usable = tuningRuns.filter((run) => Number.isFinite(run.psnrDb))
+    usable.sort(
+      (a, b) =>
+        Math.abs(a.psnrDb - kvazaar.psnrDb) -
+        Math.abs(b.psnrDb - kvazaar.psnrDb),
+    )
+    if (!usable[0]) {
+      webcodecs.push({
+        codec: `webcodecs-${hardwareAcceleration}`,
+        container: 'HEIC',
+        supported: false,
+        error: 'No quantizer run produced a finite PSNR',
+      })
+      continue
+    }
+    const selected = usable[0]
+    const measured = []
+    await runWebCodecs(hardwareAcceleration, codec, selected.quantizer)
+    for (let run = 0; run < 5; run++) {
+      measured.push(
+        await runWebCodecs(hardwareAcceleration, codec, selected.quantizer),
+      )
+    }
+    measured.sort((a, b) => a.encodeWallMs - b.encodeWallMs)
+    webcodecs.push({
+      ...measured[2],
+      supported: true,
+      targetPsnrDb: kvazaar.psnrDb,
+      tuningCandidates: tuningRuns.map((run) => run.quantizer),
+      tuningPsnrDb: tuningRuns.map((run) => ({
+        quantizer: run.quantizer,
+        psnrDb: run.psnrDb,
+        error: run.error,
+      })),
+    })
   }
+
+  const hardwareCodec = webcodecsCodecs['prefer-hardware']
+  const softwareCodec = webcodecsCodecs['prefer-software']
 
   return {
     file: 'input',
     width: source.width,
     height: source.height,
     megapixels: +((source.width * source.height) / 1_000_000).toFixed(2),
-    commonWebCodecsCodec: codec,
+    commonWebCodecsCodec:
+      hardwareCodec && hardwareCodec === softwareCodec ? hardwareCodec : null,
+    webcodecsCodecs,
     kvazaar,
     webcodecs,
     note: 'WebCodecs rows include the benchmark HEIF mux and are decoded with the same libheif WASM decoder as Kvazaar.',
