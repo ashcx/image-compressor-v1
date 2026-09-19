@@ -1,7 +1,16 @@
 import { toImageData } from '../canvas'
+import { decodeSample } from './decode-samples'
 import type { Codec, ImageSource, OutputFormat } from './types'
 
 type CodecLoader = () => Promise<Codec>
+
+const DECODE_MIME: Record<OutputFormat, string> = {
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  heic: 'image/heic',
+}
 
 // `OffscreenCanvas.convertToBlob` exists in Safari but silently ignores types it
 // cannot actually encode (notably image/webp), returning a PNG instead. Probing
@@ -32,6 +41,45 @@ export function canEncodeNatively(type: string): Promise<boolean> {
     }
   })()
   nativeSupport.set(type, probe)
+  return probe
+}
+
+// Native decode support is probed with tiny embedded samples rather than a
+// static table, because it varies by engine: Chrome/Firefox decode AVIF but not
+// HEIC, Safari decodes both, and JPEG/PNG/WebP are near-universal. `decodeSample`
+// bytes are decoded through `createImageBitmap`, the exact native path
+// `decodeImageData` tries before falling back to WASM.
+const nativeDecodeSupport = new Map<string, Promise<boolean>>()
+
+export function canDecodeNatively(type: string): Promise<boolean> {
+  const cached = nativeDecodeSupport.get(type)
+  if (cached) return cached
+  const probe = (async () => {
+    if (typeof createImageBitmap !== 'function') return false
+    const sample = decodeSample(type)
+    if (sample) {
+      try {
+        const blob = new Blob([sample], { type })
+        const bitmap = await createImageBitmap(blob)
+        bitmap.close()
+        return true
+      } catch {
+        // Fall through to the WebCodecs hint, which can still report support
+        // (e.g. a probe sample the platform's image pipeline rejects).
+      }
+    }
+    const decoder =
+      typeof ImageDecoder === 'undefined' ? undefined : ImageDecoder
+    if (decoder && typeof decoder.isTypeSupported === 'function') {
+      try {
+        return await decoder.isTypeSupported(type)
+      } catch {
+        return false
+      }
+    }
+    return false
+  })()
+  nativeDecodeSupport.set(type, probe)
   return probe
 }
 
@@ -189,20 +237,23 @@ export async function describeRenderer(
 }
 
 /**
- * Human-readable decoder path for a format, for the diagnostics page. Every
- * format tries the browser's native decoder first; only PNG, AVIF, and HEIC
- * ship a WASM fallback (`decodeImageData` in `lib/image.ts`).
+ * Human-readable decoder path for a format, for the diagnostics page. Unlike
+ * the encoder line this used to be a static string, which mislabelled Chrome as
+ * "native (Safari)". It now probes native decode support and reports the WASM
+ * decoder only when the native one is unavailable. JPEG/WebP have no WASM
+ * fallback; PNG, AVIF, and HEIC do (`decodeImageData` in `lib/image.ts`).
  */
-export function describeDecoder(format: OutputFormat): string {
+export async function describeDecoder(format: OutputFormat): Promise<string> {
+  const native = await canDecodeNatively(DECODE_MIME[format])
   switch (format) {
     case 'jpeg':
     case 'webp':
-      return 'native (browser)'
+      return native ? 'native (browser)' : 'unsupported'
     case 'png':
-      return 'native · @jsquash/png fallback'
+      return native ? 'native (browser)' : 'WASM · @jsquash/png'
     case 'avif':
-      return 'native · @jsquash/avif fallback'
+      return native ? 'native (browser)' : 'WASM · @jsquash/avif'
     case 'heic':
-      return 'native (Safari) · libheif fallback'
+      return native ? 'native (browser)' : 'WASM · libheif/libde265'
   }
 }
