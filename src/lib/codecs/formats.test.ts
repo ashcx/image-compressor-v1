@@ -82,4 +82,12 @@ describe('format specs', () => {
     ).toEqual([0, 1, 2])
     expect(pngMode?.default).toBe(0)
   })
+
+  it('exposes only the default ultrafast speed for HEIC', () => {
+    const heicSpeed = byKey(FORMAT_SPECS.heic.controls, 'speed')
+    expect(
+      heicSpeed?.kind === 'select' ? heicSpeed.options.map((o) => o.label) : [],
+    ).toEqual(['Default'])
+    expect(heicSpeed?.default).toBe(0)
+  })
 })

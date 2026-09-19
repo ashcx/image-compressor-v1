@@ -12,12 +12,13 @@ export interface HeicEncodeOptions {
 }
 
 /**
- * UI speed values index this list. The indices are stable because the select
- * control values are persisted per format; keep new presets append-only.
+ * UI speed values index this list. Only the quickest preset is exposed for now
+ * (as "Default"); the indices are stable because select values are persisted per
+ * format, so any future presets must be appended.
  */
-export const HEIC_PRESETS = ['ultrafast', 'faster', 'slow'] as const
+export const HEIC_PRESETS = ['ultrafast'] as const
 
-const DEFAULT_SPEED = 1
+const DEFAULT_SPEED = 0
 
 /** Maps a select value to a kvazaar preset name, clamped to the valid range. */
 export function heicPresetForSpeed(speed: number | undefined): string {

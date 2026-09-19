@@ -2,20 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { fitDecodedBitmap, heicPresetForSpeed } from './heic'
 
 describe('heicPresetForSpeed', () => {
-  it('maps select values to kvazaar presets', () => {
+  it('maps select values to the ultrafast preset', () => {
     expect(heicPresetForSpeed(0)).toBe('ultrafast')
-    expect(heicPresetForSpeed(1)).toBe('faster')
-    expect(heicPresetForSpeed(2)).toBe('slow')
   })
 
-  it('defaults to the balanced preset', () => {
-    expect(heicPresetForSpeed(undefined)).toBe('faster')
+  it('defaults to the ultrafast preset', () => {
+    expect(heicPresetForSpeed(undefined)).toBe('ultrafast')
   })
 
-  it('clamps out-of-range and fractional values', () => {
+  it('clamps out-of-range and fractional values to ultrafast', () => {
     expect(heicPresetForSpeed(-5)).toBe('ultrafast')
-    expect(heicPresetForSpeed(99)).toBe('slow')
-    expect(heicPresetForSpeed(1.6)).toBe('slow')
+    expect(heicPresetForSpeed(99)).toBe('ultrafast')
+    expect(heicPresetForSpeed(1.6)).toBe('ultrafast')
   })
 })
 
