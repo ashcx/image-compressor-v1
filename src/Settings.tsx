@@ -113,6 +113,16 @@ async function encoderRows(): Promise<StatRow[]> {
   ]
 }
 
+/** Decoder backend per input format; native decode is probed per browser. */
+async function decoderRows(): Promise<StatRow[]> {
+  return Promise.all(
+    FORMAT_ORDER.map(async (format) => ({
+      label: format.toUpperCase(),
+      value: await describeDecoder(format),
+    })),
+  )
+}
+
 function StatsRow({ row }: { row: StatRow }) {
   return (
     <div class="stats__row">
@@ -165,15 +175,16 @@ export function SettingsPage({
 }) {
   const [asyncStats, setAsyncStats] = useState<{
     encoders: StatRow[]
+    decoders: StatRow[]
     capabilities: StatRow[]
-  }>({ encoders: [], capabilities: [] })
+  }>({ encoders: [], decoders: [], capabilities: [] })
   const [statsOpen, setStatsOpen] = useState(false)
 
   useEffect(() => {
     let active = true
-    void Promise.all([encoderRows(), capabilityRows()]).then(
-      ([encoders, capabilities]) => {
-        if (active) setAsyncStats({ encoders, capabilities })
+    void Promise.all([encoderRows(), decoderRows(), capabilityRows()]).then(
+      ([encoders, decoders, capabilities]) => {
+        if (active) setAsyncStats({ encoders, decoders, capabilities })
       },
     )
     return () => {
@@ -233,11 +244,6 @@ export function SettingsPage({
   const deviceRows = statsOpen
     ? [...deviceSummaryRows, ...deviceDetailRows]
     : deviceSummaryRows
-
-  const decoderRows: StatRow[] = FORMAT_ORDER.map((format) => ({
-    label: format.toUpperCase(),
-    value: describeDecoder(format),
-  }))
 
   return (
     <div class="settings-page">
@@ -341,7 +347,10 @@ export function SettingsPage({
               title="Encoder backend by format"
               rows={asyncStats.encoders}
             />
-            <StatsGroup title="Decoder backend by format" rows={decoderRows} />
+            <StatsGroup
+              title="Decoder backend by format"
+              rows={asyncStats.decoders}
+            />
             <StatsGroup title="Capabilities" rows={asyncStats.capabilities} />
           </>
         )}

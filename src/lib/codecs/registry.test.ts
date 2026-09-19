@@ -30,10 +30,10 @@ describe('codec registry', () => {
     },
   )
 
-  it('describes a decoder backend for every format', () => {
+  it('describes a decoder backend for every format', async () => {
     for (const format of FORMAT_ORDER) {
-      expect(describeDecoder(format)).toBeTruthy()
+      expect(await describeDecoder(format)).toBeTruthy()
     }
-    expect(describeDecoder('heic')).toContain('libheif')
+    expect(await describeDecoder('heic')).toContain('libheif')
   })
 })
