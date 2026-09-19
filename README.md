@@ -37,7 +37,7 @@ selected settings, and the browser codec.
 | --- | --- | --- |
 | JPEG | Photographs and broad compatibility | Lossy; does not preserve transparency |
 | PNG | Screenshots, graphics, and transparency | Native lossless mode by default; slower lossless and lossy modes are available |
-| WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality |
+| WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality; uses its own quality presets tuned separately from JPEG |
 | AVIF | Very small modern web images | Can produce excellent sizes, but encoding is slower and browser support is newer |
 | HEIC | Apple-ecosystem compatibility | Decoding and encoding run through a WebAssembly codec, so every browser can read and write it; encoding is slower and uses its own quality presets tuned separately from JPEG |
 

@@ -17,6 +17,7 @@ npm run benchmark:scale    # 500 and 1,000-file cohorts (jpeg/png/mixed)
 npm run test:browser       # bounded row window + output download checks
 node bench/repeat-check.mjs --iterations 6 --count 300         # leak diagnostic
 node bench/repeat-check.mjs --iterations 6 --count 300 --clear # with clear between
+node bench/preset-quality.mjs /path/to/photo.jpg               # PSNR + SSIM per preset
 ```
 
 Each scenario runs in a **fresh browser process**. Reusing one process across
@@ -45,6 +46,15 @@ node bench/run.mjs --seed 2 --headed       # watch the run
 Each run writes `bench/results/<label>.json` (machine-readable) and
 `bench/results/<label>.md` (summary table). Commit a labelled baseline when you
 change the app so future runs have a comparison point.
+
+## Preset quality
+
+`node bench/preset-quality.mjs <image>` encodes one image with the shipped
+JPEG, WebP, and HEIC quality presets and reports PSNR plus windowed SSIM
+against the decoded source. It uses Chrome's native JPEG/WebP encoders and the
+vendored `elheif` codec (kvazaar `ultrafast`) for HEIC, so the numbers match the
+app's Chromium path. The measured table behind the per-format preset values is
+in [../docs/PERFORMANCE_AND_MEMORY.md](../docs/PERFORMANCE_AND_MEMORY.md).
 
 ## Scenarios
 

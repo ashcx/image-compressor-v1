@@ -89,6 +89,29 @@ const HEIC_QUALITY_PRESETS: SelectControl = {
   default: 51,
 }
 
+/**
+ * WebP's 0-100 scale is not comparable to JPEG's; reusing the JPEG numbers made
+ * WebP systematically lower quality at the same label. These values are
+ * calibrated so each label tracks the JPEG preset in measured PSNR/SSIM while
+ * staying smaller (Chrome's native encoder).
+ */
+const WEBP_QUALITY_PRESETS: SelectControl = {
+  kind: 'select',
+  key: 'quality',
+  label: 'Quality',
+  options: [
+    {
+      label: 'Best',
+      value: 96,
+      hint: 'Largest file. Stays visually lossless without hitting the lossless cliff at 100.',
+    },
+    { label: 'Better', value: 92 },
+    { label: 'Default', value: 85 },
+    { label: 'Low', value: 70, hint: 'Smallest file, visible trade-off.' },
+  ],
+  default: 85,
+}
+
 export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   jpeg: {
     format: 'jpeg',
@@ -136,7 +159,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
     mimeType: 'image/webp',
     extension: 'webp',
     lossless: false,
-    controls: [QUALITY_PRESETS],
+    controls: [WEBP_QUALITY_PRESETS],
   },
   avif: {
     format: 'avif',

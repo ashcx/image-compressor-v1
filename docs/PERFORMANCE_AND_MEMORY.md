@@ -90,7 +90,11 @@ why JPEG is the default output.
 
 Settings are defined in `src/lib/codecs/formats.ts`:
 
-- **JPEG / WebP:** quality presets **94 / 85 / 75 / 50**, default 75.
+- **JPEG:** quality presets **94 / 85 / 75 / 50**, default 75.
+- **WebP:** quality presets **96 / 92 / 85 / 70**, default 85. These are tuned separately
+  from JPEG — see [Quality presets and measured fidelity](#quality-presets-and-measured-fidelity).
+- **HEIC:** quality presets **80 / 58 / 51 / 43**, default 51; a single `ultrafast` speed
+  preset.
 - **PNG:** mode 0 native lossless, default; mode 1 lossless optimisation; mode 2
   256-colour quantisation.
 - **AVIF:** quality **1–100**, default 50; speed **6 / 8 / 10**, default 8. Lower speed
@@ -141,6 +145,42 @@ about **10–14×** the time of mode 0. AVIF takes seconds per image, and speed 
 several times slower than speed 8 for a small size gain. This is why the UI labels AVIF as
 slower and warns about the slow preset. Output size depends strongly on image content, not
 just resolution.
+
+### Quality presets and measured fidelity
+
+Each lossy format exposes four labels (Best / Better / Default / Low), but the number behind
+a label is format-specific because the scales are not comparable. libheif maps HEIC quality
+straight onto a HEVC QP, and WebP's 0–100 scale runs well below JPEG's. Reusing the JPEG
+numbers made HEIC produce much larger files than JPEG at "Default" and made WebP visibly
+lower quality at the same label.
+
+| Label | JPEG | WebP | HEIC (QP) |
+| --- | ---: | ---: | ---: |
+| Best | 94 | 96 | 80 (10) |
+| Better | 85 | 92 | 58 (21) |
+| Default | 75 | 85 | 51 (25) |
+| Low | 50 | 70 | 43 (29) |
+
+Measured on a 26 MP photograph — Chrome's native JPEG/WebP encoders, libheif + kvazaar
+`ultrafast` for HEIC — against the decoded source. SSIM uses 8×8 windows over luma:
+
+| Label | JPEG PSNR / SSIM / size | WebP PSNR / SSIM / size | HEIC PSNR / SSIM / size |
+| --- | --- | --- | --- |
+| Best | 53.4 dB / 0.997 / 4.28 MB | 46.8 dB / 0.989 / 3.93 MB | 50.8 dB / 0.997 / 4.89 MB |
+| Better | 45.3 dB / 0.984 / 2.92 MB | 44.7 dB / 0.981 / 2.59 MB | 45.9 dB / 0.987 / 2.16 MB |
+| Default | 42.6 dB / 0.969 / 1.69 MB | 41.9 dB / 0.960 / 1.36 MB | 42.4 dB / 0.967 / 1.18 MB |
+| Low | 39.9 dB / 0.947 / 0.89 MB | 39.7 dB / 0.936 / 0.60 MB | 40.1 dB / 0.942 / 0.53 MB |
+
+SSIM bands: **≥ 0.99** near-lossless, **0.98–0.99** very good, **0.95–0.98** good (artifacts
+possible on close inspection), **0.90–0.95** visibly compressed, **< 0.90** poor. "Low" is
+therefore the deliberately visible tier, "Default" is good but not fully transparent, and
+"Best" is near-lossless. At matched labels HEIC and WebP land close to JPEG in SSIM while
+being smaller, which is the intent of the per-format values.
+
+These are single-photo figures with a JPEG-derived reference, which flatters JPEG at the top
+end, and they use Chrome's native WebP encoder (Safari's `@jsquash/webp` fallback is slower
+and roughly 10% larger). Treat them as calibration anchors, not device guarantees.
+Regenerate with `node bench/preset-quality.mjs /path/to/photo.jpg`.
 
 ## 2. Parallelism and UI responsiveness
 
