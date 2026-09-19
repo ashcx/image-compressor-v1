@@ -17,6 +17,7 @@ npm run benchmark:scale    # 500 and 1,000-file cohorts (jpeg/png/mixed)
 npm run test:browser       # bounded row window + output download checks
 node bench/repeat-check.mjs --iterations 6 --count 300         # leak diagnostic
 node bench/repeat-check.mjs --iterations 6 --count 300 --clear # with clear between
+node bench/preset-quality.mjs /path/to/photo.jpg               # PSNR + SSIM per preset
 ```
 
 Each scenario runs in a **fresh browser process**. Reusing one process across
@@ -45,6 +46,16 @@ node bench/run.mjs --seed 2 --headed       # watch the run
 Each run writes `bench/results/<label>.json` (machine-readable) and
 `bench/results/<label>.md` (summary table). Commit a labelled baseline when you
 change the app so future runs have a comparison point.
+
+## Preset quality
+
+`node bench/preset-quality.mjs <image>` encodes one image with the shipped
+JPEG, WebP, AVIF, and HEIC quality presets and reports PSNR plus windowed
+SSIM against the decoded source. It runs against the Vite dev server and uses
+the app's own codec registry, so JPEG/WebP use the browser's native encoders
+and AVIF/HEIC use the same WASM codecs the app ships. The measured table behind
+the per-format preset values is in
+[../docs/PERFORMANCE_AND_MEMORY.md](../docs/PERFORMANCE_AND_MEMORY.md).
 
 ## Scenarios
 

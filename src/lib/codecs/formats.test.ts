@@ -105,4 +105,34 @@ describe('format specs', () => {
     ])
     expect(heicQuality?.default).toBe(51)
   })
+
+  it('uses WebP-specific quality values tuned to the JPEG presets', () => {
+    const webpQuality = byKey(FORMAT_SPECS.webp.controls, 'quality')
+    expect(
+      webpQuality?.kind === 'select'
+        ? webpQuality.options.map((o) => [o.label, o.value])
+        : [],
+    ).toEqual([
+      ['Best', 98],
+      ['Better', 92],
+      ['Default', 85],
+      ['Low', 70],
+    ])
+    expect(webpQuality?.default).toBe(85)
+  })
+
+  it('uses AVIF-specific quality values tuned to the JPEG presets', () => {
+    const avifQuality = byKey(FORMAT_SPECS.avif.controls, 'quality')
+    expect(
+      avifQuality?.kind === 'select'
+        ? avifQuality.options.map((o) => [o.label, o.value])
+        : [],
+    ).toEqual([
+      ['Best', 95],
+      ['Better', 85],
+      ['Default', 75],
+      ['Low', 58],
+    ])
+    expect(avifQuality?.default).toBe(75)
+  })
 })
