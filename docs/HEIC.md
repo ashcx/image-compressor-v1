@@ -90,6 +90,54 @@ HEIC. The app therefore treats *native decode support as a probe*, not a default
 and uses the WASM decoder everywhere else. See the engine matrix in
 [TODO.md](./TODO.md).
 
+## Decode memory and worker scheduling
+
+The scheduler selects the light or heavy budget from the **output** format
+(`isHeavyFormat(targetFormat)`) and charges `formatMemoryWeight(outputFormat)`
+(`src/lib/memory.ts`). The decode side is not modelled. That is safe for native
+JPEG/PNG/WebP decode, which is cheap and supports scaled decoding, but it
+understates a HEIC **input**. The three scenarios therefore classify differently:
+
+1. **HEIC in → other out (most common).** Decode is the entire heavy cost and the
+   encoder is native and light, so the job runs on the **light** pool and is
+   charged the light weight — even though libheif/libde265 is the heaviest
+   decoder in the app. This is the iPadOS risk: 7 light workers can each hold a
+   full-resolution HEIC decode at once.
+   - WASM (Chrome/Firefox): libde265 reference planes plus a **doubled RGBA**
+     output (the binding appends the plane twice) and the `ImageData` copy. The
+     redundant copies are now removed — `fitDecodedBitmap` trims with a view and
+     `decodeHeic` wraps that view instead of allocating a fresh clamped array —
+     so the JS-side transient is ~2× RGBA rather than ~4×. It is still the
+     heaviest decode path.
+   - Native (Safari/iPadOS): `createImageBitmap` is tried first, so iPadOS
+     decodes through ImageIO, which is cheaper than WASM. A full-resolution
+     48 MP HEIC is still large, and scaled decode
+     (`resizeWidth`/`resizeHeight`) is not guaranteed for HEIC, so the 2048 px
+     estimate cap can fall back to a full decode.
+   - **Recommended:** classify a job by the heavier of its source and target
+     formats, and charge the heavy weight when the source is HEIC. This needs the
+     source format on the main thread, which is currently detected only inside
+     the worker (the metadata worker drops it when it resolves dimensions).
+2. **other in → HEIC out.** Encoding is kvazaar WASM on every browser — no
+   native HEIC encoder exists in Chrome/Firefox, and canvas cannot encode HEIC
+   on Safari. Already heavy: the target HEIC selects the heavy pool and weight 5.
+   No change.
+3. **HEIC in → HEIC out (least common).** Both sides are heavy. It is already
+   heavy via the target; the source-format rule in (1) covers it automatically,
+   so it stays grouped with (2).
+
+### Is faster HEIC decode possible?
+
+- Native decode is faster than WASM and is already preferred wherever the
+  platform supports it.
+- The WASM libde265 decoder runs single-threaded (no `SharedArrayBuffer` /
+  cross-origin isolation in this app), so there is no in-worker parallelism to
+  exploit.
+- Removing the extra RGBA copies is a small speed win and a larger memory win.
+- Scaled decode is the real lever, but libde265's scaled output is limited and
+  not exposed by the vendored binding, so the estimate cap cannot reduce HEIC
+  decode work as reliably as JPEG's reduced IDCT.
+
 ## Recommended integration path
 
 - **HEIC-02:** recognise `heic`/`heif` by container brand and magic bytes; parse
