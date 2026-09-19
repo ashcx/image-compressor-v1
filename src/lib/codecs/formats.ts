@@ -112,6 +112,28 @@ const WEBP_QUALITY_PRESETS: SelectControl = {
   default: 85,
 }
 
+/**
+ * AVIF's quality scale is not comparable to JPEG's either. These values track
+ * the JPEG presets in measured PSNR while staying smaller, and stop short of
+ * AVIF 100, which jumps to a near-lossless ~5x file.
+ */
+const AVIF_QUALITY_PRESETS: SelectControl = {
+  kind: 'select',
+  key: 'quality',
+  label: 'Quality',
+  options: [
+    {
+      label: 'Best',
+      value: 95,
+      hint: 'Near-lossless. AVIF 100 jumps to a much larger file for little visible gain.',
+    },
+    { label: 'Better', value: 85 },
+    { label: 'Default', value: 75 },
+    { label: 'Low', value: 58, hint: 'Smallest file, visible trade-off.' },
+  ],
+  default: 75,
+}
+
 export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   jpeg: {
     format: 'jpeg',
@@ -168,15 +190,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
     extension: 'avif',
     lossless: false,
     controls: [
-      {
-        kind: 'range',
-        key: 'quality',
-        label: 'Quality',
-        min: 1,
-        max: 100,
-        step: 1,
-        default: 50,
-      },
+      AVIF_QUALITY_PRESETS,
       {
         kind: 'select',
         key: 'speed',
@@ -193,7 +207,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   },
   heic: {
     format: 'heic',
-    label: 'HEIC (slower)',
+    label: 'HEIC (slowest)',
     mimeType: 'image/heic',
     extension: 'heic',
     lossless: false,

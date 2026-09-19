@@ -97,8 +97,8 @@ Settings are defined in `src/lib/codecs/formats.ts`:
   preset.
 - **PNG:** mode 0 native lossless, default; mode 1 lossless optimisation; mode 2
   256-colour quantisation.
-- **AVIF:** quality **1–100**, default 50; speed **6 / 8 / 10**, default 8. Lower speed
-  values produce smaller files but take longer.
+- **AVIF:** quality presets **95 / 85 / 75 / 58**, default 75; speed **10 / 8 / 6**,
+  default 10. Slower speeds produce smaller files but take much longer.
 
 Full-resolution results vary with content. These are representative measurements, not fixed
 promises.
@@ -150,45 +150,50 @@ just resolution.
 
 Each lossy format exposes four labels (Best / Better / Default / Low), but the number behind
 a label is format-specific because the scales are not comparable. libheif maps HEIC quality
-straight onto a HEVC QP, and WebP's 0–100 scale runs well below JPEG's. Reusing the JPEG
-numbers made HEIC produce much larger files than JPEG at "Default" and made WebP visibly
-lower quality at the same label.
+straight onto a HEVC QP, and WebP and AVIF use 0–100 scales that run well below JPEG's.
+Reusing the JPEG numbers made HEIC produce much larger files than JPEG at "Default" and made
+WebP visibly lower quality at the same label.
 
-| Label | JPEG | WebP | HEIC (QP) |
-| --- | ---: | ---: | ---: |
-| Best | 94 | 96 | 80 (10) |
-| Better | 85 | 92 | 58 (21) |
-| Default | 75 | 85 | 51 (25) |
-| Low | 50 | 70 | 43 (29) |
+| Label | JPEG | WebP | AVIF | HEIC (QP) |
+| --- | ---: | ---: | ---: | ---: |
+| Best | 94 | 96 | 95 | 80 (10) |
+| Better | 85 | 92 | 85 | 58 (21) |
+| Default | 75 | 85 | 75 | 51 (25) |
+| Low | 50 | 70 | 58 | 43 (29) |
 
-Measured on a 26 MP photograph — Chrome's native JPEG/WebP encoders, libheif + kvazaar
-`ultrafast` for HEIC — against the decoded source. SSIM uses 8×8 windows over luma:
+Measured on a 26 MP photograph — Chrome's native JPEG/WebP encoders, the app's `@jsquash/avif`
+WASM encoder, and libheif + kvazaar `ultrafast` for HEIC — against the decoded source. SSIM
+uses 8×8 windows over luma:
 
-| Label | JPEG PSNR / SSIM / size | WebP PSNR / SSIM / size | HEIC PSNR / SSIM / size |
-| --- | --- | --- | --- |
-| Best | 53.4 dB / 0.997 / 4.28 MB | 46.8 dB / 0.989 / 3.93 MB | 50.8 dB / 0.997 / 4.89 MB |
-| Better | 45.3 dB / 0.984 / 2.92 MB | 44.7 dB / 0.981 / 2.59 MB | 45.9 dB / 0.987 / 2.16 MB |
-| Default | 42.6 dB / 0.969 / 1.69 MB | 41.9 dB / 0.960 / 1.36 MB | 42.4 dB / 0.967 / 1.18 MB |
-| Low | 39.9 dB / 0.947 / 0.89 MB | 39.7 dB / 0.936 / 0.60 MB | 40.1 dB / 0.942 / 0.53 MB |
+| Label | JPEG PSNR / SSIM / size | WebP PSNR / SSIM / size | AVIF PSNR / SSIM / size | HEIC PSNR / SSIM / size |
+| --- | --- | --- | --- | --- |
+| Best | 53.4 dB / 0.997 / 4.28 MB | 46.8 dB / 0.989 / 3.93 MB | 49.2 dB / 0.994 / 4.45 MB | 50.8 dB / 0.997 / 4.89 MB |
+| Better | 45.3 dB / 0.984 / 2.92 MB | 44.7 dB / 0.981 / 2.59 MB | 45.1 dB / 0.981 / 2.08 MB | 45.9 dB / 0.987 / 2.16 MB |
+| Default | 42.6 dB / 0.969 / 1.69 MB | 41.9 dB / 0.960 / 1.36 MB | 42.4 dB / 0.964 / 1.09 MB | 42.4 dB / 0.967 / 1.18 MB |
+| Low | 39.9 dB / 0.947 / 0.89 MB | 39.7 dB / 0.936 / 0.60 MB | 39.9 dB / 0.937 / 0.43 MB | 40.1 dB / 0.942 / 0.53 MB |
 
 SSIM bands: **≥ 0.99** near-lossless, **0.98–0.99** very good, **0.95–0.98** good (artifacts
 possible on close inspection), **0.90–0.95** visibly compressed, **< 0.90** poor. "Low" is
 therefore the deliberately visible tier, "Default" is good but not fully transparent, and
-"Best" is near-lossless. At matched labels HEIC and WebP land close to JPEG in SSIM while
-being smaller, which is the intent of the per-format values.
+"Best" is near-lossless. At matched labels AVIF, HEIC, and WebP land close to JPEG in PSNR
+while producing **25–50% smaller** files, which is the intent of the per-format values; their
+SSIM runs a little below JPEG's because the reference is itself a JPEG that JPEG re-encodes
+most faithfully.
 
 These are single-photo figures with a JPEG-derived reference, which flatters JPEG at the top
-end, and they use Chrome's native WebP encoder (Safari's `@jsquash/webp` fallback is slower
-and roughly 10% larger). Treat them as calibration anchors, not device guarantees.
-Regenerate with `node bench/preset-quality.mjs /path/to/photo.jpg`.
+end. WebP and AVIF are tuned to stop short of their near-lossless cliffs (WebP 100 and
+AVIF 100), which multiply file size for little visible gain. Safari's `@jsquash/webp`
+fallback is slower and roughly 10% larger than the native WebP numbers. Treat these as
+calibration anchors, not device guarantees. Regenerate with
+`node bench/preset-quality.mjs /path/to/photo.jpg`.
 
 ## 2. Parallelism and UI responsiveness
 
 Image processing runs in a fixed-size `WorkerPool`; the UI thread owns state and presentation.
 
 The UI's own list work is cheap — about **0.37 s of script time per 200 rows** — but codecs
-are not. A single full-resolution AVIF encode at quality 50 / speed 8 takes **~2–4 s** for
-an 8–16 MP image. Running that work on the UI thread would freeze the tab.
+are not. A single full-resolution AVIF encode at its default quality and speed takes
+**~2–4 s** for an 8–16 MP image. Running that work on the UI thread would freeze the tab.
 
 Moving decode, encode, and thumbnail work into workers produced the following scroll results
 while processing:

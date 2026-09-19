@@ -50,11 +50,12 @@ change the app so future runs have a comparison point.
 ## Preset quality
 
 `node bench/preset-quality.mjs <image>` encodes one image with the shipped
-JPEG, WebP, and HEIC quality presets and reports PSNR plus windowed SSIM
-against the decoded source. It uses Chrome's native JPEG/WebP encoders and the
-vendored `elheif` codec (kvazaar `ultrafast`) for HEIC, so the numbers match the
-app's Chromium path. The measured table behind the per-format preset values is
-in [../docs/PERFORMANCE_AND_MEMORY.md](../docs/PERFORMANCE_AND_MEMORY.md).
+JPEG, WebP, AVIF, and HEIC quality presets and reports PSNR plus windowed
+SSIM against the decoded source. It runs against the Vite dev server and uses
+the app's own codec registry, so JPEG/WebP use the browser's native encoders
+and AVIF/HEIC use the same WASM codecs the app ships. The measured table behind
+the per-format preset values is in
+[../docs/PERFORMANCE_AND_MEMORY.md](../docs/PERFORMANCE_AND_MEMORY.md).
 
 ## Scenarios
 

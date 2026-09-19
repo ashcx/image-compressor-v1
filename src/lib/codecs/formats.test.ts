@@ -120,4 +120,19 @@ describe('format specs', () => {
     ])
     expect(webpQuality?.default).toBe(85)
   })
+
+  it('uses AVIF-specific quality values tuned to the JPEG presets', () => {
+    const avifQuality = byKey(FORMAT_SPECS.avif.controls, 'quality')
+    expect(
+      avifQuality?.kind === 'select'
+        ? avifQuality.options.map((o) => [o.label, o.value])
+        : [],
+    ).toEqual([
+      ['Best', 95],
+      ['Better', 85],
+      ['Default', 75],
+      ['Low', 58],
+    ])
+    expect(avifQuality?.default).toBe(75)
+  })
 })
