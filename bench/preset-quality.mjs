@@ -25,7 +25,7 @@ if (!inputPath) {
 // shared scale. AVIF and HEIC additionally run at the app's default speed.
 const PRESETS = {
   jpeg: [50, 75, 85, 94],
-  webp: [70, 85, 92, 96],
+  webp: [70, 85, 92, 98],
   avif: [58, 75, 85, 95],
   heic: [43, 51, 58, 80],
 }
@@ -37,6 +37,7 @@ const contentType = inputPath.toLowerCase().endsWith('.png')
 const headed = process.env.HEADED === '1'
 
 const server = await createServer({
+  logLevel: 'error',
   server: { port: 4405, strictPort: false },
   plugins: [
     {

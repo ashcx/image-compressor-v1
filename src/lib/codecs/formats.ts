@@ -102,8 +102,8 @@ const WEBP_QUALITY_PRESETS: SelectControl = {
   options: [
     {
       label: 'Best',
-      value: 96,
-      hint: 'Largest file. Stays visually lossless without hitting the lossless cliff at 100.',
+      value: 98,
+      hint: 'Largest file. WebP lossy tops out near 99; 100 switches to lossless and balloons the file.',
     },
     { label: 'Better', value: 92 },
     { label: 'Default', value: 85 },

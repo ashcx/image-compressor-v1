@@ -113,7 +113,7 @@ describe('format specs', () => {
         ? webpQuality.options.map((o) => [o.label, o.value])
         : [],
     ).toEqual([
-      ['Best', 96],
+      ['Best', 98],
       ['Better', 92],
       ['Default', 85],
       ['Low', 70],

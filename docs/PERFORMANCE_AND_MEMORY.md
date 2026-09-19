@@ -156,7 +156,7 @@ WebP visibly lower quality at the same label.
 
 | Label | JPEG | WebP | AVIF | HEIC (QP) |
 | --- | ---: | ---: | ---: | ---: |
-| Best | 94 | 96 | 95 | 80 (10) |
+| Best | 94 | 98 | 95 | 80 (10) |
 | Better | 85 | 92 | 85 | 58 (21) |
 | Default | 75 | 85 | 75 | 51 (25) |
 | Low | 50 | 70 | 58 | 43 (29) |
@@ -167,7 +167,7 @@ uses 8×8 windows over luma:
 
 | Label | JPEG PSNR / SSIM / size | WebP PSNR / SSIM / size | AVIF PSNR / SSIM / size | HEIC PSNR / SSIM / size |
 | --- | --- | --- | --- | --- |
-| Best | 53.4 dB / 0.997 / 4.28 MB | 46.8 dB / 0.989 / 3.93 MB | 49.2 dB / 0.994 / 4.45 MB | 50.8 dB / 0.997 / 4.89 MB |
+| Best | 53.4 dB / 0.997 / 4.28 MB | 47.8 dB / 0.992 / 4.84 MB | 49.2 dB / 0.994 / 4.45 MB | 50.8 dB / 0.997 / 4.89 MB |
 | Better | 45.3 dB / 0.984 / 2.92 MB | 44.7 dB / 0.981 / 2.59 MB | 45.1 dB / 0.981 / 2.08 MB | 45.9 dB / 0.987 / 2.16 MB |
 | Default | 42.6 dB / 0.969 / 1.69 MB | 41.9 dB / 0.960 / 1.36 MB | 42.4 dB / 0.964 / 1.09 MB | 42.4 dB / 0.967 / 1.18 MB |
 | Low | 39.9 dB / 0.947 / 0.89 MB | 39.7 dB / 0.936 / 0.60 MB | 39.9 dB / 0.937 / 0.43 MB | 40.1 dB / 0.942 / 0.53 MB |
@@ -182,10 +182,11 @@ most faithfully.
 
 These are single-photo figures with a JPEG-derived reference, which flatters JPEG at the top
 end. WebP and AVIF are tuned to stop short of their near-lossless cliffs (WebP 100 and
-AVIF 100), which multiply file size for little visible gain. Safari's `@jsquash/webp`
-fallback is slower and roughly 10% larger than the native WebP numbers. Treat these as
-calibration anchors, not device guarantees. Regenerate with
-`node bench/preset-quality.mjs /path/to/photo.jpg`.
+AVIF 100), which multiply file size for little visible gain. WebP's lossy mode also tops out
+around 48 dB (quality 99), so its Best trails the other formats and quality 100 would jump to
+a lossless file. Safari's `@jsquash/webp` fallback is slower and roughly 10% larger than the
+native WebP numbers. Treat these as calibration anchors, not device guarantees. Regenerate
+with `node bench/preset-quality.mjs /path/to/photo.jpg`.
 
 ## 2. Parallelism and UI responsiveness
 
