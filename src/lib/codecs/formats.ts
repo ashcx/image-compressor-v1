@@ -66,6 +66,29 @@ const QUALITY_PRESETS: SelectControl = {
   default: 75,
 }
 
+/**
+ * HEIC maps quality straight onto a HEVC QP (quality 100 = QP 0, 0 = QP 51),
+ * a far higher scale than JPEG's. These values are calibrated to land near the
+ * JPEG presets in measured PSNR, so HEIC "Default" looks like JPEG "Default"
+ * without the ~2x file-size blow-up that reusing the JPEG numbers caused.
+ */
+const HEIC_QUALITY_PRESETS: SelectControl = {
+  kind: 'select',
+  key: 'quality',
+  label: 'Quality',
+  options: [
+    {
+      label: 'Best',
+      value: 80,
+      hint: 'Visually lossless HEVC (QP 10). Still much smaller than the old HEIC Best.',
+    },
+    { label: 'Better', value: 58 },
+    { label: 'Default', value: 51 },
+    { label: 'Low', value: 43, hint: 'Smallest file, visible trade-off.' },
+  ],
+  default: 51,
+}
+
 export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   jpeg: {
     format: 'jpeg',
@@ -152,7 +175,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
     extension: 'heic',
     lossless: false,
     controls: [
-      QUALITY_PRESETS,
+      HEIC_QUALITY_PRESETS,
       {
         kind: 'select',
         key: 'speed',

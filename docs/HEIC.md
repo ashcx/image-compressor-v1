@@ -9,9 +9,10 @@ Probed: 2026-09-13. Implemented: 2026-09-17.
    worker. Safari's native decoder is tried first; the WASM path covers Chrome, Firefox, and
    older WebKit.
 2. **HEIC encoding: shipped.** The same `elheif` package bundles libheif + kvazaar, so HEIC
-   output runs in the worker on every browser. The bundle exposes a single fixed encoder
-   quality, so HEIC has no adjustable quality preset yet; the format is classified as a heavy
-   codec and uses the reduced worker pool.
+   output runs in the worker on every browser. The vendored build adds a kvazaar speed preset
+   and a quality control. HEIC quality values are calibrated separately from JPEG because
+   libheif maps them straight onto a HEVC QP, which is a much higher scale than JPEG's. The
+   format is classified as a heavy codec and uses the reduced worker pool.
 
 The original feasibility spike (below) is retained as the record of why a purpose-built
 libheif WASM build was required for encoding.
