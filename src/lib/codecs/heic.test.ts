@@ -32,6 +32,8 @@ describe('fitDecodedBitmap', () => {
     expect(fitted.height).toBe(height)
     expect(fitted.data.length).toBe(width * height * 4)
     expect([...fitted.data]).toEqual([...once])
+    // Trimming is a view, not a copy: the RGBA plane is not duplicated again.
+    expect(fitted.data.buffer).toBe(twice.buffer)
   })
 
   it('returns an already-correct bitmap unchanged', () => {

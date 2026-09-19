@@ -48,8 +48,10 @@ function load(): Promise<ElheifModule> {
 
 /**
  * The elheif decode binding appends the RGBA plane twice, so the returned
- * buffer is twice `width * height * 4`. Trim it back to one image and copy it
- * into a fresh buffer suitable for `ImageData`.
+ * buffer is twice `width * height * 4`. Trim it back to one image with a view:
+ * the binding already copies the WASM heap into a JS-owned `Uint8Array` (it
+ * calls `.slice()` on the typed memory view), so slicing again here would
+ * allocate and copy a whole extra RGBA plane for no reason.
  */
 export function fitDecodedBitmap(bitmap: DecodedBitmap): DecodedBitmap {
   const expected = bitmap.width * bitmap.height * 4
@@ -57,7 +59,7 @@ export function fitDecodedBitmap(bitmap: DecodedBitmap): DecodedBitmap {
   return {
     width: bitmap.width,
     height: bitmap.height,
-    data: bitmap.data.slice(0, expected),
+    data: bitmap.data.subarray(0, expected),
   }
 }
 
@@ -69,7 +71,23 @@ export async function decodeHeic(buffer: ArrayBuffer): Promise<ImageData> {
   if (!bitmap) throw new Error('HEIC file does not contain an image')
 
   const fitted = fitDecodedBitmap(bitmap)
-  const data = new Uint8ClampedArray(fitted.width * fitted.height * 4)
+  const expected = fitted.width * fitted.height * 4
+  // The binding's output is a JS-owned buffer, so `ImageData` can wrap a view
+  // over it directly. This drops the previous copy into a fresh clamped array,
+  // which matters because HEIC decode already holds a doubled RGBA buffer.
+  if (fitted.data.length === expected) {
+    // The binding returns a plain `Uint8Array`, but the DOM lib types
+    // `TypedArray.buffer` as `ArrayBufferLike`; narrow it for `ImageData`.
+    const data = new Uint8ClampedArray(
+      fitted.data.buffer as ArrayBuffer,
+      fitted.data.byteOffset,
+      expected,
+    )
+    return new ImageData(data, fitted.width, fitted.height)
+  }
+
+  // A short buffer is unexpected: pad rather than throw.
+  const data = new Uint8ClampedArray(expected)
   data.set(fitted.data)
   return new ImageData(data, fitted.width, fitted.height)
 }
