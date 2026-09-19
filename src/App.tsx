@@ -1129,7 +1129,7 @@ async function saveToFolder() {
 
 function savingsLabel(originalSize: number, outputSize: number): string {
   const percent = percentReduction(originalSize, outputSize)
-  return percent >= 0 ? `−${percent}%` : `+${Math.abs(percent)}%`
+  return percent >= 0 ? `−${percent}% smaller` : `+${Math.abs(percent)}% larger`
 }
 
 function statusLabel(job: BatchJob): string {
@@ -1545,7 +1545,7 @@ function BatchSummary() {
       : '—'
   const reduction =
     !estimatePhase.value && originalTotal.value > 0 && batchEstimate.value > 0
-      ? `${savingsLabel(originalTotal.value, batchEstimate.value)} smaller`
+      ? savingsLabel(originalTotal.value, batchEstimate.value)
       : '—'
 
   return (
