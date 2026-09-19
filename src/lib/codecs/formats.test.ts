@@ -90,4 +90,19 @@ describe('format specs', () => {
     ).toEqual(['Default'])
     expect(heicSpeed?.default).toBe(0)
   })
+
+  it('uses HEIC-specific quality values tuned to the JPEG presets', () => {
+    const heicQuality = byKey(FORMAT_SPECS.heic.controls, 'quality')
+    expect(
+      heicQuality?.kind === 'select'
+        ? heicQuality.options.map((o) => [o.label, o.value])
+        : [],
+    ).toEqual([
+      ['Best', 80],
+      ['Better', 58],
+      ['Default', 51],
+      ['Low', 43],
+    ])
+    expect(heicQuality?.default).toBe(51)
+  })
 })
