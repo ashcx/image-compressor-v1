@@ -36,6 +36,7 @@ import { validateFiles } from './lib/intake'
 import { createJobStore } from './lib/jobStore'
 import { jobCostBytes, maxJobPixels } from './lib/memory'
 import {
+  cancelThumbnailRequests,
   disposeMetadataWorker,
   readDimensions,
   readThumbnail,
@@ -191,6 +192,8 @@ let sampleChangeTimer: ReturnType<typeof setTimeout> | undefined
 const jobTokens = new Map<string, number>()
 const estimateControllers = new Map<string, AbortController>()
 const compressControllers = new Map<string, AbortController>()
+let previewsPaused = false
+const previewRevision = signal(0)
 
 const activeControls = computed(() => FORMAT_SPECS[targetFormat.value].controls)
 
@@ -483,26 +486,54 @@ function cancelAllEstimates() {
 const previewRequests = new Set<string>()
 
 /**
- * Lazily generates a preview for an estimated row that has none. Only called
- * for visible rows, so a large batch pays for previews the user actually sees
- * rather than decoding every file up front.
+ * Lazily generates a preview for a visible row that has none. A large batch
+ * pays for previews the user actually sees rather than decoding every file up
+ * front or doing preview work in the completion-critical worker path.
  */
 async function loadThumbnail(id: string) {
   const job = getJob(id)
-  if (!job || job.thumbnailUrl || job.status !== 'estimated') return
+  if (
+    previewsPaused ||
+    !job ||
+    job.thumbnailUrl ||
+    (job.status !== 'estimated' && job.status !== 'done')
+  ) {
+    return
+  }
   if (previewRequests.has(id)) return
   previewRequests.add(id)
   cancelIdleTeardown()
   try {
     const blob = await readThumbnail(job.file)
-    if (!blob) return
+    if (!blob || previewsPaused) return
     const current = getJob(id)
-    if (!current || current.thumbnailUrl || current.status === 'error') return
+    if (
+      !current ||
+      current.thumbnailUrl ||
+      current.status === 'error' ||
+      previewsPaused
+    ) {
+      return
+    }
     updateJob(id, { thumbnailUrl: URL.createObjectURL(blob) })
   } finally {
     previewRequests.delete(id)
     scheduleIdleTeardown()
   }
+}
+
+function pausePreviews() {
+  if (previewsPaused) return
+  previewsPaused = true
+  cancelThumbnailRequests()
+}
+
+function resumePreviews() {
+  if (!previewsPaused) return
+  previewsPaused = false
+  // Visible rows retry their missing previews when this changes. Rows that are
+  // still virtualized will request theirs when they are mounted later.
+  previewRevision.value += 1
 }
 
 function updateAverageRatios() {
@@ -572,7 +603,7 @@ async function estimateJob(id: string) {
     if (jobTokens.get(id) !== token || result.type !== 'estimate') return
 
     const previousThumb = getJob(id)?.thumbnailUrl
-    const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
+    const thumbnailUrl = previousThumb ?? ''
     updateJob(id, {
       status: 'estimated',
       thumbnailUrl,
@@ -584,7 +615,6 @@ async function estimateJob(id: string) {
       height: result.height,
       capped: result.capped,
     })
-    if (previousThumb) URL.revokeObjectURL(previousThumb)
     updateAverageRatios()
     refreshEstimates()
   } catch (error) {
@@ -662,7 +692,7 @@ async function compressJob(id: string) {
     }
 
     const previousThumb = getJob(id)?.thumbnailUrl
-    const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
+    const thumbnailUrl = previousThumb ?? ''
     const store = await getOutputStore()
     await store.put(id, result.outputBlob)
     syncOutputPressure(store)
@@ -683,7 +713,6 @@ async function compressJob(id: string) {
       height: result.height,
       capped: result.capped,
     })
-    if (previousThumb) URL.revokeObjectURL(previousThumb)
   } catch (error) {
     if (controller.signal.aborted || jobTokens.get(id) !== token) return
     updateJob(id, {
@@ -811,7 +840,7 @@ async function addFiles(fileList: FileList | File[] | null) {
         else
           updateJob(job.id, { status: 'estimated', sampleKey: sampleKey.value })
       } else {
-        void compressJob(job.id)
+        startCompression([job.id])
       }
     }
   } finally {
@@ -823,10 +852,9 @@ function recompressSingle() {
   cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   reprocessTimer = setTimeout(() => {
-    for (const id of jobIds.value) {
-      if (getJob(id)?.status === 'error') continue
-      void compressJob(id)
-    }
+    startCompression(
+      jobIds.value.filter((id) => getJob(id)?.status !== 'error'),
+    )
   }, 200)
 }
 
@@ -926,13 +954,29 @@ function compressAll() {
     sampleChangeTimer = undefined
   }
   cancelAllEstimates()
-  for (const id of jobIds.value) {
-    const job = getJob(id)
-    if (!job || job.status === 'error' || job.status === 'processing') continue
-    if (job.status === 'estimated' || job.outputKey !== outputKey.value) {
-      void compressJob(id)
-    }
-  }
+  startCompression(
+    jobIds.value.filter((id) => {
+      const job = getJob(id)
+      if (!job || job.status === 'error' || job.status === 'processing') {
+        return false
+      }
+      return job.status === 'estimated' || job.outputKey !== outputKey.value
+    }),
+  )
+}
+
+/**
+ * Starts a compression run with preview generation fully paused. Any preview
+ * that was not already stored is retried only after every compression task has
+ * settled, when completed outputs are available for download.
+ */
+function startCompression(ids: string[]) {
+  if (ids.length === 0) return
+  pausePreviews()
+  const runs = ids.map((id) => compressJob(id))
+  void Promise.allSettled(runs).then(() => {
+    if (stats.value.processing === 0) resumePreviews()
+  })
 }
 
 /**
@@ -1225,10 +1269,17 @@ const JobRow = memo(function JobRow({
   onThumbnail,
 }: JobRowProps) {
   const job = jobStore.signalFor(id)?.value
+  const currentPreviewRevision = previewRevision.value
   // Request a preview only once the row is mounted (i.e. scrolled into view).
   useEffect(() => {
-    if (job && !job.thumbnailUrl && job.status === 'estimated') onThumbnail(id)
-  }, [id, job?.thumbnailUrl, job?.status, onThumbnail])
+    if (
+      job &&
+      !job.thumbnailUrl &&
+      (job.status === 'estimated' || job.status === 'done')
+    ) {
+      onThumbnail(id)
+    }
+  }, [id, job?.thumbnailUrl, job?.status, onThumbnail, currentPreviewRevision])
   if (!job) return null
   const current = isCurrent(job)
   const label = statusLabel(job)

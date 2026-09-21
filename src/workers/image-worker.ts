@@ -17,7 +17,6 @@ import {
   resolveDecodeTargetSize,
   resolveResize,
 } from '../lib/resize'
-import { createThumbnail } from '../lib/thumbnail'
 
 interface WorkerScope {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null
@@ -130,24 +129,20 @@ scope.onmessage = async (event) => {
       const fullWidth = fullTarget?.width ?? dimensions?.width ?? source.width
       const fullHeight =
         fullTarget?.height ?? dimensions?.height ?? source.height
-      const [samples, thumbnailBlob] = await Promise.all([
-        buildEstimateSamples(source, request.targetFormat, {
-          quality: request.quality,
-          effort: request.effort,
-          speed: request.speed,
-          mode: request.mode,
-          fullWidth,
-          fullHeight,
-        }),
-        createThumbnail(source),
-      ])
+      const samples = await buildEstimateSamples(source, request.targetFormat, {
+        quality: request.quality,
+        effort: request.effort,
+        speed: request.speed,
+        mode: request.mode,
+        fullWidth,
+        fullHeight,
+      })
       const response: EstimateResponse = {
         type: 'estimate',
         jobId: request.jobId,
         width: fullWidth,
         height: fullHeight,
         samples,
-        thumbnailBlob,
         capped,
       }
       scope.postMessage(response)
@@ -161,13 +156,10 @@ scope.onmessage = async (event) => {
       mode: request.mode,
     })
 
-    const thumbnailBlob = await createThumbnail(source)
-
     const response: ResultResponse = {
       type: 'result',
       jobId: request.jobId,
       outputBlob: encoded.blob,
-      thumbnailBlob,
       outputSize: encoded.blob.size,
       width: encoded.width,
       height: encoded.height,

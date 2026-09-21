@@ -90,3 +90,25 @@ export function readThumbnail(file: File): Promise<Blob | null> {
     getWorker().postMessage({ type: 'thumbnail', jobId, file })
   })
 }
+
+/**
+ * Cancels thumbnail work before compression starts. Terminating the metadata
+ * worker is intentional: an in-flight decode must not continue consuming CPU
+ * while the codec pool is compressing the batch. Missing previews are retried
+ * after compression resumes.
+ */
+export function cancelThumbnailRequests(): void {
+  if (pendingThumbnails.size === 0) return
+
+  const active = worker
+  worker = null
+  active?.terminate()
+
+  for (const resolve of pendingThumbnails.values()) resolve(null)
+  pendingThumbnails.clear()
+
+  // The metadata worker also serves dimension reads. Resolve any that shared
+  // the terminated worker so they cannot leave callers waiting forever.
+  for (const resolve of pendingDimensions.values()) resolve(null)
+  pendingDimensions.clear()
+}
