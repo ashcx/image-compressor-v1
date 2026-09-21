@@ -93,9 +93,8 @@ The main source areas are:
 
 ## Known limitations
 
-- Browser memory limits constrain very large images and batches.
+- Browser memory limits constrain very large images and batches, especially on iOS / iPadOS devices due to WebKit limitations.
 - Output orientation is normalized into the pixels, but EXIF, GPS, XMP, ICC, depth maps, burst frames, and auxiliary images are not preserved; only the primary still image is converted.
-- AVIF and some PNG modes can be substantially slower than JPEG or WebP.
+- AVIF, HEIC and some PNG modes can be substantially slower than JPEG or WebP. This has to do with the algorithmic complexity of the format itself.
 - Folder saving requires a browser File System Access API; otherwise use the ZIP download.
-- A ZIP stores image bytes without attempting to recompress them, so its size is close to the combined output files plus ZIP metadata.
-- Animated GIF, TIFF, and SVG are not current output targets.
+
