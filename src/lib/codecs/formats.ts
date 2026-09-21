@@ -191,14 +191,14 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
         hint: 'Native WebP can produce smaller files, but takes longer when the browser supports it.',
         options: [
           {
-            label: 'Fast',
+            label: 'Default',
             value: 0,
-            hint: 'Fast libwebp WebAssembly encoding.',
+            hint: 'Default libwebp WebAssembly encoding.',
           },
           {
             label: 'Smaller size (slower)',
             value: 1,
-            hint: 'Uses the native browser WebP encoder when available; otherwise falls back to Fast.',
+            hint: 'Uses the native browser WebP encoder when available; otherwise falls back to Default.',
           },
         ],
       },

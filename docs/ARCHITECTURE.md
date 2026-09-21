@@ -88,7 +88,7 @@ cost model.
 ### Native-first, lazy codec loading
 
 Codec modules are loaded only when a format needs them. JPEG uses native browser encoding when
-the browser can provide it. WebP defaults to libwebp method 1 through WebAssembly for a fast,
+the browser can provide it. WebP defaults to libwebp method 1 through WebAssembly for a
 portable path; its optional smaller-size speed setting uses the native browser encoder when
 available and falls back to libwebp otherwise. The default PNG mode also uses the native
 browser encoder; slower lossless optimisation and lossy palette modes use their

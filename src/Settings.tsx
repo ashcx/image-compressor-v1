@@ -95,7 +95,7 @@ async function capabilityRows(): Promise<StatRow[]> {
 
 /** Encoder backend per output format (PNG is listed per compression mode). */
 async function encoderRows(): Promise<StatRow[]> {
-  const [jpeg, pngNative, pngLossless, pngLossy, webpFast, webpSmall] =
+  const [jpeg, pngNative, pngLossless, pngLossy, webpDefault, webpSmall] =
     await Promise.all([
       describeRenderer('jpeg'),
       describeRenderer('png', 0),
@@ -110,7 +110,7 @@ async function encoderRows(): Promise<StatRow[]> {
     { label: 'PNG · uncompressed', value: pngNative },
     { label: 'PNG · lossless', value: pngLossless },
     { label: 'PNG · lossy', value: pngLossy },
-    { label: 'WebP · fast', value: webpFast },
+    { label: 'WebP · default', value: webpDefault },
     { label: 'WebP · smaller', value: webpSmall },
     { label: 'AVIF', value: await describeRenderer('avif') },
     { label: 'HEIC', value: await describeRenderer('heic') },
