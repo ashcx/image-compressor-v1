@@ -252,8 +252,18 @@ source, not only from test tables:
 
 iOS raised its limit to **8192 per axis** in Safari 17.4 (WebKit bug 271002); older iOS is
 detected from the UA `OS`/`Version` token and clamped to 4096. Every decode is scaled down to
-satisfy both the side and area ceilings, and never upscaled. When a clamp applies, the worker
-reports it and the row shows **"downscaled to device limit."**
+satisfy both the side and area ceilings, and never upscaled. The app also applies a universal
+**100 MP working-resolution cap** before these platform and memory limits. The effective decode
+size is therefore the most restrictive of the 100 MP cap, the browser canvas ceiling, and the
+device/codec memory budget. When a clamp applies, the worker reports it; the row shows the
+original and decoded dimensions plus **"downscaled for device safety"**, and the app displays a
+plain-language notice explaining why.
+
+A 200 MP source is therefore reduced to at most 100 MP while preserving its aspect ratio when
+the browser supports bounded image decoding. If a browser cannot perform that bounded decode and
+the source exceeds the safety limits, the app fails that image with an explanatory error rather
+than silently retrying at full resolution. A full-resolution fallback remains available only
+when the source is already within the applicable safety limits.
 
 ### Decoded-memory budget and scheduling
 

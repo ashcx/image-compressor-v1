@@ -48,6 +48,7 @@ import {
 } from './lib/outputStore'
 import { compatibilityMode } from './lib/preferences'
 import {
+  MAX_WORKING_PIXELS,
   resolveDecodeTargetSize,
   resolveResize,
   type SizeLimits,
@@ -87,6 +88,7 @@ interface BatchJob {
   originalSize: number
   status: JobStatus
   thumbnailUrl: string
+  thumbnailUnavailable: boolean
   outputStored: boolean
   outputExtension: string
   outputSize: number
@@ -99,7 +101,7 @@ interface BatchJob {
   height: number
   samples: EstimateSample[]
   error: string
-  /** True when the device's canvas/budget ceiling forced a smaller decode. */
+  /** True when the universal, browser, or device ceiling forced a smaller decode. */
   capped: boolean
 }
 
@@ -172,6 +174,17 @@ const newVersion = signal('')
 const notice = signal('')
 const OUTPUT_PRESSURE_NOTICE =
   'Output memory is full for this device. Download or clear completed images to keep compressing.'
+const DECODE_CAP_NOTICE =
+  'Some images were downscaled to stay within browser and device safety limits. Affected rows show the original and decoded resolution.'
+let decodeCapNoticeShown = false
+
+function noteDecodeCap() {
+  if (decodeCapNoticeShown) return
+  if (!notice.value) {
+    decodeCapNoticeShown = true
+    notice.value = DECODE_CAP_NOTICE
+  }
+}
 const delivery = signal<DeliveryProgress | null>(null)
 const delivering = computed(() => delivery.value !== null)
 // True when the in-memory output fallback has exceeded its device budget, so
@@ -421,7 +434,10 @@ function jobPlan(
   const profile = getDeviceProfile()
   const limits: SizeLimits = {
     ...profile.canvasLimits,
-    maxPixels: maxJobPixels(profile.canvasMemoryBudget, format, mode),
+    maxPixels: Math.min(
+      MAX_WORKING_PIXELS,
+      maxJobPixels(profile.canvasMemoryBudget, format, mode),
+    ),
   }
   if (!width || !height) return { cost: 0, limits }
 
@@ -496,6 +512,7 @@ async function loadThumbnail(id: string) {
     previewsPaused ||
     !job ||
     job.thumbnailUrl ||
+    job.thumbnailUnavailable ||
     (job.status !== 'estimated' && job.status !== 'done')
   ) {
     return
@@ -504,8 +521,14 @@ async function loadThumbnail(id: string) {
   previewRequests.add(id)
   cancelIdleTeardown()
   try {
-    const blob = await readThumbnail(job.file)
-    if (!blob || previewsPaused) return
+    const preview = await readThumbnail(job.file)
+    if (!preview || previewsPaused) return
+    if (preview.unavailable) {
+      updateJob(id, { thumbnailUnavailable: true })
+      return
+    }
+    const blob = preview.blob
+    if (!blob) return
     const current = getJob(id)
     if (
       !current ||
@@ -615,6 +638,7 @@ async function estimateJob(id: string) {
       height: result.height,
       capped: result.capped,
     })
+    if (result.capped) noteDecodeCap()
     updateAverageRatios()
     refreshEstimates()
   } catch (error) {
@@ -713,6 +737,7 @@ async function compressJob(id: string) {
       height: result.height,
       capped: result.capped,
     })
+    if (result.capped) noteDecodeCap()
   } catch (error) {
     if (controller.signal.aborted || jobTokens.get(id) !== token) return
     updateJob(id, {
@@ -798,6 +823,7 @@ async function addFiles(fileList: FileList | File[] | null) {
       originalSize: file.size,
       status: 'queued',
       thumbnailUrl: '',
+      thumbnailUnavailable: false,
       outputStored: false,
       outputExtension: FORMAT_SPECS[targetFormat.value].extension,
       outputSize: 0,
@@ -1177,18 +1203,21 @@ function savingsLabel(originalSize: number, outputSize: number): string {
 }
 
 function statusLabel(job: BatchJob): string {
+  const capLabel = job.capped ? 'downscaled for device safety' : ''
   switch (job.status) {
     case 'queued':
     case 'estimating':
     case 'estimated':
     case 'processing':
-      return ''
+      return capLabel
     case 'done':
-      return isCurrent(job) ? '' : 'settings changed — re-compress'
+      return [capLabel, isCurrent(job) ? '' : 'settings changed — re-compress']
+        .filter(Boolean)
+        .join(' · ')
     case 'cancelled':
-      return 'cancelled'
+      return [capLabel, 'cancelled'].filter(Boolean).join(' · ')
     case 'error':
-      return job.error
+      return [capLabel, job.error].filter(Boolean).join(' · ')
   }
 }
 
@@ -1196,6 +1225,15 @@ function dimensionsLabel(job: BatchJob): string {
   const width = job.sourceWidth || job.width
   const height = job.sourceHeight || job.height
   if (!width || !height) return ''
+
+  if (
+    job.capped &&
+    job.width &&
+    job.height &&
+    (job.width !== width || job.height !== height)
+  ) {
+    return `${width}×${height} → ${job.width}×${job.height}`
+  }
 
   const edge = maxLongEdge.value
   if (!edge) return `${width}×${height}`
@@ -1275,6 +1313,7 @@ const JobRow = memo(function JobRow({
     if (
       job &&
       !job.thumbnailUrl &&
+      !job.thumbnailUnavailable &&
       (job.status === 'estimated' || job.status === 'done')
     ) {
       onThumbnail(id)
@@ -1312,6 +1351,15 @@ const JobRow = memo(function JobRow({
               <span class="job__spinner job__spinner--overlay" />
             )}
           </>
+        ) : job.thumbnailUnavailable ? (
+          <span
+            class="job__preview-unavailable"
+            title="Preview unavailable"
+            role="img"
+            aria-label="Preview unavailable"
+          >
+            No preview
+          </span>
         ) : job.status === 'processing' ? (
           <span class="job__spinner" />
         ) : (
@@ -1324,7 +1372,7 @@ const JobRow = memo(function JobRow({
         </span>
         <div class="job__details">
           <span
-            class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
+            class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}${job.capped ? ' job__meta--warning' : ''}`}
           >
             {dimensions}
             {label && `${dimensions ? ' · ' : ''}${label}`}

@@ -751,6 +751,14 @@ input[type="range"]:disabled {
   font-weight: 800;
 }
 
+.job__preview-unavailable {
+  padding: 0 0.15rem;
+  color: var(--muted);
+  font-size: 0.55rem;
+  line-height: 1.1;
+  text-align: center;
+}
+
 .job__thumb--stale {
   opacity: 0.42;
 }
@@ -798,6 +806,11 @@ input[type="range"]:disabled {
 
 .job__meta--error {
   color: var(--bad);
+}
+
+.job__meta--warning {
+  color: var(--warning-text);
+  font-weight: 600;
 }
 
 .job__size {

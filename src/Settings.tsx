@@ -19,6 +19,7 @@ import {
   type ThemePreference,
   themePreference,
 } from './lib/preferences'
+import { MAX_WORKING_PIXELS } from './lib/resize'
 import { appVersion } from './lib/version'
 
 interface StatRow {
@@ -226,6 +227,10 @@ export function SettingsPage({
   ]
 
   const deviceDetailRows: StatRow[] = [
+    {
+      label: 'Working-resolution cap',
+      value: `${(MAX_WORKING_PIXELS / 1_000_000).toLocaleString()} MP before device/browser limits`,
+    },
     {
       label: 'Canvas ceiling',
       value: `${profile.canvasLimits.maxSide.toLocaleString()} px max side · ${canvasAreaLabel(profile.canvasLimits.maxArea)}`,
