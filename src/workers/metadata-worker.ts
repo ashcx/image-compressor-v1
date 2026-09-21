@@ -74,20 +74,20 @@ async function generateThumbnail(file: File): Promise<Blob | null> {
       bitmap.close()
     }
   } catch {
-    return generateWasmThumbnail(file)
+    return generateFallbackThumbnail(file)
   }
 }
 
 /**
- * Browsers cannot natively decode HEIC to a bitmap, so previews fall back to
- * the WASM decoder. The source is scaled before thumbnailing to keep the
- * full-resolution pixels short-lived.
+ * If native decoding fails, use the decoder registered for the detected source
+ * format. The destination format is deliberately absent: every source is
+ * reduced to the same fixed JPEG preview by `createThumbnail`.
  */
-async function generateWasmThumbnail(file: File): Promise<Blob | null> {
+async function generateFallbackThumbnail(file: File): Promise<Blob | null> {
   try {
     const buffer = await file.arrayBuffer()
     const format = detectFormat(buffer)
-    if (format !== 'heic') return null
+    if (!format) return null
     const source = await decodeImageData(buffer, format, {
       maxEdge: PREVIEW_DECODE_EDGE,
     })

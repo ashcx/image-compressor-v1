@@ -76,10 +76,10 @@ export function readDimensions(file: File): Promise<Dimensions | null> {
 }
 
 /**
- * Generates a small preview for a file on the metadata worker. Used lazily for
- * rows that scroll into view but are not part of the size-estimate sample, so
- * large batches pay only for the previews the user actually sees. Resolves
- * `null` when the image cannot be decoded.
+ * Generates a fixed small JPEG preview from the source file on the metadata
+ * worker. It intentionally accepts no target format: previews are independent
+ * of the selected destination and are used lazily for visible rows. Resolves
+ * `null` when the source cannot be decoded.
  */
 export function readThumbnail(file: File): Promise<Blob | null> {
   if (typeof Worker === 'undefined') return Promise.resolve(null)
