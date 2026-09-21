@@ -35,11 +35,14 @@ Estimates are guidance, not a guarantee. Final size depends on image content, di
 
 Compression is not guaranteed to reduce size. Some images and settings can produce an output larger than the original.
 
-## How the speed works
+## Fast and furious
+
+![](./public/speed_measurements.svg)
+** Exact speed may differ between client hardware, as compression is done on-device and varies by system memory and CPU performance.  
 
 Compressor uses batch-level parallelism: each worker processes an independent image while the main thread remains available for painting and input. The worker pool is sized from available device signals and reduced for memory-heavy codecs.
 
-Common formats use native browser encoders where they are reliable. WebP defaults to libwebp WebAssembly encoding and offers an opt-in smaller-size mode using the native browser encoder when available. WebAssembly codecs provide portable paths for formats and browser combinations that do not have a suitable native encoder. Codec modules are loaded lazily, so selecting JPEG does not pay the startup cost for AVIF or HEIC.
+Common formats use native browser encoders where they are the best option. WebP defaults to libwebp WebAssembly encoding due to its faster speed with few tradeoffs and offers an opt-in smaller-size mode using the native browser encoder when available. WebAssembly codecs provide portable paths for formats and browser combinations that do not have a suitable native encoder. Codec modules are loaded lazily, so selecting JPEG does not pay the startup cost for AVIF or HEIC.
 
 The application also limits decoded image memory, samples large batches for estimates, virtualizes the results list, and stores completed outputs outside the active job state when the browser provides the Origin Private File System. These controls are intended to improve throughput without making the page unusable on constrained devices.
 
