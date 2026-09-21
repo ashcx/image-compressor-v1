@@ -1293,22 +1293,27 @@ const JobRow = memo(function JobRow({
       aria-setsize={setSize}
     >
       <div class="job__thumb">
-        {job.status === 'processing' ? (
-          <span class="job__spinner" />
-        ) : job.status === 'error' ? (
+        {job.status === 'error' ? (
           <span class="job__icon job__icon--error">!</span>
         ) : job.status === 'cancelled' ? (
           <span class="job__icon job__icon--cancelled" title="Cancelled">
             –
           </span>
         ) : job.thumbnailUrl ? (
-          <img
-            class={current ? '' : 'job__thumb--stale'}
-            src={job.thumbnailUrl}
-            alt=""
-            loading="lazy"
-            decoding="async"
-          />
+          <>
+            <img
+              class={current ? '' : 'job__thumb--stale'}
+              src={job.thumbnailUrl}
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
+            {job.status === 'processing' && (
+              <span class="job__spinner job__spinner--overlay" />
+            )}
+          </>
+        ) : job.status === 'processing' ? (
+          <span class="job__spinner" />
         ) : (
           <span class="job__icon job__icon--idle">…</span>
         )}
