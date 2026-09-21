@@ -44,6 +44,16 @@ describe('format specs', () => {
     }
   })
 
+  it('exposes fast and smaller-size WebP speed options', () => {
+    const webpSpeed = byKey(FORMAT_SPECS.webp.controls, 'speed')
+    expect(
+      webpSpeed?.kind === 'select'
+        ? webpSpeed.options.map((option) => option.label)
+        : [],
+    ).toEqual(['Fast', 'Smaller size (slower)'])
+    expect(webpSpeed?.default).toBe(0)
+  })
+
   it('labels the slow codecs', () => {
     expect(FORMAT_SPECS.avif.label).toBe('AVIF (slower)')
   })

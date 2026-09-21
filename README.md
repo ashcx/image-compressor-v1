@@ -29,7 +29,7 @@ Estimates are guidance, not a guarantee. Final size depends on image content, di
 | --- | --- | --- |
 | JPEG | Photographs and broad compatibility | Lossy; does not preserve transparency |
 | PNG | Screenshots, graphics, and transparency | Native lossless mode by default; slower lossless and lossy modes are available |
-| WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality; uses its own quality presets |
+| WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality; offers fast WASM and slower native-browser size modes |
 | AVIF | Very small modern web images | Strong size potential, but encoding is slower and browser support is newer |
 | HEIC | Apple-ecosystem compatibility | Uses a portable WebAssembly codec for consistent output; encoding is slower |
 
@@ -39,7 +39,7 @@ Compression is not guaranteed to reduce size. Some images and settings can produ
 
 Compressor uses batch-level parallelism: each worker processes an independent image while the main thread remains available for painting and input. The worker pool is sized from available device signals and reduced for memory-heavy codecs.
 
-Common formats use native browser encoders where they are reliable. WebAssembly codecs provide portable paths for formats and browser combinations that do not have a suitable native encoder. Codec modules are loaded lazily, so selecting JPEG does not pay the startup cost for AVIF or HEIC.
+Common formats use native browser encoders where they are reliable. WebP defaults to fast libwebp WebAssembly encoding and offers an opt-in smaller-size mode using the native browser encoder when available. WebAssembly codecs provide portable paths for formats and browser combinations that do not have a suitable native encoder. Codec modules are loaded lazily, so selecting JPEG does not pay the startup cost for AVIF or HEIC.
 
 The application also limits decoded image memory, samples large batches for estimates, virtualizes the results list, and stores completed outputs outside the active job state when the browser provides the Origin Private File System. These controls are intended to improve throughput without making the page unusable on constrained devices.
 

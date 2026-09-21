@@ -58,7 +58,8 @@ Mobile memory figures are sizing rationale, not verified device limits.
 | Format | Encoder | When used |
 | --- | --- | --- |
 | JPEG | Native `OffscreenCanvas.convertToBlob` | Always in Chromium, Firefox, and Safari |
-| WebP | Native, otherwise `@jsquash/webp` | Native where supported; WebAssembly fallback on Safari |
+| WebP · Fast | `@jsquash/webp`, libwebp method 1 | Default portable path |
+| WebP · Smaller size | Native `OffscreenCanvas.convertToBlob`, otherwise `@jsquash/webp` | Opt-in slower path; falls back when native WebP is unavailable |
 | PNG mode 0 | Native `convertToBlob` | Default fast lossless mode |
 | PNG mode 1 | `@jsquash/png` + `@jsquash/oxipng` (level 0) | Opt-in lossless optimisation |
 | PNG mode 2 | `imagequant` (256 colours) | Opt-in lossy palette mode |
@@ -67,8 +68,10 @@ Mobile memory figures are sizing rationale, not verified device limits.
 The application probes native support once per MIME type because Safari's
 `convertToBlob` can silently return PNG for `image/webp`.
 
-The Safari WebP fallback uses libwebp `method: 1`. It measured roughly **3× faster** than
-the default method 4 for about **10% larger output**; method 3 was close to method 4.
+The default WebP path uses libwebp `method: 1`. It measured roughly **2.5× faster** than
+Chromium's native WebP path on the 26 MP sample while producing about **16% larger output** at
+quality 85, with effectively equal SSIM and PSNR. The smaller-size setting opts into that native
+path where the browser's MIME probe confirms support.
 
 AVIF and the compressed PNG modes are imported lazily, so the initial page load does not pay
 their WebAssembly startup cost unless the user selects them. ZIP output uses `fflate` with
@@ -91,8 +94,9 @@ why JPEG is the default output.
 Settings are defined in `src/lib/codecs/formats.ts`:
 
 - **JPEG:** quality presets **94 / 85 / 75 / 50**, default 75.
-- **WebP:** quality presets **98 / 92 / 85 / 70**, default 85. These are tuned separately
-  from JPEG — see [Quality presets and measured fidelity](#quality-presets-and-measured-fidelity).
+- **WebP:** quality presets **98 / 92 / 85 / 70**, default 85, plus **Fast** and **Smaller size
+  (slower)** speed settings. The quality presets are tuned separately from JPEG — see
+  [Quality presets and measured fidelity](#quality-presets-and-measured-fidelity).
 - **HEIC:** quality presets **80 / 58 / 51 / 43**, default 51; a single `ultrafast` speed
   preset.
 - **PNG:** mode 0 native lossless, default; mode 1 lossless optimisation; mode 2
@@ -184,8 +188,8 @@ These are single-photo figures with a JPEG-derived reference, which flatters JPE
 end. WebP and AVIF are tuned to stop short of their near-lossless cliffs (WebP 100 and
 AVIF 100), which multiply file size for little visible gain. WebP's lossy mode also tops out
 around 48 dB (quality 99), so its Best trails the other formats and quality 100 would jump to
-a lossless file. Safari's `@jsquash/webp` fallback is slower and roughly 10% larger than the
-native WebP numbers. Treat these as calibration anchors, not device guarantees. Regenerate
+a lossless file. The fast libwebp path is portable but can be larger than a browser's native
+WebP encoder. Treat these as calibration anchors, not device guarantees. Regenerate
 with `node bench/preset-quality.mjs /path/to/photo.jpg`.
 
 ## 2. Parallelism and UI responsiveness
@@ -229,7 +233,7 @@ point; the worker budget is a balance between throughput and responsiveness.
   | Path | Weight |
   | --- | ---: |
   | Native JPEG / PNG mode 0 | 2.5 |
-  | WebP (native on Chromium/Firefox, WASM on Safari) | 4 |
+  | WebP (WASM default or native smaller-size option) | 4 |
   | AVIF, PNG modes 1–2 | 5 |
 
 - Estimate decodes are capped at **2048 px** (~11 MB at 2048 × 1365) plus the 384/896 sample

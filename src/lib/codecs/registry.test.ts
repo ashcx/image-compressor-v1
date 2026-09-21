@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FORMAT_ORDER } from './formats'
-import { describeDecoder, getCodec } from './registry'
+import { describeDecoder, describeRenderer, getCodec } from './registry'
 import type { OutputFormat } from './types'
 
 const EXPECTED: Record<OutputFormat, { mimeType: string; extension: string }> =
@@ -35,5 +35,12 @@ describe('codec registry', () => {
       expect(await describeDecoder(format)).toBeTruthy()
     }
     expect(await describeDecoder('heic')).toContain('libheif')
+  })
+
+  it('reports the selected WebP encoder path', async () => {
+    expect(await describeRenderer('webp', undefined, 0)).toBe('WASM · libwebp')
+    expect(await describeRenderer('webp', undefined, 1)).toMatch(
+      /^(native|WASM · libwebp \(fallback\))$/,
+    )
   })
 })

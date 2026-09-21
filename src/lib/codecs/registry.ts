@@ -100,9 +100,9 @@ function wrap(buffer: ArrayBuffer, type: string): Blob {
   return new Blob([buffer], { type })
 }
 
-// JPEG uses the browser's native encoder when it is available. WebP always
-// imports libwebp lazily because its method-1 WASM path is the selected codec.
-// AVIF (and the PNG compression modes) pull their WASM in lazily too.
+// JPEG uses the browser's native encoder when it is available. WebP defaults
+// to libwebp method 1, with an opt-in native path for smaller output. AVIF
+// (and the PNG compression modes) pull their WASM in lazily too.
 const loaders: Record<OutputFormat, CodecLoader> = {
   jpeg: async () => ({
     format: 'jpeg',
@@ -147,9 +147,15 @@ const loaders: Record<OutputFormat, CodecLoader> = {
     mimeType: 'image/webp',
     extension: 'webp',
     encode: async (source, options) => {
-      // Use the fast libwebp path consistently across browsers. Native canvas
-      // WebP encoding is much slower on the measured desktop corpus and is
-      // not quality-equivalent enough to justify browser-dependent output.
+      if (options?.speed === 1 && (await canEncodeNatively('image/webp'))) {
+        return encodeCanvas(
+          source,
+          'image/webp',
+          (options?.quality ?? 75) / 100,
+        )
+      }
+      // The default is the fast, portable path. Browsers without native WebP
+      // support also use this path when the slower option is selected.
       const { encode } = await import('@jsquash/webp')
       return wrap(
         await encode(toImageData(source), {
@@ -204,17 +210,23 @@ export async function getCodec(format: OutputFormat): Promise<Codec> {
 
 /**
  * Human-readable encoder backend currently in use, for the diagnostics line.
- * `png` depends on its compression mode; JPEG reports native and WebP reports
- * its fixed libwebp WASM path.
+ * `png` depends on its compression mode; WebP reports the selected native or
+ * libwebp path.
  */
 export async function describeRenderer(
   format: OutputFormat,
   mode?: number,
+  speed?: number,
 ): Promise<string> {
   switch (format) {
     case 'jpeg':
       return (await canEncodeNatively('image/jpeg')) ? 'native' : 'unsupported'
     case 'webp':
+      if (speed === 1) {
+        return (await canEncodeNatively('image/webp'))
+          ? 'native'
+          : 'WASM · libwebp (fallback)'
+      }
       return 'WASM · libwebp'
     case 'png':
       if ((mode ?? 0) === 0) {

@@ -87,10 +87,12 @@ cost model.
 
 ### Native-first, lazy codec loading
 
-Codec modules are loaded only when a format needs them. JPEG and WebP use native browser
-encoding when the browser can provide it. The default PNG mode also uses the native browser
-encoder; slower lossless optimisation and lossy palette modes use their format-specific
-libraries. AVIF uses its WebAssembly codec.
+Codec modules are loaded only when a format needs them. JPEG uses native browser encoding when
+the browser can provide it. WebP defaults to libwebp method 1 through WebAssembly for a fast,
+portable path; its optional smaller-size speed setting uses the native browser encoder when
+available and falls back to libwebp otherwise. The default PNG mode also uses the native
+browser encoder; slower lossless optimisation and lossy palette modes use their
+format-specific libraries. AVIF uses its WebAssembly codec.
 
 Native support is probed because browsers can report support for a MIME type while returning
 another format in practice. WebAssembly fallbacks preserve functionality where a native
