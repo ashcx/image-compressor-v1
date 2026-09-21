@@ -58,7 +58,7 @@ Mobile memory figures are sizing rationale, not verified device limits.
 | Format | Encoder | When used |
 | --- | --- | --- |
 | JPEG | Native `OffscreenCanvas.convertToBlob` | Always in Chromium, Firefox, and Safari |
-| WebP · Fast | `@jsquash/webp`, libwebp method 1 | Default portable path |
+| WebP · Default | `@jsquash/webp`, libwebp method 1 | Default portable path |
 | WebP · Smaller size | Native `OffscreenCanvas.convertToBlob`, otherwise `@jsquash/webp` | Opt-in slower path; falls back when native WebP is unavailable |
 | PNG mode 0 | Native `convertToBlob` | Default fast lossless mode |
 | PNG mode 1 | `@jsquash/png` + `@jsquash/oxipng` (level 0) | Opt-in lossless optimisation |
@@ -94,7 +94,7 @@ why JPEG is the default output.
 Settings are defined in `src/lib/codecs/formats.ts`:
 
 - **JPEG:** quality presets **94 / 85 / 75 / 50**, default 75.
-- **WebP:** quality presets **98 / 92 / 85 / 70**, default 85, plus **Fast** and **Smaller size
+- **WebP:** quality presets **98 / 92 / 85 / 70**, default 85, plus **Default** and **Smaller size
   (slower)** speed settings. The quality presets are tuned separately from JPEG — see
   [Quality presets and measured fidelity](#quality-presets-and-measured-fidelity).
 - **HEIC:** quality presets **80 / 58 / 51 / 43**, default 51; a single `ultrafast` speed
@@ -188,7 +188,7 @@ These are single-photo figures with a JPEG-derived reference, which flatters JPE
 end. WebP and AVIF are tuned to stop short of their near-lossless cliffs (WebP 100 and
 AVIF 100), which multiply file size for little visible gain. WebP's lossy mode also tops out
 around 48 dB (quality 99), so its Best trails the other formats and quality 100 would jump to
-a lossless file. The fast libwebp path is portable but can be larger than a browser's native
+a lossless file. The default libwebp path is portable but can be larger than a browser's native
 WebP encoder. Treat these as calibration anchors, not device guarantees. Regenerate
 with `node bench/preset-quality.mjs /path/to/photo.jpg`.
 
