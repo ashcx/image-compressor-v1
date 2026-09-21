@@ -14,7 +14,7 @@ It uses adaptive background workers to process independent images in parallel wh
 - **Useful at scale.** Virtualized results and bounded output storage keep large batches manageable instead of mounting every row or retaining every result in the page.
 - **No upload required.** Image processing happens locally in the browser; image bytes are not sent to a server.
 
-## How to use it
+## How to use
 
 1. Open the app and choose **Select images**, or drop images onto the drop area.
 2. Choose the output format and adjust its options.
@@ -56,7 +56,7 @@ The core workflow is intended for recent desktop and mobile versions of Chrome, 
 
 HEIC/HEIF input is decoded natively where the browser supports it and through WebAssembly otherwise. HEIC output uses the WebAssembly encoder. The app does not edit, crop, watermark, catalogue, or store an image history.
 
-## For developers
+## For developers/nerds
 
 Requirements: a current Node.js release and npm.
 
