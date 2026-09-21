@@ -48,8 +48,12 @@ internals.
 
 Selected files are read through a bounded file-buffer store. The app detects the input format,
 reads dimensions, and creates thumbnails and size estimates without sending the file away.
-Estimates use bounded sample decodes and format-specific calibration rather than running a
-full encode before the user starts the batch.
+Native preview decodes request the 96px target directly before storing a fixed JPEG. HEIC
+previews use a lightweight embedded JPEG thumbnail when one is present; otherwise the UI shows
+that a preview is unavailable rather than decoding the full primary image. Preview requests
+run on the metadata worker, are cancelled when compression starts, and resume only after all
+compression work has settled. Estimates use bounded sample decodes and format-specific
+calibration rather than running a full encode before the user starts the batch.
 
 ### 2. Scheduling
 

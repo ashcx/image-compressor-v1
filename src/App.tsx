@@ -87,6 +87,7 @@ interface BatchJob {
   originalSize: number
   status: JobStatus
   thumbnailUrl: string
+  thumbnailUnavailable: boolean
   outputStored: boolean
   outputExtension: string
   outputSize: number
@@ -496,6 +497,7 @@ async function loadThumbnail(id: string) {
     previewsPaused ||
     !job ||
     job.thumbnailUrl ||
+    job.thumbnailUnavailable ||
     (job.status !== 'estimated' && job.status !== 'done')
   ) {
     return
@@ -504,8 +506,14 @@ async function loadThumbnail(id: string) {
   previewRequests.add(id)
   cancelIdleTeardown()
   try {
-    const blob = await readThumbnail(job.file)
-    if (!blob || previewsPaused) return
+    const preview = await readThumbnail(job.file)
+    if (!preview || previewsPaused) return
+    if (preview.unavailable) {
+      updateJob(id, { thumbnailUnavailable: true })
+      return
+    }
+    const blob = preview.blob
+    if (!blob) return
     const current = getJob(id)
     if (
       !current ||
@@ -798,6 +806,7 @@ async function addFiles(fileList: FileList | File[] | null) {
       originalSize: file.size,
       status: 'queued',
       thumbnailUrl: '',
+      thumbnailUnavailable: false,
       outputStored: false,
       outputExtension: FORMAT_SPECS[targetFormat.value].extension,
       outputSize: 0,
@@ -1275,6 +1284,7 @@ const JobRow = memo(function JobRow({
     if (
       job &&
       !job.thumbnailUrl &&
+      !job.thumbnailUnavailable &&
       (job.status === 'estimated' || job.status === 'done')
     ) {
       onThumbnail(id)
@@ -1312,6 +1322,15 @@ const JobRow = memo(function JobRow({
               <span class="job__spinner job__spinner--overlay" />
             )}
           </>
+        ) : job.thumbnailUnavailable ? (
+          <span
+            class="job__preview-unavailable"
+            title="Preview unavailable"
+            role="img"
+            aria-label="Preview unavailable"
+          >
+            No preview
+          </span>
         ) : job.status === 'processing' ? (
           <span class="job__spinner" />
         ) : (

@@ -19,6 +19,7 @@ node bench/repeat-check.mjs --iterations 6 --count 300         # leak diagnostic
 node bench/repeat-check.mjs --iterations 6 --count 300 --clear # with clear between
 node bench/preset-quality.mjs /path/to/photo.jpg               # PSNR + SSIM per preset
 node bench/webp-compare.mjs /path/to/photo.jpg                 # native vs WASM WebP
+npm run benchmark:preview -- --repeats 3                        # preview strategy matrix
 ```
 
 Each scenario runs in a **fresh browser process**. Reusing one process across
@@ -104,6 +105,24 @@ module initialization.
 Use `--quality 75` and `--repeats 5` by default, or change them for a matched test. Compare
 both median time and output bytes: a faster WASM method may use a different compression
 trade-off and is not automatically equivalent to the browser's native output.
+
+## Preview strategy comparison
+
+`npm run benchmark:preview` uses the 25.9MP `test_pictures/IMG_1792.jpeg` fixture
+and creates matching JPEG, PNG, WebP, AVIF, and HEIC source variants through the
+app's codec registry. It compares:
+
+- `current-jpeg` — the current bounded native decode followed by a fixed 96px JPEG.
+- `small-bitmap-canvas` — native or fallback decode requested directly at the 96px
+  display size, without JPEG encoding.
+- `small-jpeg` — the same small decode followed by JPEG encoding.
+
+The report includes cold and warm worker timings, output bytes, tracked RGBA raster
+memory, a synthetic offscreen-scroll frame-gap probe, and Chromium page-heap samples
+when available. The HEIC row is a codec-fallback test; the current WASM decoder does
+not support reduced-size decode, so it reports the full decoded source surface even
+when the requested display output is only 96px. This is a controlled microbenchmark,
+not a claim about every browser or device.
 
 ## Metrics
 

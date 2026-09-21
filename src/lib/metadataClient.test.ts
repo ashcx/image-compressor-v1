@@ -10,12 +10,15 @@ class FakeWorker {
   onmessage: ((event: MessageEvent) => void) | null = null
   onerror: ((event: ErrorEvent) => void) | null = null
   terminated = false
+  lastMessage: unknown
 
   constructor() {
     FakeWorker.instances.push(this)
   }
 
-  postMessage(): void {}
+  postMessage(message: unknown): void {
+    this.lastMessage = message
+  }
 
   terminate(): void {
     this.terminated = true
@@ -54,5 +57,26 @@ describe('metadata thumbnail cancellation', () => {
 
     cancelThumbnailRequests()
     await expect(second).resolves.toBeNull()
+  })
+
+  it('preserves an explicit unavailable-preview result', async () => {
+    vi.stubGlobal('Worker', FakeWorker)
+
+    const pending = readThumbnail(new Blob() as File)
+    const worker = FakeWorker.instances[0]
+    const jobId = (worker.lastMessage as { jobId: string }).jobId
+    worker.onmessage?.({
+      data: {
+        type: 'thumbnail',
+        jobId,
+        thumbnailBlob: null,
+        thumbnailUnavailable: true,
+      },
+    } as MessageEvent)
+
+    await expect(pending).resolves.toEqual({
+      blob: null,
+      unavailable: true,
+    })
   })
 })

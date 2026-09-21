@@ -2,7 +2,17 @@ import type { Dimensions } from './dimensions'
 
 type MetadataResponse =
   | { type: 'dimensions'; jobId: string; width: number; height: number }
-  | { type: 'thumbnail'; jobId: string; thumbnailBlob: Blob | null }
+  | {
+      type: 'thumbnail'
+      jobId: string
+      thumbnailBlob: Blob | null
+      thumbnailUnavailable: boolean
+    }
+
+export interface ThumbnailResult {
+  blob: Blob | null
+  unavailable: boolean
+}
 
 let worker: Worker | null = null
 let counter = 0
@@ -10,7 +20,10 @@ const pendingDimensions = new Map<
   string,
   (dimensions: Dimensions | null) => void
 >()
-const pendingThumbnails = new Map<string, (blob: Blob | null) => void>()
+const pendingThumbnails = new Map<
+  string,
+  (result: ThumbnailResult | null) => void
+>()
 
 function getWorker(): Worker {
   if (!worker) {
@@ -24,7 +37,10 @@ function getWorker(): Worker {
         const resolve = pendingThumbnails.get(data.jobId)
         if (!resolve) return
         pendingThumbnails.delete(data.jobId)
-        resolve(data.thumbnailBlob)
+        resolve({
+          blob: data.thumbnailBlob,
+          unavailable: data.thumbnailUnavailable,
+        })
         return
       }
       const resolve = pendingDimensions.get(data.jobId)
@@ -78,10 +94,11 @@ export function readDimensions(file: File): Promise<Dimensions | null> {
 /**
  * Generates a fixed small JPEG preview from the source file on the metadata
  * worker. It intentionally accepts no target format: previews are independent
- * of the selected destination and are used lazily for visible rows. Resolves
- * `null` when the source cannot be decoded.
+ * of the selected destination and are used lazily for visible rows. HEIC can
+ * resolve as unavailable when no lightweight embedded JPEG thumbnail exists.
+ * Resolves `null` only when the request is cancelled or the worker is absent.
  */
-export function readThumbnail(file: File): Promise<Blob | null> {
+export function readThumbnail(file: File): Promise<ThumbnailResult | null> {
   if (typeof Worker === 'undefined') return Promise.resolve(null)
 
   const jobId = `thumb-${++counter}`
