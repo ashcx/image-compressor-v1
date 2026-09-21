@@ -91,7 +91,7 @@ why JPEG is the default output.
 Settings are defined in `src/lib/codecs/formats.ts`:
 
 - **JPEG:** quality presets **94 / 85 / 75 / 50**, default 75.
-- **WebP:** quality presets **96 / 92 / 85 / 70**, default 85. These are tuned separately
+- **WebP:** quality presets **98 / 92 / 85 / 70**, default 85. These are tuned separately
   from JPEG — see [Quality presets and measured fidelity](#quality-presets-and-measured-fidelity).
 - **HEIC:** quality presets **80 / 58 / 51 / 43**, default 51; a single `ultrafast` speed
   preset.
