@@ -1895,7 +1895,7 @@ export function App() {
               />
               <div>
                 <h1>Compressor</h1>
-                <p>Private, fast image compression in your browser.</p>
+                <p>The fastest way to process images online.</p>
               </div>
             </div>
             <div class="app__header-actions">
