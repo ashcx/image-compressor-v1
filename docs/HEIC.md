@@ -149,9 +149,17 @@ understates a HEIC **input**. The three scenarios therefore classify differently
 - **HEIC-05:** validate against iPhone/Android fixtures, portrait orientation,
   alpha, multi-image and malformed files, and compare native vs WASM output.
 
-## Open items before HEIC encoding can be scheduled
+## Build and calibration status
 
-1. Approval of an encoder backend and its license (kvazaar preferred over x265).
-2. HEVC patent-licensing decision for the distribution.
-3. A purpose-built WASM build with the chosen backend and a reproducible build script.
-4. Calibration data for HEIC quality presets, separate from AVIF.
+The items above are resolved:
+
+1. **Backend and license:** kvazaar (LGPL-2.1) was selected over x265 (GPL-2.0); the patched
+   build is vendored under `vendor/elheif/`.
+2. **Reproducible build:** pinned kvazaar v2.3.1 + libheif v1.18.2 + elheif patches, scripted
+   in [`wasm/heic/build.sh`](../wasm/heic/build.sh).
+3. **Calibration:** HEIC quality presets are calibrated separately from JPEG; measured
+   fidelity is in
+   [PERFORMANCE_AND_MEMORY.md](./PERFORMANCE_AND_MEMORY.md#quality-presets-and-measured-fidelity).
+
+Still tracked as release gates in [TODO.md](./TODO.md): the HEVC patent-licensing decision,
+the dependency-advisory process (SEC-01), and the licensing/security release gate.

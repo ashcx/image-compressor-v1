@@ -144,5 +144,5 @@ retained binary memory rather than a JS-heap leak.
 - `performance.memory` and `longtask` are Chromium-specific; other engines report nulls,
   and `performance.memory` returns a near-constant figure in headless Chromium.
 - Mobile worker budgets are policy, not measured on physical devices.
-- The app retains every finished output Blob until Sprint 4 (PERF-10, OPFS output store);
-  very large batches pay for that retained memory.
+- When OPFS is unavailable, completed outputs fall back to bounded in-memory blobs; very
+  large batches are then limited by the device output budget rather than the queue.

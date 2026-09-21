@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyJobChange,
   type BatchStats,
-  computeBatchStats,
   EMPTY_BATCH_STATS,
   recomputeReady,
   type StatsJob,
@@ -19,6 +18,15 @@ function job(overrides: Partial<StatsJob> = {}): StatsJob {
     hasBlob: false,
     ...overrides,
   }
+}
+
+// Correctness reference for the incremental reducer: a plain full recompute.
+function computeBatchStats(jobs: StatsJob[], outputKey: string): BatchStats {
+  let stats: BatchStats = { ...EMPTY_BATCH_STATS }
+  for (const statsJob of jobs) {
+    stats = applyJobChange(stats, null, statsJob, outputKey)
+  }
+  return stats
 }
 
 describe('computeBatchStats', () => {
