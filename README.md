@@ -1,8 +1,12 @@
 # Image Compressor
 
-[Image Compressor](https://ashcx.github.io/image-compressor-v1/) is a browser app for converting and resizing images in batches. It is
-built around one goal: make image processing fast, private, and useful on the device you
-already have.
+[Compressor](https://ashcx.github.io/image-compressor-v1/) is a browser app for converting and resizing images in batches. It is built around one goal: provide the fastest batch image encoding possible in a browser-based, cross-platform application. 
+
+To that end, Compressor utilizes a fully multi-parallel image encoding pipeline. JPEG and WebP encoding utilize up to 7 separate web worker threads (subject to device support and browser memory limits). AVIF and HEIC encoding utilize up to 4 separate worker threads. 
+
+Much effort was taken to tune the image encoding pipeline to best suit the processing and memory limits of different platforms. iPhones, iPads without an M-series processor, and Android devices with <8GB RAM have the most limited multi-processing capabilities due to their software- or hardware-enforced memory limitations.
+
+High-end Android and desktop devices with >=8GB RAM running Chromium-based browsers should get the best experience, though Firefox and desktop Safari also works fine. Compressor remains fully-functional on mobile WebKit with limited parallel processing due to browser-enforced memory limits. 
 
 [Open the live app](https://ashcx.github.io/image-compressor-v1/)
 
