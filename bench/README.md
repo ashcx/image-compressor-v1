@@ -18,6 +18,7 @@ npm run test:browser       # bounded row window + output download checks
 node bench/repeat-check.mjs --iterations 6 --count 300         # leak diagnostic
 node bench/repeat-check.mjs --iterations 6 --count 300 --clear # with clear between
 node bench/preset-quality.mjs /path/to/photo.jpg               # PSNR + SSIM per preset
+node bench/webp-compare.mjs /path/to/photo.jpg                 # native vs WASM WebP
 ```
 
 Each scenario runs in a **fresh browser process**. Reusing one process across
@@ -90,6 +91,19 @@ the QA corpus definition in [../docs/TEST-MATRIX.md](../docs/TEST-MATRIX.md):
 The generator produces a bounded pool of unique images per cohort and reuses them
 to reach the requested count, which keeps generation fast while still measuring
 per-file processing cost.
+
+## Native vs WASM WebP
+
+`node bench/webp-compare.mjs <image>` decodes one input and sends identical pixels to
+separate workers. It measures native `OffscreenCanvas.convertToBlob` and libwebp WASM
+methods 0–6 at the requested quality. The WASM `medianMs` includes the canvas-to-
+`ImageData` readback used by the app, while `medianEncodeMs` reports only the libwebp
+portion. The first call is reported separately as `coldMs`, because it includes WASM
+module initialization.
+
+Use `--quality 75` and `--repeats 5` by default, or change them for a matched test. Compare
+both median time and output bytes: a faster WASM method may use a different compression
+trade-off and is not automatically equivalent to the browser's native output.
 
 ## Metrics
 

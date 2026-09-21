@@ -76,10 +76,10 @@ export function readDimensions(file: File): Promise<Dimensions | null> {
 }
 
 /**
- * Generates a small preview for a file on the metadata worker. Used lazily for
- * rows that scroll into view but are not part of the size-estimate sample, so
- * large batches pay only for the previews the user actually sees. Resolves
- * `null` when the image cannot be decoded.
+ * Generates a fixed small JPEG preview from the source file on the metadata
+ * worker. It intentionally accepts no target format: previews are independent
+ * of the selected destination and are used lazily for visible rows. Resolves
+ * `null` when the source cannot be decoded.
  */
 export function readThumbnail(file: File): Promise<Blob | null> {
   if (typeof Worker === 'undefined') return Promise.resolve(null)
@@ -89,4 +89,26 @@ export function readThumbnail(file: File): Promise<Blob | null> {
     pendingThumbnails.set(jobId, resolve)
     getWorker().postMessage({ type: 'thumbnail', jobId, file })
   })
+}
+
+/**
+ * Cancels thumbnail work before compression starts. Terminating the metadata
+ * worker is intentional: an in-flight decode must not continue consuming CPU
+ * while the codec pool is compressing the batch. Missing previews are retried
+ * after compression resumes.
+ */
+export function cancelThumbnailRequests(): void {
+  if (pendingThumbnails.size === 0) return
+
+  const active = worker
+  worker = null
+  active?.terminate()
+
+  for (const resolve of pendingThumbnails.values()) resolve(null)
+  pendingThumbnails.clear()
+
+  // The metadata worker also serves dimension reads. Resolve any that shared
+  // the terminated worker so they cannot leave callers waiting forever.
+  for (const resolve of pendingDimensions.values()) resolve(null)
+  pendingDimensions.clear()
 }
