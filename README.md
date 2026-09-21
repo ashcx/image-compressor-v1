@@ -1,6 +1,8 @@
 # Compressor
 
-[Compressor](https://ashcx.github.io/image-compressor-v1/) is a speed-first browser image compressor for converting, resizing, and processing images in batches.
+[Compressor](https://ashcx.github.io/image-compressor-v1/) is a speed-first, browser-based, cross-platform image compressor for converting, resizing, and processing images.
+
+You can process one image, or a hundred more. Compressor is done before you know it. 
 
 It uses adaptive background workers to process independent images in parallel while keeping the interface responsive. JPEG, PNG, WebP, AVIF, and HEIC are supported, with format-specific quality controls and batch downloads.
 
