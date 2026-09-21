@@ -6,7 +6,43 @@ export interface ZipStore {
 }
 
 // Timestamped per app session so two tabs never share the same OPFS file.
-const ZIP_FILE_NAME = `image-compressor-${Date.now().toString(36)}.zip`
+export const ZIP_FILE_PREFIX = 'image-compressor-'
+const ZIP_FILE_NAME = `${ZIP_FILE_PREFIX}${Date.now().toString(36)}.zip`
+export const STALE_ZIP_MS = 24 * 60 * 60 * 1000
+
+function zipTimestamp(name: string): number | null {
+  if (!name.startsWith(ZIP_FILE_PREFIX) || !name.endsWith('.zip')) return null
+  const stamp = Number.parseInt(
+    name.slice(ZIP_FILE_PREFIX.length, -'.zip'.length),
+    36,
+  )
+  return Number.isFinite(stamp) ? stamp : null
+}
+
+/**
+ * Best-effort removal of zip scratch files abandoned by earlier sessions (for
+ * example a crashed tab). The current session's file is left alone.
+ */
+async function removeStaleZipFiles(
+  root: FileSystemDirectoryHandle,
+  current: string,
+): Promise<void> {
+  const now = Date.now()
+  try {
+    for await (const [name, handle] of root.entries()) {
+      if (name === current || handle.kind !== 'file') continue
+      const created = zipTimestamp(name)
+      if (created === null || now - created < STALE_ZIP_MS) continue
+      try {
+        await root.removeEntry(name)
+      } catch {
+        // Another tab may still be writing it; leave it alone.
+      }
+    }
+  } catch {
+    // Iteration can fail on exotic OPFS implementations; nothing to sweep.
+  }
+}
 
 async function createMemoryStore(): Promise<ZipStore> {
   const parts: Uint8Array[] = []
@@ -39,6 +75,7 @@ export async function createZipStore(): Promise<ZipStore> {
   if (hasOpfs()) {
     try {
       const root = await navigator.storage.getDirectory()
+      void removeStaleZipFiles(root, ZIP_FILE_NAME)
       const handle = await root.getFileHandle(ZIP_FILE_NAME, {
         create: true,
       })
