@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   createOutputStore,
-  resetOutputStorage,
   SESSION_PREFIX,
   STALE_SESSION_MS,
 } from './outputStore'
@@ -148,18 +147,21 @@ describe('OPFS output store', () => {
   })
 })
 
-describe('resetOutputStorage', () => {
-  it('removes every app output directory and leaves others alone', async () => {
+describe('session scoping', () => {
+  it('clears only the current session directory', async () => {
     const root = new FakeDir({ failWrites: false })
-    root.dirs.set(`${SESSION_PREFIX}one`, new FakeDir(root.state))
-    root.dirs.set(`${SESSION_PREFIX}two`, new FakeDir(root.state))
-    root.dirs.set('unrelated', new FakeDir(root.state))
+    const other = new FakeDir(root.state)
+    other.files.set('keep.bin', new Blob(['keep']))
+    root.dirs.set(`${SESSION_PREFIX}other`, other)
     installOpfs(root)
 
-    await resetOutputStorage()
+    const store = await createOutputStore()
+    await store.put('a', new Blob(['hello']))
+    expect(await (await store.get('a'))?.text()).toBe('hello')
 
-    expect(root.dirs.has(`${SESSION_PREFIX}one`)).toBe(false)
-    expect(root.dirs.has(`${SESSION_PREFIX}two`)).toBe(false)
-    expect(root.dirs.has('unrelated')).toBe(true)
+    await store.clear()
+
+    expect(await store.get('a')).toBeNull()
+    expect(other.files.has('keep.bin')).toBe(true)
   })
 })

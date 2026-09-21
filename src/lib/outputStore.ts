@@ -188,28 +188,3 @@ export async function createOutputStore(
   const maxBytes = options.maxMemoryBytes ?? Number.POSITIVE_INFINITY
   return (await createOpfsStore(maxBytes)) ?? createMemoryOutputStore(maxBytes)
 }
-
-/**
- * Removes every output directory this app created, across all sessions, so a
- * reset leaves no app data behind. Safe to call when OPFS is unavailable.
- */
-export async function resetOutputStorage(): Promise<void> {
-  if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) {
-    return
-  }
-  try {
-    const root = await navigator.storage.getDirectory()
-    for await (const [name, handle] of root.entries()) {
-      if (handle.kind !== 'directory' || !name.startsWith(SESSION_PREFIX)) {
-        continue
-      }
-      try {
-        await root.removeEntry(name, { recursive: true })
-      } catch {
-        // Leave it for the next startup sweep.
-      }
-    }
-  } catch {
-    // No OPFS: nothing persistent to reset.
-  }
-}

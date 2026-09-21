@@ -120,14 +120,32 @@ async function thumbnailFromBitmap(bitmap: ImageBitmap): Promise<Blob> {
   }
 }
 
-function findMarker(
-  bytes: Uint8Array,
+const SCAN_CHUNK_BYTES = 256 * 1024
+
+/**
+ * Streaming marker search so a large HEIF is never fully materialized in the
+ * worker. Reads fixed-size slices with a one-byte overlap so a marker pair that
+ * straddles a chunk boundary is still found.
+ */
+async function findMarkerInFile(
+  file: File,
   start: number,
+  end: number,
   first: number,
   second: number,
-): number {
-  for (let index = start; index + 1 < bytes.length; index += 1) {
-    if (bytes[index] === first && bytes[index + 1] === second) return index
+): Promise<number> {
+  let offset = Math.max(0, start)
+  while (offset < end) {
+    const chunkEnd = Math.min(end, offset + SCAN_CHUNK_BYTES)
+    const chunk = new Uint8Array(
+      await file.slice(offset, chunkEnd).arrayBuffer(),
+    )
+    for (let index = 0; index + 1 < chunk.length; index += 1) {
+      if (chunk[index] === first && chunk[index + 1] === second) {
+        return offset + index
+      }
+    }
+    offset = chunkEnd === end ? end : Math.max(offset + 1, chunkEnd - 1)
   }
   return -1
 }
@@ -140,21 +158,34 @@ function findMarker(
  */
 async function embeddedJpegThumbnail(file: File): Promise<Blob | null> {
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer())
     let searchFrom = 0
     let candidates = 0
     while (candidates < MAX_EMBEDDED_THUMBNAIL_CANDIDATES) {
-      const start = findMarker(bytes, searchFrom, 0xff, 0xd8)
+      const start = await findMarkerInFile(
+        file,
+        searchFrom,
+        file.size,
+        0xff,
+        0xd8,
+      )
       if (start < 0) return null
-      const end = findMarker(bytes, start + 2, 0xff, 0xd9)
-      if (end < 0) return null
-      searchFrom = end + 2
+      // Bound the end search so an oversized candidate is skipped without
+      // holding its bytes; matches the previous 2 MB budget.
+      const limit = Math.min(file.size, start + MAX_EMBEDDED_THUMBNAIL_BYTES)
+      const end = await findMarkerInFile(file, start + 2, limit, 0xff, 0xd9)
       candidates += 1
-      if (end + 2 - start > MAX_EMBEDDED_THUMBNAIL_BYTES) continue
+      if (end < 0) {
+        searchFrom = limit
+        continue
+      }
+      searchFrom = end + 2
 
-      const candidate = new Blob([bytes.slice(start, end + 2)], {
-        type: 'image/jpeg',
-      })
+      const candidate = new Blob(
+        [await file.slice(start, end + 2).arrayBuffer()],
+        {
+          type: 'image/jpeg',
+        },
+      )
       try {
         return await thumbnailFromBitmap(await decodePreview(candidate))
       } catch {

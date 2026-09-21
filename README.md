@@ -54,7 +54,7 @@ The committed benchmark references include 500- and 1,000-file synthetic cohorts
 
 The conversion pipeline runs in the browser using Web Workers, WebAssembly, and native browser image encoders. The application does not send selected image bytes to a server; the hosting service only delivers the app's static files.
 
-The core workflow is intended for recent desktop and mobile versions of Chrome, Firefox, and Safari. Browser capabilities differ, especially for AVIF, HEIC, large batches, folder saving, and available memory. ZIP download is the compatibility fallback when folder saving is unavailable.
+The core workflow requires the OffscreenCanvas API and is intended for Chrome or Edge 69+, Firefox 105+, and Safari 16.4 or newer. Firefox has not been validated as thoroughly as Chromium and Safari, so the app shows a one-time warning there. Browser capabilities differ, especially for AVIF, HEIC, large batches, folder saving, and available memory. ZIP download is the compatibility fallback when folder saving is unavailable.
 
 HEIC/HEIF input is decoded natively where the browser supports it and through WebAssembly otherwise. HEIC output uses the WebAssembly encoder. The app does not edit, crop, watermark, catalogue, or store an image history.
 

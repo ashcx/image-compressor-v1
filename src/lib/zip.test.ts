@@ -1,11 +1,84 @@
 import { unzipSync } from 'fflate'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { createStreamingZip, uniqueEntryName, ZipTooLargeError } from './zip'
-import { resetZipStore } from './zipStore'
+import {
+  createZipStore,
+  resetZipStore,
+  STALE_ZIP_MS,
+  ZIP_FILE_PREFIX,
+} from './zipStore'
+
+const originalNavigator = globalThis.navigator
+
+function fakeOpfs(initial: Record<string, Blob>) {
+  const files = new Map(Object.entries(initial))
+  const root = {
+    async getFileHandle(name: string) {
+      return {
+        async createWritable() {
+          const chunks: BlobPart[] = []
+          return {
+            async write(chunk: BlobPart) {
+              chunks.push(chunk)
+            },
+            async close() {
+              files.set(name, new Blob(chunks))
+            },
+            async abort() {},
+          }
+        },
+        async getFile() {
+          return files.get(name) ?? new Blob([])
+        },
+      }
+    },
+    async removeEntry(name: string) {
+      if (!files.delete(name)) throw new DOMException('NotFoundError')
+    },
+    async *entries(): AsyncGenerator<[string, { kind: 'file' }]> {
+      for (const name of files.keys()) yield [name, { kind: 'file' }]
+    },
+  }
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { storage: { getDirectory: async () => root } },
+    configurable: true,
+    writable: true,
+  })
+  return { files }
+}
+
+afterEach(() => {
+  Object.defineProperty(globalThis, 'navigator', {
+    value: originalNavigator,
+    configurable: true,
+    writable: true,
+  })
+})
 
 describe('resetZipStore', () => {
   it('is a no-op without OPFS', async () => {
     await expect(resetZipStore()).resolves.toBeUndefined()
+  })
+})
+
+describe('createZipStore stale scratch sweep', () => {
+  it('removes abandoned zip files but keeps fresh and unrelated files', async () => {
+    const stale = `${ZIP_FILE_PREFIX}${(Date.now() - 2 * STALE_ZIP_MS).toString(36)}.zip`
+    const fresh = `${ZIP_FILE_PREFIX}${Date.now().toString(36)}.zip`
+    const { files } = fakeOpfs({
+      [stale]: new Blob(['stale']),
+      [fresh]: new Blob(['fresh']),
+      'unrelated.bin': new Blob(['keep']),
+    })
+
+    const store = await createZipStore()
+    await store.write(new Uint8Array([1, 2, 3]))
+    await store.close()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(files.has(stale)).toBe(false)
+    expect(files.has(fresh)).toBe(true)
+    expect(files.has('unrelated.bin')).toBe(true)
   })
 })
 
