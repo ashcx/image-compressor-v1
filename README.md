@@ -14,7 +14,7 @@ It uses adaptive background workers to process independent images in parallel wh
 - **Useful at scale.** Virtualized results and bounded output storage keep large batches manageable instead of mounting every row or retaining every result in the page.
 - **No upload required.** Image processing happens locally in the browser; image bytes are not sent to a server.
 
-## How to use
+## How to use (in case you've been living under a rock)
 
 1. Open the app and choose **Select images**, or drop images onto the drop area.
 2. Choose the output format and adjust its options.
@@ -56,7 +56,7 @@ The core workflow is intended for recent desktop and mobile versions of Chrome, 
 
 HEIC/HEIF input is decoded natively where the browser supports it and through WebAssembly otherwise. HEIC output uses the WebAssembly encoder. The app does not edit, crop, watermark, catalogue, or store an image history.
 
-## For developers/nerds
+## For the nerds out there
 
 Requirements: a current Node.js release and npm.
 
@@ -82,7 +82,7 @@ The main source areas are:
 - `src/lib/*.test.ts` — unit tests for the non-UI modules
 - `bench/` — Playwright benchmark harness, fixture generator, and committed baselines
 
-## Further documentation
+## Further documentation (got em' receipts)
 
 - [Architecture](./docs/ARCHITECTURE.md) — processing pipeline, design choices, and trade-offs
 - [Performance and memory](./docs/PERFORMANCE_AND_MEMORY.md) — measured encode times, output sizes, memory model, worker scaling, and estimate accuracy
@@ -91,7 +91,7 @@ The main source areas are:
 - [HEIC decision](./docs/HEIC.md) — decoder/encoder feasibility, licensing, and security
 - [Scrum TODO roadmap](./docs/TODO.md) — sprint backlog, story points, acceptance criteria, and HEIC delivery work
 
-## Known limitations
+## Known limitations 
 
 - Browser memory limits constrain very large images and batches, especially on iOS / iPadOS devices due to WebKit limitations.
 - Output orientation is normalized into the pixels, but EXIF, GPS, XMP, ICC, depth maps, burst frames, and auxiliary images are not preserved; only the primary still image is converted.
