@@ -453,7 +453,11 @@ let rendererToken = 0
 
 async function refreshRenderer() {
   const token = ++rendererToken
-  const label = await describeRenderer(targetFormat.value, settings.value.mode)
+  const label = await describeRenderer(
+    targetFormat.value,
+    settings.value.mode,
+    settings.value.speed,
+  )
   if (token === rendererToken) renderer.value = label
 }
 
@@ -949,9 +953,9 @@ function changeControl(key: ControlKey, value: number) {
   } else {
     applyWorkerBudget()
     void refreshRenderer()
-    // PNG compression mode switches between the native, oxipng, and imagequant
-    // codecs, so warm the newly selected one.
-    if (key === 'mode') {
+    // PNG compression mode and WebP speed switch codec backends, so warm the
+    // newly selected path.
+    if (key === 'mode' || (targetFormat.value === 'webp' && key === 'speed')) {
       warmImage({ targetFormat: targetFormat.value, ...settings.value })
     }
     scheduleSampleReestimate()
@@ -1891,7 +1895,7 @@ export function App() {
               />
               <div>
                 <h1>Compressor</h1>
-                <p>Private, fast image compression in your browser.</p>
+                <p>The fastest way to process images online.</p>
               </div>
             </div>
             <div class="app__header-actions">

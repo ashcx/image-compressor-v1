@@ -10,8 +10,8 @@ const HEADROOM = 0.9
  * holds at once:
  *
  * - native JPEG/PNG: decoded bitmap + drawing canvas + encoder working set
- * - WebP: native on Chromium/Firefox, but WebAssembly on Safari, so charge the
- *   heavier path everywhere
+ * - WebP: libwebp WebAssembly on every browser, so charge the heavier path
+ *   everywhere
  * - AVIF and compressed PNG: `toImageData` plus the WASM RGBA/YUV buffers
  */
 export function formatMemoryWeight(format: OutputFormat, mode = 0): number {

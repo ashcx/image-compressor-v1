@@ -1,39 +1,27 @@
 # Compressor
 
-[Compressor](https://ashcx.github.io/image-compressor-v1/) is a browser app for converting and resizing images in batches. It is built around one goal: provide the fastest batch image encoding possible in a browser-based, cross-platform application. 
+[Compressor](https://ashcx.github.io/image-compressor-v1/) is a speed-first browser image compressor for converting, resizing, and processing images in batches.
 
-To that end, Compressor utilizes a fully multi-parallel image encoding pipeline. JPEG and WebP encoding utilize up to 7 separate web worker threads (subject to device support and browser memory limits). AVIF and HEIC encoding utilize up to 4 separate worker threads. 
-
-Much effort was taken to tune the image encoding pipeline to best suit the processing and memory limits of different platforms. iPhones, iPads without an M-series processor, and Android devices with <8GB RAM have the most limited multi-processing capabilities due to their software- or hardware-enforced memory limitations.
-
-High-end Android and desktop devices with >=8GB RAM running Chromium-based browsers should get the best experience, though Firefox and desktop Safari also works fine. Compressor remains fully-functional on mobile WebKit with limited parallel processing due to browser-enforced memory limits. 
+It uses adaptive background workers to process independent images in parallel while keeping the interface responsive. JPEG, PNG, WebP, AVIF, and HEIC are supported, with format-specific quality controls and batch downloads.
 
 [Open the live app](https://ashcx.github.io/image-compressor-v1/)
 
-## Why use it?
+## Why Compressor?
 
-- **Speed-first processing.** Common formats prefer native browser encoding, while separate
-  images are processed in parallel background workers that adapt to the device's hardware.
-- **No upload required.** Image bytes stay on your device. There is no upload step, server
-  queue, or network transfer of the images.
-- **Control over the result.** Choose the output format, quality, compression mode, and
-  maximum image size.
-- **Built for batches.** Add several images, see per-image estimates and progress, then
-  download results individually, as a ZIP, or into a folder where supported.
-
-The application is designed to be one of the fastest image-processing tools available in a
-browser. 
+- **Fast batch processing.** Independent images are processed concurrently, with worker capacity adapted to the device and selected codec.
+- **Responsive while it works.** Decoding, resizing, estimating, and encoding run away from the UI thread.
+- **One focused workflow.** Select images, choose an output format, review estimates, compress, and download.
+- **Useful at scale.** Virtualized results and bounded output storage keep large batches manageable instead of mounting every row or retaining every result in the page.
+- **No upload required.** Image processing happens locally in the browser; image bytes are not sent to a server.
 
 ## How to use it
 
 1. Open the app and choose **Select images**, or drop images onto the drop area.
 2. Choose the output format and adjust its options.
 3. Review the estimated sizes. For several files, select **Compress all**.
-4. Download individual results, download the batch as a ZIP, or use **Save to folder** where
-   the browser supports it.
+4. Download individual results, download the batch as a ZIP, or use **Save to folder** where the browser supports it.
 
-Estimates are guidance, not a guarantee. The final size depends on image content, dimensions,
-selected settings, and the browser codec.
+Estimates are guidance, not a guarantee. Final size depends on image content, dimensions, selected settings, and the browser codec.
 
 ## Output formats
 
@@ -41,29 +29,29 @@ selected settings, and the browser codec.
 | --- | --- | --- |
 | JPEG | Photographs and broad compatibility | Lossy; does not preserve transparency |
 | PNG | Screenshots, graphics, and transparency | Native lossless mode by default; slower lossless and lossy modes are available |
-| WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality; uses its own quality presets tuned separately from JPEG |
-| AVIF | Very small modern web images | Can produce excellent sizes, but encoding is slower and browser support is newer; uses its own quality presets tuned separately from JPEG |
-| HEIC | Apple-ecosystem compatibility | Decoding and encoding run through a WebAssembly codec, so every browser can read and write it; encoding is slower and uses its own quality presets tuned separately from JPEG |
+| WebP | A strong general-purpose web format | Usually smaller than JPEG at similar visual quality; offers fast WASM and slower native-browser size modes |
+| AVIF | Very small modern web images | Strong size potential, but encoding is slower and browser support is newer |
+| HEIC | Apple-ecosystem compatibility | Uses a portable WebAssembly codec for consistent output; encoding is slower |
 
-If an output is larger than the original, that is expected for some images and settings.
-Compression is not always a size reduction.
+Compression is not guaranteed to reduce size. Some images and settings can produce an output larger than the original.
+
+## How the speed works
+
+Compressor uses batch-level parallelism: each worker processes an independent image while the main thread remains available for painting and input. The worker pool is sized from available device signals and reduced for memory-heavy codecs.
+
+Common formats use native browser encoders where they are reliable. WebP defaults to fast libwebp WebAssembly encoding and offers an opt-in smaller-size mode using the native browser encoder when available. WebAssembly codecs provide portable paths for formats and browser combinations that do not have a suitable native encoder. Codec modules are loaded lazily, so selecting JPEG does not pay the startup cost for AVIF or HEIC.
+
+The application also limits decoded image memory, samples large batches for estimates, virtualizes the results list, and stores completed outputs outside the active job state when the browser provides the Origin Private File System. These controls are intended to improve throughput without making the page unusable on constrained devices.
+
+The committed benchmark references include 500- and 1,000-file synthetic cohorts. They are useful for regression comparisons, not guarantees for every device. Absolute speed depends on the browser, processor, memory bandwidth, image dimensions, and selected format.
 
 ## Privacy and browser support
 
-The conversion pipeline runs in the browser using Web Workers and WebAssembly or native
-browser image encoders. The application does not send selected image bytes to a server; the
-hosting service only delivers the app's static files.
+The conversion pipeline runs in the browser using Web Workers, WebAssembly, and native browser image encoders. The application does not send selected image bytes to a server; the hosting service only delivers the app's static files.
 
-The core workflow is intended for recent desktop and mobile versions of Chrome, Firefox, and
-Safari. Browser capabilities differ, especially for AVIF, large batches, folder saving, and
-available memory. ZIP download is the compatibility fallback when folder saving is not
-available.
+The core workflow is intended for recent desktop and mobile versions of Chrome, Firefox, and Safari. Browser capabilities differ, especially for AVIF, HEIC, large batches, folder saving, and available memory. ZIP download is the compatibility fallback when folder saving is unavailable.
 
-The app does not edit, crop, watermark, catalogue, or store an image history. Animated GIF,
-TIFF, and SVG are not current output targets. HEIC/HEIF input is decoded natively where the
-browser supports it (Safari) and through WebAssembly everywhere else; HEIC output always uses
-the WebAssembly encoder. Orientation is baked into the output pixels, but image metadata is not
-preserved (see the limitations below).
+HEIC/HEIF input is decoded natively where the browser supports it and through WebAssembly otherwise. HEIC output uses the WebAssembly encoder. The app does not edit, crop, watermark, catalogue, or store an image history.
 
 ## For developers
 
@@ -80,8 +68,7 @@ npm run preview   # serve the production build locally
 npm run benchmark # run the Playwright browser benchmarks against the build
 ```
 
-The project is a Vite + TypeScript + Preact application. GitHub Pages deploys the build from
-`main` through `.github/workflows/pages.yml`.
+The project is a Vite + TypeScript + Preact application. GitHub Pages deploys the build from `main` through `.github/workflows/pages.yml`.
 
 The main source areas are:
 
@@ -90,34 +77,22 @@ The main source areas are:
 - `src/lib/codecs/` — native and WebAssembly codec selection
 - `src/workers/` — decode, resize, estimate, and encode work away from the UI thread
 - `src/lib/*.test.ts` — unit tests for the non-UI modules
-- `bench/` — Playwright benchmark harness, fixture generator, and committed baseline
+- `bench/` — Playwright benchmark harness, fixture generator, and committed baselines
 
 ## Further documentation
 
-- [Architecture](./docs/ARCHITECTURE.md) — the processing pipeline, design choices, and
-  trade-offs.
-- [Performance and memory](./docs/PERFORMANCE_AND_MEMORY.md) — measured encode times,
-  output sizes, the decoded-canvas memory model, worker scaling, estimate accuracy, and
-  remaining measurement gaps.
-- [Benchmark harness](./bench/README.md) — how to run and compare the browser benchmarks.
-- [QA matrix](./docs/TEST-MATRIX.md) — test corpus, browser/device matrix, and release checks.
-- [HEIC decision](./docs/HEIC.md) — decoder/encoder feasibility, licensing, and security.
-- [Scrum TODO roadmap](./docs/TODO.md) — sprint backlog, story points, acceptance criteria,
-  tests, parallel work, and the HEIC delivery plan.
-
-## Current validation status
-
-The automated unit-test, typecheck, lint, and production-build commands are the local quality
-baseline. Browser-specific release confidence still requires checking codec support,
-large-memory behavior, folder saving, and cross-device differences on the actual release
-build.
+- [Architecture](./docs/ARCHITECTURE.md) — processing pipeline, design choices, and trade-offs
+- [Performance and memory](./docs/PERFORMANCE_AND_MEMORY.md) — measured encode times, output sizes, memory model, worker scaling, and estimate accuracy
+- [Benchmark harness](./bench/README.md) — how to run and compare browser benchmarks
+- [QA matrix](./docs/TEST-MATRIX.md) — test corpus, browser/device matrix, and release checks
+- [HEIC decision](./docs/HEIC.md) — decoder/encoder feasibility, licensing, and security
+- [Scrum TODO roadmap](./docs/TODO.md) — sprint backlog, story points, acceptance criteria, and HEIC delivery work
 
 ## Known limitations
 
 - Browser memory limits constrain very large images and batches.
-- Output orientation is normalised into the pixels, but EXIF, GPS, XMP, ICC, depth maps, burst
-  frames, and auxiliary images are not preserved; only the primary still image is converted.
+- Output orientation is normalized into the pixels, but EXIF, GPS, XMP, ICC, depth maps, burst frames, and auxiliary images are not preserved; only the primary still image is converted.
 - AVIF and some PNG modes can be substantially slower than JPEG or WebP.
 - Folder saving requires a browser File System Access API; otherwise use the ZIP download.
-- A ZIP stores image bytes without attempting to recompress them, so its size is close to the
-  combined output files plus ZIP metadata.
+- A ZIP stores image bytes without attempting to recompress them, so its size is close to the combined output files plus ZIP metadata.
+- Animated GIF, TIFF, and SVG are not current output targets.

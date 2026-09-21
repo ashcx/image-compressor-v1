@@ -22,6 +22,7 @@ interface ResultResponse {
   encodeMs?: number
   readbackMs?: number
   bytes: number
+  outputBlob: Blob
 }
 
 interface ReadyResponse {
@@ -83,6 +84,7 @@ scope.onmessage = async (event) => {
         backend: 'native',
         elapsedMs: performance.now() - started,
         bytes: blob.size,
+        outputBlob: blob,
       })
       return
     }
@@ -109,6 +111,7 @@ scope.onmessage = async (event) => {
       encodeMs: performance.now() - encodedStarted,
       readbackMs,
       bytes: encoded.byteLength,
+      outputBlob: new Blob([encoded], { type: 'image/webp' }),
     })
   } catch (error) {
     scope.postMessage({
