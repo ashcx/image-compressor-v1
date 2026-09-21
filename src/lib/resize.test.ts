@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampSizeToLimits,
+  MAX_WORKING_PIXELS,
   resolveDecodeSize,
   resolveDecodeTargetSize,
   resolveResize,
@@ -109,6 +110,15 @@ describe('clampSizeToLimits', () => {
         { maxPixels: 25_000_000 },
       ),
     ).toEqual({ width: 5000, height: 5000 })
+  })
+
+  it('supports the universal 100 MP working-resolution ceiling', () => {
+    expect(
+      clampSizeToLimits(
+        { width: 20000, height: 10000 },
+        { maxPixels: MAX_WORKING_PIXELS },
+      ),
+    ).toEqual({ width: 14142, height: 7071 })
   })
 
   it('ignores an infinite area ceiling', () => {

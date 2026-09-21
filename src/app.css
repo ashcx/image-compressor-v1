@@ -808,6 +808,11 @@ input[type="range"]:disabled {
   color: var(--bad);
 }
 
+.job__meta--warning {
+  color: var(--warning-text);
+  font-weight: 600;
+}
+
 .job__size {
   display: flex;
   flex: none;

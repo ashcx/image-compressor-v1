@@ -2,7 +2,7 @@ import { context2d, createCanvas, scaleImage } from '../lib/canvas'
 import type { OutputFormat } from '../lib/codecs/types'
 import { detectFormat } from '../lib/detect'
 import { type Dimensions, parseDimensions } from '../lib/dimensions'
-import { decodeImageData } from '../lib/image'
+import { BOUNDED_DECODE_ERROR, decodeImageData } from '../lib/image'
 import { createThumbnail, THUMBNAIL_SHORT_EDGE } from '../lib/thumbnail'
 
 interface DimensionsRequest {
@@ -102,8 +102,7 @@ async function decodePreview(
       resizeQuality: 'high',
     })
   } catch {
-    // Browsers without scaled decode fall back to a full decode.
-    return createImageBitmap(source)
+    throw new Error(BOUNDED_DECODE_ERROR)
   }
 }
 

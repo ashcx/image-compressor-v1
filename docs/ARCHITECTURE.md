@@ -125,7 +125,9 @@ replaces the estimate with the actual encoded byte count.
 ### Memory and data movement
 
 Thumbnails and estimate decodes use bounded dimensions. Full-resolution work happens only when
-the output is requested, with the configured maximum long edge applied at that point.
+the output is requested and the source is within the universal 100 MP, browser, and device
+limits. When bounded decoding is required but unsupported, the image fails safely instead of
+falling back to a potentially dangerous full-resolution allocation.
 
 Inputs can be transferred to workers for one-shot compression, while copies are retained only
 when a later pass needs the same bytes. Intermediate data is released in the worker, and the
