@@ -48,7 +48,7 @@ The application also limits decoded image memory, samples large batches for esti
 
 The committed benchmark references include 500- and 1,000-file synthetic cohorts. They are useful for regression comparisons, not guarantees for every device. Absolute speed depends on the browser, processor, memory bandwidth, image dimensions, and selected format.
 
-## Privacy and browser support
+## I don't spy with my little eye
 
 The conversion pipeline runs in the browser using Web Workers, WebAssembly, and native browser image encoders. The application does not send selected image bytes to a server; the hosting service only delivers the app's static files.
 
