@@ -24,8 +24,8 @@
   </defs>
 
   <rect width="1200" height="1370" fill="#1d1d1f"/>
-  <text class="title" x="80" y="116">Faster image encoding performance.</text>
-  <text class="eyebrow" x="80" y="158">Tested on MacBook Air M5 · 130 × 26MP mirrorless camera photos</text>
+  <text class="title" x="80" y="116">Fastest image encoding on the web.</text>
+  <text class="eyebrow" x="80" y="158">Compressor v1 · Tested on MacBook Air M5 · 130 × 26MP mirrorless camera photos</text>
   <line class="rule" x1="80" y1="204" x2="1120" y2="204"/>
 
   <text class="format" x="80" y="260">JPEG encoding</text>
