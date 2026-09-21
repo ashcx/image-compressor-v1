@@ -1,9 +1,12 @@
 export interface ZipStore {
   write(chunk: Uint8Array): Promise<void>
   close(): Promise<Blob>
+  /** Discards a partially written archive without committing it. */
+  abort(): Promise<void>
 }
 
-const ZIP_FILE_NAME = 'image-compressor.zip'
+// Timestamped per app session so two tabs never share the same OPFS file.
+const ZIP_FILE_NAME = `image-compressor-${Date.now().toString(36)}.zip`
 
 async function createMemoryStore(): Promise<ZipStore> {
   const parts: Uint8Array[] = []
@@ -13,6 +16,9 @@ async function createMemoryStore(): Promise<ZipStore> {
     },
     async close() {
       return new Blob(parts as BlobPart[], { type: 'application/zip' })
+    },
+    async abort() {
+      parts.length = 0
     },
   }
 }
@@ -49,6 +55,20 @@ export async function createZipStore(): Promise<ZipStore> {
             await writable.close()
           }
           return handle.getFile()
+        },
+        async abort() {
+          if (closed) return
+          closed = true
+          try {
+            await writable.abort()
+          } catch {
+            // The stream may already be errored; removal below still applies.
+          }
+          try {
+            await root.removeEntry(ZIP_FILE_NAME)
+          } catch {
+            // Nothing to remove.
+          }
         },
       }
     } catch {

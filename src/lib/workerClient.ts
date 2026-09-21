@@ -160,6 +160,9 @@ export function isPoolWarm(): boolean {
 
 export interface PoolStats {
   busy: number
+  /** Workers currently spawned (live). */
+  live: number
+  /** Configured worker budget the pool is allowed to grow to. */
   size: number
   /** Decoded-memory bytes currently held by busy workers. */
   cost: number
@@ -170,6 +173,7 @@ export interface PoolStats {
 export function getPoolStats(): PoolStats {
   return {
     busy: pool?.busyCount ?? 0,
+    live: pool?.workerCount ?? 0,
     size: resolvePoolSize(),
     cost: pool?.activeCostCount ?? 0,
     budget: resolveMemoryBudget(),

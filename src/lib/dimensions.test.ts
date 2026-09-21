@@ -176,6 +176,60 @@ function heic(...ispes: number[][]): ArrayBuffer {
   return concat(ftyp, meta)
 }
 
+function irotBox(steps: number): number[] {
+  return box('irot', [steps & 0x03])
+}
+
+function isobmff(
+  brand: string,
+  ipcoChildren: number[][],
+  extra: number[] = [],
+): ArrayBuffer {
+  const ipco = box('ipco', ipcoChildren.flat())
+  const iprp = box('iprp', ipco)
+  const meta = box('meta', [0, 0, 0, 0, ...iprp])
+  const ftyp = box('ftyp', [...ascii(brand), ...u32be(0), ...ascii(brand)])
+  return concat(ftyp, meta, extra)
+}
+
+function heicWithIrot(
+  steps: number,
+  width: number,
+  height: number,
+  extra: number[] = [],
+): ArrayBuffer {
+  return isobmff('heic', [irotBox(steps), ispeBox(width, height)], extra)
+}
+
+function tiffOrientation(orientation: number): number[] {
+  return [
+    0x49,
+    0x49,
+    0x2a,
+    0,
+    8,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0x12,
+    0x01,
+    3,
+    0,
+    1,
+    0,
+    0,
+    0,
+    orientation,
+    0,
+    0,
+    0,
+    0,
+    0,
+  ]
+}
+
 describe('parseDimensions', () => {
   it('parses PNG dimensions from IHDR', () => {
     expect(parseDimensions(png(640, 480))).toEqual({
@@ -237,6 +291,31 @@ describe('parseDimensions', () => {
     expect(
       parseDimensions(heic(ispeBox(160, 120), ispeBox(4032, 3024))),
     ).toEqual({ width: 4032, height: 3024 })
+  })
+
+  it('swaps HEIC dimensions for a 90-degree container rotation', () => {
+    expect(parseDimensions(heicWithIrot(1, 4032, 3024))).toEqual({
+      width: 3024,
+      height: 4032,
+    })
+  })
+
+  it('keeps HEIC dimensions for a 180-degree container rotation', () => {
+    expect(parseDimensions(heicWithIrot(2, 4032, 3024))).toEqual({
+      width: 4032,
+      height: 3024,
+    })
+  })
+
+  it('swaps AVIF dimensions for a 270-degree container rotation', () => {
+    expect(
+      parseDimensions(isobmff('avif', [irotBox(3), ispeBox(1920, 1080)])),
+    ).toEqual({ width: 1080, height: 1920 })
+  })
+
+  it('does not double-swap when EXIF and container rotation compose', () => {
+    const buffer = heicWithIrot(1, 4032, 3024, tiffOrientation(6))
+    expect(parseDimensions(buffer)).toEqual({ width: 4032, height: 3024 })
   })
 
   it('returns null for an empty buffer', () => {

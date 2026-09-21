@@ -1,5 +1,18 @@
 import type { ImageSource } from './codecs/types'
 
+/**
+ * True when the browser exposes the OffscreenCanvas API the whole encode
+ * pipeline depends on. OffscreenCanvas is supported by Chrome/Edge 69+,
+ * Firefox 105+, and Safari 16.4+; older browsers fail on every job, so the app
+ * gates intake instead.
+ */
+export function supportsOffscreenCanvas(): boolean {
+  return (
+    typeof OffscreenCanvas !== 'undefined' &&
+    typeof OffscreenCanvas.prototype.convertToBlob === 'function'
+  )
+}
+
 export function createCanvas(width: number, height: number): OffscreenCanvas {
   return new OffscreenCanvas(width, height)
 }

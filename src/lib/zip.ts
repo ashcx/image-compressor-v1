@@ -51,6 +51,17 @@ export async function createStreamingZip(
   let pending: Uint8Array[] = []
   let size = 0
   let streamError: Error | null = null
+  let aborted = false
+
+  const abortStore = async () => {
+    if (aborted) return
+    aborted = true
+    try {
+      await store.abort()
+    } catch {
+      // Best effort: the archive is already unusable at this point.
+    }
+  }
 
   const zip = new Zip((error, chunk) => {
     if (error) {
@@ -96,15 +107,25 @@ export async function createStreamingZip(
       return size
     },
     async add(name, data) {
-      if (streamError) throw streamError
-      const entry = new ZipPassThrough(name)
-      zip.add(entry)
-      await pushEntry(entry, data)
+      try {
+        if (streamError) throw streamError
+        const entry = new ZipPassThrough(name)
+        zip.add(entry)
+        await pushEntry(entry, data)
+      } catch (error) {
+        await abortStore()
+        throw error
+      }
     },
     async finish() {
-      zip.end()
-      await flush()
-      return store.close()
+      try {
+        zip.end()
+        await flush()
+        return await store.close()
+      } catch (error) {
+        await abortStore()
+        throw error
+      }
     },
   }
 }

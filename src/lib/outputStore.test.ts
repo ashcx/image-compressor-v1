@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createMemoryOutputStore,
-  createOutputStore,
-  resetOutputStorage,
-} from './outputStore'
+import { createMemoryOutputStore, createOutputStore } from './outputStore'
 
 const blob = (text: string) => new Blob([text])
 
@@ -69,7 +65,10 @@ describe('createOutputStore', () => {
     expect(await store.get('x')).toBeNull()
   })
 
-  it('resets without OPFS as a no-op', async () => {
-    await expect(resetOutputStorage()).resolves.toBeUndefined()
+  it('clears a memory store without OPFS', async () => {
+    const store = await createOutputStore()
+    await store.put('x', blob('hi'))
+    await store.clear()
+    expect(await await store.get('x')).toBeNull()
   })
 })

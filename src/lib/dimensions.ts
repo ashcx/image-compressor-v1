@@ -199,7 +199,8 @@ function collectBoxes(
   return found
 }
 
-function parseAvif(view: DataView): Dimensions | null {
+/** Locates the `meta/iprp/ipco` item-property container shared by HEIF files. */
+function findIpco(view: DataView): BoxLocation | null {
   const end = view.byteLength
   const meta = findBox(view, 0, end, 'meta')
   if (meta === null) return null
@@ -212,12 +213,38 @@ function parseAvif(view: DataView): Dimensions | null {
   )
   if (iprp === null) return null
 
-  const ipco = findBox(
+  return findBox(
     view,
     iprp.start + iprp.headerSize,
     iprp.start + iprp.size,
     'ipco',
   )
+}
+
+/**
+ * True when the container rotates the primary image by 90 or 270 degrees. HEIF
+ * stores this as an `irot` item property; the payload's low two bits are the
+ * anti-clockwise angle in 90-degree steps, so odd steps transpose the axes.
+ * `imir` mirrors without swapping width and height and is ignored here.
+ */
+function heifRotationSwaps(view: DataView): boolean {
+  const ipco = findIpco(view)
+  if (ipco === null) return false
+
+  for (const irot of collectBoxes(
+    view,
+    ipco.start + ipco.headerSize,
+    ipco.start + ipco.size,
+    'irot',
+  )) {
+    const value = readU8(view, irot.start + irot.headerSize)
+    if (value !== null && (value & 0x03) % 2 === 1) return true
+  }
+  return false
+}
+
+function parseAvif(view: DataView): Dimensions | null {
+  const ipco = findIpco(view)
   if (ipco === null) return null
 
   const ispe = findBox(
@@ -241,24 +268,7 @@ function parseAvif(view: DataView): Dimensions | null {
  * thumbnail and the primary image), so the largest one is used.
  */
 function parseHeif(view: DataView): Dimensions | null {
-  const end = view.byteLength
-  const meta = findBox(view, 0, end, 'meta')
-  if (meta === null) return null
-
-  const iprp = findBox(
-    view,
-    meta.start + meta.headerSize + 4,
-    meta.start + meta.size,
-    'iprp',
-  )
-  if (iprp === null) return null
-
-  const ipco = findBox(
-    view,
-    iprp.start + iprp.headerSize,
-    iprp.start + iprp.size,
-    'ipco',
-  )
+  const ipco = findIpco(view)
   if (ipco === null) return null
 
   let best: Dimensions | null = null
@@ -304,10 +314,14 @@ export function parseDimensions(buffer: ArrayBuffer): Dimensions | null {
     })()
     if (dimensions === null) return null
 
-    // Header dimensions are stored unrotated; swap them for orientations that
-    // transpose the image so they match the oriented pixels.
-    const orientation = readExifOrientation(buffer, format)
-    return orientationSwapsAxes(orientation)
+    // Header dimensions are stored unrotated. The EXIF orientation tag and the
+    // HEIF container `irot` transform can each transpose them; the app applies
+    // the container transform during decode and the EXIF tag on the WASM path,
+    // so the two compose and only their XOR swaps the axes.
+    const exifSwaps = orientationSwapsAxes(readExifOrientation(buffer, format))
+    const containerSwaps =
+      format === 'heic' || format === 'avif' ? heifRotationSwaps(view) : false
+    return exifSwaps !== containerSwaps
       ? { width: dimensions.height, height: dimensions.width }
       : dimensions
   } catch {

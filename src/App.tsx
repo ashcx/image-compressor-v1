@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import addImageIcon from '../assets/add-image.svg'
 import settingsIcon from '../assets/settings.svg'
 import type { JobStatus } from './lib/batchStats'
+import { supportsOffscreenCanvas } from './lib/canvas'
 import {
   type ControlKey,
   FORMAT_ORDER,
@@ -15,7 +16,7 @@ import {
 } from './lib/codecs/formats'
 import { describeRenderer } from './lib/codecs/registry'
 import type { OutputFormat, ResizeOptions } from './lib/codecs/types'
-import { getDeviceProfile } from './lib/device'
+import { getDeviceProfile, getDeviceSignals } from './lib/device'
 import {
   averageRatioSamples,
   deriveEstimate,
@@ -41,11 +42,7 @@ import {
   readDimensions,
   readThumbnail,
 } from './lib/metadataClient'
-import {
-  createOutputStore,
-  type OutputStore,
-  resetOutputStorage,
-} from './lib/outputStore'
+import { createOutputStore, type OutputStore } from './lib/outputStore'
 import { compatibilityMode } from './lib/preferences'
 import {
   MAX_WORKING_PIXELS,
@@ -194,6 +191,37 @@ const batchWarning = signal('')
 const importing = signal(false)
 const settingsOpen = signal(false)
 
+// OffscreenCanvas gates the whole encode pipeline. Without it every job would
+// fail, so intake is disabled and the supported versions are named instead.
+const offscreenCanvasSupported = supportsOffscreenCanvas()
+const FIREFOX_WARNING_KEY = 'image-compressor:firefox-warning-dismissed'
+
+function firefoxWarningDismissed(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  try {
+    return localStorage.getItem(FIREFOX_WARNING_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+// Firefox behaviour has not been validated, so surface a one-time, dismissable
+// heads-up rather than claiming full support.
+const firefoxWarning = signal(
+  typeof navigator !== 'undefined' &&
+    navigator.userAgent.includes('Firefox') &&
+    !firefoxWarningDismissed(),
+)
+
+function dismissFirefoxWarning() {
+  firefoxWarning.value = false
+  try {
+    localStorage.setItem(FIREFOX_WARNING_KEY, '1')
+  } catch {
+    // Storage can be unavailable; the warning stays dismissed for this page.
+  }
+}
+
 // Ratios of estimated output to original size, averaged over the sampled
 // images, used to extrapolate estimates for unmeasured rows in a big batch.
 const averageRatios = signal<EstimateSample[]>([])
@@ -218,6 +246,15 @@ const settingsWarning = computed(() => {
     return 'AVIF at the Slowest preset can take a very long time to process. Use Default for better performance.'
   }
   return ''
+})
+
+// Low-memory devices can run out of headroom during heavy batches. Point at the
+// existing single-worker mode instead of silently reducing functionality.
+const deviceMemoryWarning = computed(() => {
+  if (compatibilityMode.value) return ''
+  const memory = getDeviceSignals().deviceMemory
+  if (typeof memory !== 'number' || memory > 3) return ''
+  return 'This device reports low memory. If compression fails or the tab becomes unresponsive, enable Compatibility mode in Settings.'
 })
 
 // Keys capture everything that changes the encoded bytes except quality. Quality
@@ -800,7 +837,7 @@ function batchRiskWarning(count: number, bytes: number): string {
 }
 
 async function addFiles(fileList: FileList | File[] | null) {
-  if (!fileList) return
+  if (!offscreenCanvasSupported || !fileList) return
   const incoming = Array.from(fileList)
   if (incoming.length === 0) return
 
@@ -1076,12 +1113,15 @@ function clearAll() {
   disposeMetadataWorker()
   // Terminating workers does not force the browser to reclaim their WASM heaps,
   // decoded canvases, or Blob backing store, so repeated batches can leave the
-  // tab progressively heavier. We delete all app OPFS data and reload, which
-  // re-runs the app from a clean document. Note this is not a literal first
-  // visit: the browser's HTTP/asset caches and process stay warm.
-  void Promise.allSettled([resetOutputStorage(), resetZipStore()]).finally(() =>
-    location.reload(),
-  )
+  // tab progressively heavier. We clear this session's stored outputs and the
+  // zip scratch file, then reload, which re-runs the app from a clean document.
+  // Only this tab's data is touched so parallel tabs keep their outputs. Note
+  // this is not a literal first visit: the browser's HTTP/asset caches and
+  // process stay warm.
+  void Promise.allSettled([
+    getOutputStore().then((store) => store.clear()),
+    resetZipStore(),
+  ]).finally(() => location.reload())
 }
 
 function triggerDownload(blob: Blob, name: string) {
@@ -1090,7 +1130,18 @@ function triggerDownload(blob: Blob, name: string) {
   anchor.href = url
   anchor.download = name
   anchor.click()
-  URL.revokeObjectURL(url)
+  // Revoking in the same task as the click can cancel the download in Safari;
+  // hold the URL briefly so the browser can start reading the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** `Compressor_20260921_223704` style stamp for the download archive. */
+function timestampLabel(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return [
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`,
+    `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`,
+  ].join('_')
 }
 
 // The full-resolution output is read back from storage on demand, so rows never
@@ -1142,7 +1193,7 @@ async function downloadAll() {
       }
     }
     const blob = await zip.finish()
-    triggerDownload(blob, 'images.zip')
+    triggerDownload(blob, `Compressor_${timestampLabel()}.zip`)
   } catch (error) {
     notice.value =
       error instanceof ZipTooLargeError
@@ -1617,6 +1668,12 @@ function Panel() {
             </p>
           )}
 
+          {deviceMemoryWarning.value && (
+            <p class="field__warning" role="status">
+              {deviceMemoryWarning.value}
+            </p>
+          )}
+
           {batchWarning.value && (
             <p class="field__warning" role="alert">
               {batchWarning.value}
@@ -1672,9 +1729,11 @@ function BatchSummary() {
             data-estimating={estimatePhase.value}
             data-workers-busy={workerStats.busy}
             data-workers-size={workerStats.size}
+            data-workers-live={workerStats.live}
+            title="Live workers / configured worker budget"
           >
-            {status} <span aria-hidden="true">·</span> {workerStats.size}{' '}
-            workers
+            {status} <span aria-hidden="true">·</span> {workerStats.live}/
+            {workerStats.size} workers
           </p>
         </div>
         <div class="summary-card__estimate">
@@ -1814,6 +1873,25 @@ export function App() {
     })
   }, [])
 
+  // Best-effort cleanup when the tab is closed or navigated away from (not when
+  // entering the back/forward cache, which restores the page). Outputs only
+  // exist for this session, so leaving them behind would leak OPFS space.
+  useEffect(() => {
+    const onPageHide = (event: PageTransitionEvent) => {
+      if (event.persisted) return
+      if (outputStorePromise) {
+        void outputStorePromise
+          .then((store) => store.clear())
+          .catch(() => {
+            // Unload is best-effort; the startup sweep catches leftovers.
+          })
+      }
+      void resetZipStore()
+    }
+    window.addEventListener('pagehide', onPageHide)
+    return () => window.removeEventListener('pagehide', onPageHide)
+  }, [])
+
   function onInputChange(event: JSX.TargetedEvent<HTMLInputElement, Event>) {
     void addFiles(event.currentTarget.files)
     event.currentTarget.value = ''
@@ -1822,11 +1900,14 @@ export function App() {
   function onDrop(event: JSX.TargetedDragEvent<HTMLElement>) {
     event.preventDefault()
     isDragging.value = false
+    // The Add button is disabled while busy; match that for drops.
+    if (busy.value || !offscreenCanvasSupported) return
     void addFiles(event.dataTransfer?.files ?? null)
   }
 
   function onDragOver(event: JSX.TargetedDragEvent<HTMLElement>) {
     event.preventDefault()
+    if (busy.value || !offscreenCanvasSupported) return
     isDragging.value = true
   }
 
@@ -1859,6 +1940,32 @@ export function App() {
                 onClick={() => location.reload()}
               >
                 Reload
+              </button>
+            </div>
+          )}
+
+          {!offscreenCanvasSupported && (
+            <div class="update-banner" role="alert">
+              <span>
+                This browser cannot process images because it lacks the
+                OffscreenCanvas API. Use Chrome or Edge 69+, Firefox 105+, or
+                Safari 16.4+ (or newer).
+              </span>
+            </div>
+          )}
+
+          {firefoxWarning.value && (
+            <div class="update-banner" role="status">
+              <span>
+                This app has not been tested on Firefox and may not behave
+                perfectly.
+              </span>
+              <button
+                type="button"
+                class="button button--small"
+                onClick={dismissFirefoxWarning}
+              >
+                Dismiss
               </button>
             </div>
           )}
@@ -1904,7 +2011,7 @@ export function App() {
                 class="button button--secondary"
                 aria-label="Add images"
                 title="Add images"
-                disabled={busy.value}
+                disabled={busy.value || !offscreenCanvasSupported}
                 onClick={() => inputRef.current?.click()}
               >
                 <AddIcon />
@@ -1929,6 +2036,7 @@ export function App() {
             <button
               type="button"
               class={`dropzone${isDragging.value ? ' dropzone--active' : ''}`}
+              disabled={!offscreenCanvasSupported}
               onClick={() => inputRef.current?.click()}
             >
               <span class="welcome-visual" aria-hidden="true">
@@ -1961,6 +2069,7 @@ export function App() {
             type="file"
             accept="image/*,.heic,.heif"
             multiple
+            disabled={!offscreenCanvasSupported}
             onChange={onInputChange}
           />
 
