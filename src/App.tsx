@@ -2,8 +2,6 @@ import { computed, effect, type Signal, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { memo } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import addImageIcon from '../assets/add-image.svg'
-import settingsIcon from '../assets/settings.svg'
 import type { JobStatus } from './lib/batchStats'
 import {
   type ControlKey,
@@ -1249,23 +1247,28 @@ function dimensionsLabel(job: BatchJob): string {
 
 function AddIcon() {
   return (
-    <img
-      class="button__icon button__icon--asset"
-      src={addImageIcon}
-      alt=""
+    <svg
+      class="button__icon button__icon--toolbar"
+      viewBox="0 0 24 24"
       aria-hidden="true"
-    />
+    >
+      <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8" />
+      <circle cx="8" cy="8" r="1" />
+      <path d="m3 16 5-5 7 7M12 15l3-3 6 6M19 3v6M16 6h6" />
+    </svg>
   )
 }
 
 function SettingsIcon() {
   return (
-    <img
-      class="button__icon button__icon--asset"
-      src={settingsIcon}
-      alt=""
+    <svg
+      class="button__icon button__icon--toolbar"
+      viewBox="0 0 24 24"
       aria-hidden="true"
-    />
+    >
+      <path d="M9.5 2h5l.6 2.4 2.1 1.2 2.4-.7 2.5 4.2-1.8 1.7v2.4l1.8 1.7-2.5 4.2-2.4-.7-2.1 1.2-.6 2.4h-5l-.6-2.4-2.1-1.2-2.4.7-2.5-4.2 1.8-1.7v-2.4L1.9 10l2.5-4.2 2.4.7 2.1-1.2Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   )
 }
 
