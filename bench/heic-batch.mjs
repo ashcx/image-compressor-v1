@@ -98,8 +98,22 @@ async function once() {
     phase = 'estimate'
     const t0 = performance.now()
     await page.setInputFiles('input[type="file"]', files)
+    // Estimates start a moment after intake; wait for them to begin and end.
+    await page
+      .waitForFunction(
+        () =>
+          document
+            .querySelector('.summary-card__status')
+            ?.getAttribute('data-estimating') === 'true',
+        undefined,
+        { timeout: 3000 },
+      )
+      .catch(() => undefined)
     await page.waitForFunction(
       () =>
+        document
+          .querySelector('.summary-card__status')
+          ?.getAttribute('data-estimating') !== 'true' &&
         [...document.querySelectorAll('button')].some(
           (button) =>
             /^Compress/.test(button.textContent ?? '') && !button.disabled,
