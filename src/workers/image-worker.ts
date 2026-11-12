@@ -3,6 +3,7 @@ import { encodeImageSource } from '../lib/convert'
 import { detectFormat } from '../lib/detect'
 import { parseDimensions } from '../lib/dimensions'
 import { buildEstimateSamples } from '../lib/estimate'
+import { preserveExif } from '../lib/exif'
 import { decodeImageData } from '../lib/image'
 import type {
   EstimateResponse,
@@ -206,11 +207,18 @@ scope.onmessage = async (event) => {
       mode: request.mode,
     })
 
+    const outputBlob = request.keepMetadata
+      ? await preserveExif(request.fileBuffer, encoded.blob, encoded.format, {
+          width: encoded.width,
+          height: encoded.height,
+        })
+      : encoded.blob
+
     const response: ResultResponse = {
       type: 'result',
       jobId: request.jobId,
-      outputBlob: encoded.blob,
-      outputSize: encoded.blob.size,
+      outputBlob,
+      outputSize: outputBlob.size,
       width: encoded.width,
       height: encoded.height,
       format: encoded.format,

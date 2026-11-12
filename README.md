@@ -96,7 +96,7 @@ The main source areas are:
 ## Known limitations 
 
 - Browser memory limits constrain very large images and batches, especially on iOS / iPadOS devices due to WebKit limitations.
-- Output orientation is normalized into the pixels, but EXIF, GPS, XMP, ICC, depth maps, burst frames, and auxiliary images are not preserved; only the primary still image is converted.
+- Output orientation is normalized into the pixels. With **Keep metadata** on (the default), EXIF (date taken, camera, GPS) is copied into JPEG, PNG, and WebP output, with Orientation reset to 1 and the embedded EXIF thumbnail dropped. AVIF and HEIC output never include metadata. XMP, ICC, depth maps, burst frames, and auxiliary images are never preserved; only the primary still image is converted. Size estimates do not include the EXIF block (about 2 KB for an iPad photo).
 - AVIF, HEIC and some PNG modes can be substantially slower than JPEG or WebP. This has to do with the algorithmic complexity of the format itself.
 - Folder saving requires a browser File System Access API; otherwise use the ZIP download.
 
