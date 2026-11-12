@@ -27,7 +27,11 @@ export interface PoolTask {
   signal?: AbortSignal
   /** Estimated decoded-memory bytes, used to gate concurrent large jobs. */
   cost?: number
-  /** Counts against `heavyLimit`, for jobs that keep a large WASM heap. */
+  /**
+   * For jobs that leave a large WASM heap behind. They count against
+   * `heavyLimit`, and their worker is replaced afterwards because a WASM heap
+   * never shrinks: only ending the worker returns that memory to the system.
+   */
   heavy?: boolean
 }
 
@@ -271,8 +275,14 @@ export class WorkerPool {
       task.resolve(response)
     }
 
-    this.idle.push(worker)
+    if (task.heavy) this.retire(worker)
+    else this.idle.push(worker)
     this.dispatch()
+  }
+
+  private retire(worker: PoolWorker): void {
+    worker.terminate()
+    this.workers = this.workers.filter((candidate) => candidate !== worker)
   }
 
   private handleError(worker: PoolWorker, event: ErrorEvent): void {

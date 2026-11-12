@@ -341,6 +341,36 @@ describe('WorkerPool heavy limit', () => {
   })
 })
 
+describe('WorkerPool heavy worker recycling', () => {
+  it('replaces the worker after a heavy task but reuses it after a light one', async () => {
+    const created: FakeWorker[] = []
+    const pool = new WorkerPool({
+      size: 1,
+      createWorker: () => {
+        const worker = new FakeWorker((self, message) =>
+          self.respond(resultFor(message.jobId)),
+        )
+        created.push(worker)
+        return worker
+      },
+    })
+
+    await pool.run(task('light-1'))
+    await pool.run(task('light-2'))
+    expect(created).toHaveLength(1)
+    expect(created[0].terminated).toBe(false)
+
+    await pool.run({ ...task('heavy'), heavy: true })
+    expect(created[0].terminated).toBe(true)
+    expect(pool.workerCount).toBe(0)
+
+    await pool.run(task('light-3'))
+    expect(created).toHaveLength(2)
+    expect(created[1].terminated).toBe(false)
+    pool.terminate()
+  })
+})
+
 describe('WorkerPool memory budget', () => {
   function costTask(jobId: string, cost: number): PoolTask {
     return { ...task(jobId), cost }
