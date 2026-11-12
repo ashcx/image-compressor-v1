@@ -45,14 +45,13 @@ export interface ResultResponse {
   type: 'result'
   jobId: string
   outputBlob: Blob
-  thumbnailBlob: Blob
   outputSize: number
   width: number
   height: number
   format: OutputFormat
   extension: string
   mimeType: string
-  /** True when a platform/budget ceiling forced a smaller decode. */
+  /** True when the universal, platform, or budget ceiling forced a smaller decode. */
   capped: boolean
 }
 
@@ -62,8 +61,7 @@ export interface EstimateResponse {
   width: number
   height: number
   samples: EstimateSample[]
-  thumbnailBlob: Blob
-  /** True when a platform/budget ceiling forced a smaller decode. */
+  /** True when the universal, platform, or budget ceiling forced a smaller decode. */
   capped: boolean
 }
 

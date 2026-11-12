@@ -513,7 +513,7 @@ available.
   - Cache the WASM instance per worker.
   - Release WASM buffers after each job.
 
-- [ ] **HEIC-08 — Add quality presets and estimate calibration (8 points)**
+- [x] **HEIC-08 — Add quality presets and estimate calibration (8 points)**
   - Add HEIC-specific Fast, Balanced, Smaller, and Maximum Quality settings.
   - Map UI quality to encoder parameters through a documented calibration layer.
   - Measure output size and encode time against representative photos and graphics.
@@ -536,8 +536,12 @@ Delivered:
   orientation tag applied on the WASM path (`src/lib/orientation.ts`), with parsed dimensions
   swapped for orientations 5-8. Metadata (EXIF/GPS/XMP/ICC/depth/burst/auxiliary) is dropped and
   documented in the README and [HEIC.md](./HEIC.md).
-- Remaining: adjustable quality/speed presets (HEIC-08), deferred until a purpose-built encoder
-  build exposes parameters.
+- HEIC-specific quality presets (Best / Better / Default / Low) are calibrated separately from
+  JPEG through a documented quality→QP mapping, with a dedicated estimate calibration
+  (`src/lib/codecs/formats.ts`, `src/lib/estimate.ts`).
+- Remaining: adjustable speed presets beyond the single `ultrafast` option, deferred until the
+  vendored encoder build exposes more parameters; the HEIC estimate calibration is still
+  provisional (single-sample) pending a representative HEIC corpus.
 
 ### Expected output
 

@@ -19,6 +19,7 @@ import {
   type ThemePreference,
   themePreference,
 } from './lib/preferences'
+import { MAX_WORKING_PIXELS } from './lib/resize'
 import { appVersion } from './lib/version'
 
 interface StatRow {
@@ -94,23 +95,36 @@ async function capabilityRows(): Promise<StatRow[]> {
 
 /** Encoder backend per output format (PNG is listed per compression mode). */
 async function encoderRows(): Promise<StatRow[]> {
-  const [jpeg, pngNative, pngLossless, pngLossy, webp] = await Promise.all([
-    describeRenderer('jpeg'),
-    describeRenderer('png', 0),
-    describeRenderer('png', 1),
-    describeRenderer('png', 2),
-    describeRenderer('webp'),
-  ])
+  const [jpeg, pngNative, pngLossless, pngLossy, webpDefault, webpSmall] =
+    await Promise.all([
+      describeRenderer('jpeg'),
+      describeRenderer('png', 0),
+      describeRenderer('png', 1),
+      describeRenderer('png', 2),
+      describeRenderer('webp', undefined, 0),
+      describeRenderer('webp', undefined, 1),
+    ])
 
   return [
     { label: 'JPEG', value: jpeg },
     { label: 'PNG · uncompressed', value: pngNative },
     { label: 'PNG · lossless', value: pngLossless },
     { label: 'PNG · lossy', value: pngLossy },
-    { label: 'WebP', value: webp },
+    { label: 'WebP · default', value: webpDefault },
+    { label: 'WebP · smaller', value: webpSmall },
     { label: 'AVIF', value: await describeRenderer('avif') },
     { label: 'HEIC', value: await describeRenderer('heic') },
   ]
+}
+
+/** Decoder backend per input format; native decode is probed per browser. */
+async function decoderRows(): Promise<StatRow[]> {
+  return Promise.all(
+    FORMAT_ORDER.map(async (format) => ({
+      label: format.toUpperCase(),
+      value: await describeDecoder(format),
+    })),
+  )
 }
 
 function StatsRow({ row }: { row: StatRow }) {
@@ -165,15 +179,16 @@ export function SettingsPage({
 }) {
   const [asyncStats, setAsyncStats] = useState<{
     encoders: StatRow[]
+    decoders: StatRow[]
     capabilities: StatRow[]
-  }>({ encoders: [], capabilities: [] })
+  }>({ encoders: [], decoders: [], capabilities: [] })
   const [statsOpen, setStatsOpen] = useState(false)
 
   useEffect(() => {
     let active = true
-    void Promise.all([encoderRows(), capabilityRows()]).then(
-      ([encoders, capabilities]) => {
-        if (active) setAsyncStats({ encoders, capabilities })
+    void Promise.all([encoderRows(), decoderRows(), capabilityRows()]).then(
+      ([encoders, decoders, capabilities]) => {
+        if (active) setAsyncStats({ encoders, decoders, capabilities })
       },
     )
     return () => {
@@ -216,6 +231,10 @@ export function SettingsPage({
 
   const deviceDetailRows: StatRow[] = [
     {
+      label: 'Working-resolution cap',
+      value: `${(MAX_WORKING_PIXELS / 1_000_000).toLocaleString()} MP before device/browser limits`,
+    },
+    {
       label: 'Canvas ceiling',
       value: `${profile.canvasLimits.maxSide.toLocaleString()} px max side · ${canvasAreaLabel(profile.canvasLimits.maxArea)}`,
     },
@@ -233,11 +252,6 @@ export function SettingsPage({
   const deviceRows = statsOpen
     ? [...deviceSummaryRows, ...deviceDetailRows]
     : deviceSummaryRows
-
-  const decoderRows: StatRow[] = FORMAT_ORDER.map((format) => ({
-    label: format.toUpperCase(),
-    value: describeDecoder(format),
-  }))
 
   return (
     <div class="settings-page">
@@ -341,7 +355,10 @@ export function SettingsPage({
               title="Encoder backend by format"
               rows={asyncStats.encoders}
             />
-            <StatsGroup title="Decoder backend by format" rows={decoderRows} />
+            <StatsGroup
+              title="Decoder backend by format"
+              rows={asyncStats.decoders}
+            />
             <StatsGroup title="Capabilities" rows={asyncStats.capabilities} />
           </>
         )}

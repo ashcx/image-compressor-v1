@@ -58,7 +58,8 @@ Mobile memory figures are sizing rationale, not verified device limits.
 | Format | Encoder | When used |
 | --- | --- | --- |
 | JPEG | Native `OffscreenCanvas.convertToBlob` | Always in Chromium, Firefox, and Safari |
-| WebP | Native, otherwise `@jsquash/webp` | Native where supported; WebAssembly fallback on Safari |
+| WebP · Default | `@jsquash/webp`, libwebp method 1 | Default portable path |
+| WebP · Smaller size | Native `OffscreenCanvas.convertToBlob`, otherwise `@jsquash/webp` | Opt-in slower path; falls back when native WebP is unavailable |
 | PNG mode 0 | Native `convertToBlob` | Default fast lossless mode |
 | PNG mode 1 | `@jsquash/png` + `@jsquash/oxipng` (level 0) | Opt-in lossless optimisation |
 | PNG mode 2 | `imagequant` (256 colours) | Opt-in lossy palette mode |
@@ -67,8 +68,10 @@ Mobile memory figures are sizing rationale, not verified device limits.
 The application probes native support once per MIME type because Safari's
 `convertToBlob` can silently return PNG for `image/webp`.
 
-The Safari WebP fallback uses libwebp `method: 1`. It measured roughly **3× faster** than
-the default method 4 for about **10% larger output**; method 3 was close to method 4.
+The default WebP path uses libwebp `method: 1`. It measured roughly **2.5× faster** than
+Chromium's native WebP path on the 26 MP sample while producing about **16% larger output** at
+quality 85, with effectively equal SSIM and PSNR. The smaller-size setting opts into that native
+path where the browser's MIME probe confirms support.
 
 AVIF and the compressed PNG modes are imported lazily, so the initial page load does not pay
 their WebAssembly startup cost unless the user selects them. ZIP output uses `fflate` with
@@ -90,11 +93,16 @@ why JPEG is the default output.
 
 Settings are defined in `src/lib/codecs/formats.ts`:
 
-- **JPEG / WebP:** quality presets **94 / 85 / 75 / 50**, default 75.
+- **JPEG:** quality presets **94 / 85 / 75 / 50**, default 75.
+- **WebP:** quality presets **98 / 92 / 85 / 70**, default 85, plus **Default** and **Smaller size
+  (slower)** speed settings. The quality presets are tuned separately from JPEG — see
+  [Quality presets and measured fidelity](#quality-presets-and-measured-fidelity).
+- **HEIC:** quality presets **80 / 58 / 51 / 43**, default 51; a single `ultrafast` speed
+  preset.
 - **PNG:** mode 0 native lossless, default; mode 1 lossless optimisation; mode 2
   256-colour quantisation.
-- **AVIF:** quality **1–100**, default 50; speed **6 / 8 / 10**, default 8. Lower speed
-  values produce smaller files but take longer.
+- **AVIF:** quality presets **95 / 85 / 75 / 58**, default 75; speed **10 / 8 / 6**,
+  default 10. Slower speeds produce smaller files but take much longer.
 
 Full-resolution results vary with content. These are representative measurements, not fixed
 promises.
@@ -142,13 +150,55 @@ several times slower than speed 8 for a small size gain. This is why the UI labe
 slower and warns about the slow preset. Output size depends strongly on image content, not
 just resolution.
 
+### Quality presets and measured fidelity
+
+Each lossy format exposes four labels (Best / Better / Default / Low), but the number behind
+a label is format-specific because the scales are not comparable. libheif maps HEIC quality
+straight onto a HEVC QP, and WebP and AVIF use 0–100 scales that run well below JPEG's.
+Reusing the JPEG numbers made HEIC produce much larger files than JPEG at "Default" and made
+WebP visibly lower quality at the same label.
+
+| Label | JPEG | WebP | AVIF | HEIC (QP) |
+| --- | ---: | ---: | ---: | ---: |
+| Best | 94 | 98 | 95 | 80 (10) |
+| Better | 85 | 92 | 85 | 58 (21) |
+| Default | 75 | 85 | 75 | 51 (25) |
+| Low | 50 | 70 | 58 | 43 (29) |
+
+Measured on a 26 MP photograph — Chrome's native JPEG/WebP encoders, the app's `@jsquash/avif`
+WASM encoder, and libheif + kvazaar `ultrafast` for HEIC — against the decoded source. SSIM
+uses 8×8 windows over luma:
+
+| Label | JPEG PSNR / SSIM / size | WebP PSNR / SSIM / size | AVIF PSNR / SSIM / size | HEIC PSNR / SSIM / size |
+| --- | --- | --- | --- | --- |
+| Best | 53.4 dB / 0.997 / 4.28 MB | 47.8 dB / 0.992 / 4.84 MB | 49.2 dB / 0.994 / 4.45 MB | 50.8 dB / 0.997 / 4.89 MB |
+| Better | 45.3 dB / 0.984 / 2.92 MB | 44.7 dB / 0.981 / 2.59 MB | 45.1 dB / 0.981 / 2.08 MB | 45.9 dB / 0.987 / 2.16 MB |
+| Default | 42.6 dB / 0.969 / 1.69 MB | 41.9 dB / 0.960 / 1.36 MB | 42.4 dB / 0.964 / 1.09 MB | 42.4 dB / 0.967 / 1.18 MB |
+| Low | 39.9 dB / 0.947 / 0.89 MB | 39.7 dB / 0.936 / 0.60 MB | 39.9 dB / 0.937 / 0.43 MB | 40.1 dB / 0.942 / 0.53 MB |
+
+SSIM bands: **≥ 0.99** near-lossless, **0.98–0.99** very good, **0.95–0.98** good (artifacts
+possible on close inspection), **0.90–0.95** visibly compressed, **< 0.90** poor. "Low" is
+therefore the deliberately visible tier, "Default" is good but not fully transparent, and
+"Best" is near-lossless. At matched labels AVIF, HEIC, and WebP land close to JPEG in PSNR
+while producing **25–50% smaller** files, which is the intent of the per-format values; their
+SSIM runs a little below JPEG's because the reference is itself a JPEG that JPEG re-encodes
+most faithfully.
+
+These are single-photo figures with a JPEG-derived reference, which flatters JPEG at the top
+end. WebP and AVIF are tuned to stop short of their near-lossless cliffs (WebP 100 and
+AVIF 100), which multiply file size for little visible gain. WebP's lossy mode also tops out
+around 48 dB (quality 99), so its Best trails the other formats and quality 100 would jump to
+a lossless file. The default libwebp path is portable but can be larger than a browser's native
+WebP encoder. Treat these as calibration anchors, not device guarantees. Regenerate
+with `node bench/preset-quality.mjs /path/to/photo.jpg`.
+
 ## 2. Parallelism and UI responsiveness
 
 Image processing runs in a fixed-size `WorkerPool`; the UI thread owns state and presentation.
 
 The UI's own list work is cheap — about **0.37 s of script time per 200 rows** — but codecs
-are not. A single full-resolution AVIF encode at quality 50 / speed 8 takes **~2–4 s** for
-an 8–16 MP image. Running that work on the UI thread would freeze the tab.
+are not. A single full-resolution AVIF encode at its default quality and speed takes
+**~2–4 s** for an 8–16 MP image. Running that work on the UI thread would freeze the tab.
 
 Moving decode, encode, and thumbnail work into workers produced the following scroll results
 while processing:
@@ -183,7 +233,7 @@ point; the worker budget is a balance between throughput and responsiveness.
   | Path | Weight |
   | --- | ---: |
   | Native JPEG / PNG mode 0 | 2.5 |
-  | WebP (native on Chromium/Firefox, WASM on Safari) | 4 |
+  | WebP (WASM default or native smaller-size option) | 4 |
   | AVIF, PNG modes 1–2 | 5 |
 
 - Estimate decodes are capped at **2048 px** (~11 MB at 2048 × 1365) plus the 384/896 sample
@@ -206,8 +256,18 @@ source, not only from test tables:
 
 iOS raised its limit to **8192 per axis** in Safari 17.4 (WebKit bug 271002); older iOS is
 detected from the UA `OS`/`Version` token and clamped to 4096. Every decode is scaled down to
-satisfy both the side and area ceilings, and never upscaled. When a clamp applies, the worker
-reports it and the row shows **"downscaled to device limit."**
+satisfy both the side and area ceilings, and never upscaled. The app also applies a universal
+**100 MP working-resolution cap** before these platform and memory limits. The effective decode
+size is therefore the most restrictive of the 100 MP cap, the browser canvas ceiling, and the
+device/codec memory budget. When a clamp applies, the worker reports it; the row shows the
+original and decoded dimensions plus **"downscaled for device safety"**, and the app displays a
+plain-language notice explaining why.
+
+A 200 MP source is therefore reduced to at most 100 MP while preserving its aspect ratio when
+the browser supports bounded image decoding. If a browser cannot perform that bounded decode and
+the source exceeds the safety limits, the app fails that image with an explanatory error rather
+than silently retrying at full resolution. A full-resolution fallback remains available only
+when the source is already within the applicable safety limits.
 
 ### Decoded-memory budget and scheduling
 

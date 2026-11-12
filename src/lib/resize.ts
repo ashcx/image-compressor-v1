@@ -6,6 +6,9 @@ export interface ResolvedSize {
   height: number
 }
 
+/** Universal working-resolution ceiling, applied before browser/device limits. */
+export const MAX_WORKING_PIXELS = 100_000_000
+
 /** Decode ceilings: per-axis, total area, and a single-job pixel budget. */
 export interface SizeLimits {
   maxSide?: number

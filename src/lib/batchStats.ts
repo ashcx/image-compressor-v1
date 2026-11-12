@@ -153,16 +153,6 @@ export function applyJobChange(
   return { ...apply(stats, delta), total: stats.total + totalDelta }
 }
 
-/** Full recompute, used as the correctness reference for the reducer. */
-export function computeBatchStats(
-  jobs: StatsJob[],
-  outputKey: string,
-): BatchStats {
-  let stats: BatchStats = { ...EMPTY_BATCH_STATS }
-  for (const job of jobs) stats = applyJobChange(stats, null, job, outputKey)
-  return stats
-}
-
 /**
  * Recomputes only the current-output counters. Called when the output key
  * changes, since every job's "ready" flag is relative to that key.

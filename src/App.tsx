@@ -2,8 +2,6 @@ import { computed, effect, type Signal, signal } from '@preact/signals'
 import type { JSX } from 'preact'
 import { memo } from 'preact/compat'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import addImageIcon from '../assets/add-image.svg'
-import settingsIcon from '../assets/settings.svg'
 import type { JobStatus } from './lib/batchStats'
 import {
   type ControlKey,
@@ -37,6 +35,7 @@ import { validateFiles } from './lib/intake'
 import { createJobStore } from './lib/jobStore'
 import { jobCostBytes, maxJobPixels } from './lib/memory'
 import {
+  cancelThumbnailRequests,
   disposeMetadataWorker,
   readDimensions,
   readThumbnail,
@@ -48,6 +47,7 @@ import {
 } from './lib/outputStore'
 import { compatibilityMode } from './lib/preferences'
 import {
+  MAX_WORKING_PIXELS,
   resolveDecodeTargetSize,
   resolveResize,
   type SizeLimits,
@@ -87,6 +87,7 @@ interface BatchJob {
   originalSize: number
   status: JobStatus
   thumbnailUrl: string
+  thumbnailUnavailable: boolean
   outputStored: boolean
   outputExtension: string
   outputSize: number
@@ -99,7 +100,7 @@ interface BatchJob {
   height: number
   samples: EstimateSample[]
   error: string
-  /** True when the device's canvas/budget ceiling forced a smaller decode. */
+  /** True when the universal, browser, or device ceiling forced a smaller decode. */
   capped: boolean
 }
 
@@ -173,6 +174,17 @@ const newVersion = signal('')
 const notice = signal('')
 const OUTPUT_PRESSURE_NOTICE =
   'Output memory is full for this device. Download or clear completed images to keep compressing.'
+const DECODE_CAP_NOTICE =
+  'Some images were downscaled to stay within browser and device safety limits. Affected rows show the original and decoded resolution.'
+let decodeCapNoticeShown = false
+
+function noteDecodeCap() {
+  if (decodeCapNoticeShown) return
+  if (!notice.value) {
+    decodeCapNoticeShown = true
+    notice.value = DECODE_CAP_NOTICE
+  }
+}
 const delivery = signal<DeliveryProgress | null>(null)
 const delivering = computed(() => delivery.value !== null)
 // True when the in-memory output fallback has exceeded its device budget, so
@@ -193,6 +205,8 @@ let sampleChangeTimer: ReturnType<typeof setTimeout> | undefined
 const jobTokens = new Map<string, number>()
 const estimateControllers = new Map<string, AbortController>()
 const compressControllers = new Map<string, AbortController>()
+let previewsPaused = false
+const previewRevision = signal(0)
 
 const activeControls = computed(() => FORMAT_SPECS[targetFormat.value].controls)
 
@@ -425,7 +439,10 @@ function jobPlan(
   const profile = getDeviceProfile()
   const limits: SizeLimits = {
     ...profile.canvasLimits,
-    maxPixels: maxJobPixels(profile.canvasMemoryBudget, format, mode),
+    maxPixels: Math.min(
+      MAX_WORKING_PIXELS,
+      maxJobPixels(profile.canvasMemoryBudget, format, mode),
+    ),
   }
   if (!width || !height) return { cost: 0, limits }
 
@@ -441,7 +458,11 @@ let rendererToken = 0
 
 async function refreshRenderer() {
   const token = ++rendererToken
-  const label = await describeRenderer(targetFormat.value, settings.value.mode)
+  const label = await describeRenderer(
+    targetFormat.value,
+    settings.value.mode,
+    settings.value.speed,
+  )
   if (token === rendererToken) renderer.value = label
 }
 
@@ -490,26 +511,61 @@ function cancelAllEstimates() {
 const previewRequests = new Set<string>()
 
 /**
- * Lazily generates a preview for an estimated row that has none. Only called
- * for visible rows, so a large batch pays for previews the user actually sees
- * rather than decoding every file up front.
+ * Lazily generates a preview for a visible row that has none. A large batch
+ * pays for previews the user actually sees rather than decoding every file up
+ * front or doing preview work in the completion-critical worker path.
  */
 async function loadThumbnail(id: string) {
   const job = getJob(id)
-  if (!job || job.thumbnailUrl || job.status !== 'estimated') return
+  if (
+    previewsPaused ||
+    !job ||
+    job.thumbnailUrl ||
+    job.thumbnailUnavailable ||
+    (job.status !== 'estimated' && job.status !== 'done')
+  ) {
+    return
+  }
   if (previewRequests.has(id)) return
   previewRequests.add(id)
   cancelIdleTeardown()
   try {
-    const blob = await readThumbnail(job.file)
+    const preview = await readThumbnail(job.file)
+    if (!preview || previewsPaused) return
+    if (preview.unavailable) {
+      updateJob(id, { thumbnailUnavailable: true })
+      return
+    }
+    const blob = preview.blob
     if (!blob) return
     const current = getJob(id)
-    if (!current || current.thumbnailUrl || current.status === 'error') return
+    if (
+      !current ||
+      current.thumbnailUrl ||
+      current.status === 'error' ||
+      previewsPaused
+    ) {
+      return
+    }
     updateJob(id, { thumbnailUrl: URL.createObjectURL(blob) })
   } finally {
     previewRequests.delete(id)
     scheduleIdleTeardown()
   }
+}
+
+function pausePreviews() {
+  if (previewsPaused) return
+  previewsPaused = true
+  cancelThumbnailRequests()
+}
+
+function resumePreviews() {
+  if (!previewsPaused) return
+  previewsPaused = false
+  // Visible rows retry their missing previews when this changes. Rows that are
+  // still virtualized will request theirs when they are mounted later.
+  previewRevision.value += 1
 }
 
 function updateAverageRatios() {
@@ -579,7 +635,7 @@ async function estimateJob(id: string) {
     if (jobTokens.get(id) !== token || result.type !== 'estimate') return
 
     const previousThumb = getJob(id)?.thumbnailUrl
-    const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
+    const thumbnailUrl = previousThumb ?? ''
     updateJob(id, {
       status: 'estimated',
       thumbnailUrl,
@@ -591,7 +647,7 @@ async function estimateJob(id: string) {
       height: result.height,
       capped: result.capped,
     })
-    if (previousThumb) URL.revokeObjectURL(previousThumb)
+    if (result.capped) noteDecodeCap()
     updateAverageRatios()
     refreshEstimates()
   } catch (error) {
@@ -670,7 +726,7 @@ async function compressJob(id: string) {
     }
 
     const previousThumb = getJob(id)?.thumbnailUrl
-    const thumbnailUrl = URL.createObjectURL(result.thumbnailBlob)
+    const thumbnailUrl = previousThumb ?? ''
     const store = await getOutputStore()
     await store.put(id, result.outputBlob)
     syncOutputPressure(store)
@@ -691,7 +747,7 @@ async function compressJob(id: string) {
       height: result.height,
       capped: result.capped,
     })
-    if (previousThumb) URL.revokeObjectURL(previousThumb)
+    if (result.capped) noteDecodeCap()
   } catch (error) {
     if (controller.signal.aborted || jobTokens.get(id) !== token) return
     updateJob(id, {
@@ -777,6 +833,7 @@ async function addFiles(fileList: FileList | File[] | null) {
       originalSize: file.size,
       status: 'queued',
       thumbnailUrl: '',
+      thumbnailUnavailable: false,
       outputStored: false,
       outputExtension: FORMAT_SPECS[targetFormat.value].extension,
       outputSize: 0,
@@ -819,7 +876,7 @@ async function addFiles(fileList: FileList | File[] | null) {
         else
           updateJob(job.id, { status: 'estimated', sampleKey: sampleKey.value })
       } else {
-        void compressJob(job.id)
+        startCompression([job.id])
       }
     }
   } finally {
@@ -831,10 +888,9 @@ function recompressSingle() {
   cancelAllEstimates()
   if (reprocessTimer) clearTimeout(reprocessTimer)
   reprocessTimer = setTimeout(() => {
-    for (const id of jobIds.value) {
-      if (getJob(id)?.status === 'error') continue
-      void compressJob(id)
-    }
+    startCompression(
+      jobIds.value.filter((id) => getJob(id)?.status !== 'error'),
+    )
   }, 200)
 }
 
@@ -903,9 +959,9 @@ function changeControl(key: ControlKey, value: number) {
   } else {
     applyWorkerBudget()
     void refreshRenderer()
-    // PNG compression mode switches between the native, oxipng, and imagequant
-    // codecs, so warm the newly selected one.
-    if (key === 'mode') {
+    // PNG compression mode and WebP speed switch codec backends, so warm the
+    // newly selected path.
+    if (key === 'mode' || (targetFormat.value === 'webp' && key === 'speed')) {
       warmImage({ targetFormat: targetFormat.value, ...settings.value })
     }
     scheduleSampleReestimate()
@@ -941,13 +997,29 @@ function compressAll() {
     sampleChangeTimer = undefined
   }
   cancelAllEstimates()
-  for (const id of jobIds.value) {
-    const job = getJob(id)
-    if (!job || job.status === 'error' || job.status === 'processing') continue
-    if (job.status === 'estimated' || job.outputKey !== outputKey.value) {
-      void compressJob(id)
-    }
-  }
+  startCompression(
+    jobIds.value.filter((id) => {
+      const job = getJob(id)
+      if (!job || job.status === 'error' || job.status === 'processing') {
+        return false
+      }
+      return job.status === 'estimated' || job.outputKey !== outputKey.value
+    }),
+  )
+}
+
+/**
+ * Starts a compression run with preview generation fully paused. Any preview
+ * that was not already stored is retried only after every compression task has
+ * settled, when completed outputs are available for download.
+ */
+function startCompression(ids: string[]) {
+  if (ids.length === 0) return
+  pausePreviews()
+  const runs = ids.map((id) => compressJob(id))
+  void Promise.allSettled(runs).then(() => {
+    if (stats.value.processing === 0) resumePreviews()
+  })
 }
 
 /**
@@ -1144,22 +1216,25 @@ async function saveToFolder() {
 
 function savingsLabel(originalSize: number, outputSize: number): string {
   const percent = percentReduction(originalSize, outputSize)
-  return percent >= 0 ? `−${percent}%` : `+${Math.abs(percent)}%`
+  return percent >= 0 ? `−${percent}% smaller` : `+${Math.abs(percent)}% larger`
 }
 
 function statusLabel(job: BatchJob): string {
+  const capLabel = job.capped ? 'downscaled for device safety' : ''
   switch (job.status) {
     case 'queued':
     case 'estimating':
     case 'estimated':
     case 'processing':
-      return ''
+      return capLabel
     case 'done':
-      return isCurrent(job) ? '' : 'settings changed — re-compress'
+      return [capLabel, isCurrent(job) ? '' : 'settings changed — re-compress']
+        .filter(Boolean)
+        .join(' · ')
     case 'cancelled':
-      return 'cancelled'
+      return [capLabel, 'cancelled'].filter(Boolean).join(' · ')
     case 'error':
-      return job.error
+      return [capLabel, job.error].filter(Boolean).join(' · ')
   }
 }
 
@@ -1167,6 +1242,15 @@ function dimensionsLabel(job: BatchJob): string {
   const width = job.sourceWidth || job.width
   const height = job.sourceHeight || job.height
   if (!width || !height) return ''
+
+  if (
+    job.capped &&
+    job.width &&
+    job.height &&
+    (job.width !== width || job.height !== height)
+  ) {
+    return `${width}×${height} → ${job.width}×${job.height}`
+  }
 
   const edge = maxLongEdge.value
   if (!edge) return `${width}×${height}`
@@ -1178,23 +1262,28 @@ function dimensionsLabel(job: BatchJob): string {
 
 function AddIcon() {
   return (
-    <img
-      class="button__icon button__icon--asset"
-      src={addImageIcon}
-      alt=""
+    <svg
+      class="button__icon button__icon--toolbar"
+      viewBox="0 0 24 24"
       aria-hidden="true"
-    />
+    >
+      <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8" />
+      <circle cx="8" cy="8" r="1" />
+      <path d="m3 16 5-5 7 7M12 15l3-3 6 6M19 3v6M16 6h6" />
+    </svg>
   )
 }
 
 function SettingsIcon() {
   return (
-    <img
-      class="button__icon button__icon--asset"
-      src={settingsIcon}
-      alt=""
+    <svg
+      class="button__icon button__icon--toolbar"
+      viewBox="0 0 24 24"
       aria-hidden="true"
-    />
+    >
+      <path d="M9.5 2h5l.6 2.4 2.1 1.2 2.4-.7 2.5 4.2-1.8 1.7v2.4l1.8 1.7-2.5 4.2-2.4-.7-2.1 1.2-.6 2.4h-5l-.6-2.4-2.1-1.2-2.4.7-2.5-4.2 1.8-1.7v-2.4L1.9 10l2.5-4.2 2.4.7 2.1-1.2Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   )
 }
 
@@ -1240,10 +1329,18 @@ const JobRow = memo(function JobRow({
   onThumbnail,
 }: JobRowProps) {
   const job = jobStore.signalFor(id)?.value
+  const currentPreviewRevision = previewRevision.value
   // Request a preview only once the row is mounted (i.e. scrolled into view).
   useEffect(() => {
-    if (job && !job.thumbnailUrl && job.status === 'estimated') onThumbnail(id)
-  }, [id, job?.thumbnailUrl, job?.status, onThumbnail])
+    if (
+      job &&
+      !job.thumbnailUrl &&
+      !job.thumbnailUnavailable &&
+      (job.status === 'estimated' || job.status === 'done')
+    ) {
+      onThumbnail(id)
+    }
+  }, [id, job?.thumbnailUrl, job?.status, onThumbnail, currentPreviewRevision])
   if (!job) return null
   const current = isCurrent(job)
   const label = statusLabel(job)
@@ -1257,22 +1354,36 @@ const JobRow = memo(function JobRow({
       aria-setsize={setSize}
     >
       <div class="job__thumb">
-        {job.status === 'processing' ? (
-          <span class="job__spinner" />
-        ) : job.status === 'error' ? (
+        {job.status === 'error' ? (
           <span class="job__icon job__icon--error">!</span>
         ) : job.status === 'cancelled' ? (
           <span class="job__icon job__icon--cancelled" title="Cancelled">
             –
           </span>
         ) : job.thumbnailUrl ? (
-          <img
-            class={current ? '' : 'job__thumb--stale'}
-            src={job.thumbnailUrl}
-            alt=""
-            loading="lazy"
-            decoding="async"
-          />
+          <>
+            <img
+              class={current ? '' : 'job__thumb--stale'}
+              src={job.thumbnailUrl}
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
+            {job.status === 'processing' && (
+              <span class="job__spinner job__spinner--overlay" />
+            )}
+          </>
+        ) : job.thumbnailUnavailable ? (
+          <span
+            class="job__preview-unavailable"
+            title="Preview unavailable"
+            role="img"
+            aria-label="Preview unavailable"
+          >
+            No preview
+          </span>
+        ) : job.status === 'processing' ? (
+          <span class="job__spinner" />
         ) : (
           <span class="job__icon job__icon--idle">…</span>
         )}
@@ -1283,7 +1394,7 @@ const JobRow = memo(function JobRow({
         </span>
         <div class="job__details">
           <span
-            class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}`}
+            class={`job__meta${job.status === 'error' ? ' job__meta--error' : ''}${job.capped ? ' job__meta--warning' : ''}`}
           >
             {dimensions}
             {label && `${dimensions ? ' · ' : ''}${label}`}
@@ -1578,7 +1689,7 @@ function BatchSummary() {
       : '—'
   const reduction =
     !estimatePhase.value && originalTotal.value > 0 && batchEstimate.value > 0
-      ? `${savingsLabel(originalTotal.value, batchEstimate.value)} smaller`
+      ? savingsLabel(originalTotal.value, batchEstimate.value)
       : '—'
 
   return (
@@ -1820,7 +1931,7 @@ export function App() {
               />
               <div>
                 <h1>Compressor</h1>
-                <p>Private, fast image compression in your browser.</p>
+                <p>The fastest way to process images online.</p>
               </div>
             </div>
             <div class="app__header-actions">

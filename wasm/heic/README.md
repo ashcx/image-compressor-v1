@@ -27,13 +27,11 @@ dependencies' older `cmake_minimum_required`).
 kvazaar presets, fastest to slowest: `ultrafast`, `superfast`, `veryfast`,
 `faster`, `fast`, `medium`, `slow`, `slower`, `veryslow`, `placebo`.
 
-The app maps three UI options (`src/lib/codecs/heic.ts`):
+The app currently exposes a single `Speed` option (`src/lib/codecs/heic.ts`):
 
 | UI | Preset | Notes |
 | --- | --- | --- |
-| Fast | `ultrafast` | quickest, slightly larger output |
-| Balanced (default) | `faster` | good speed/size balance |
-| Smaller | `slow` | smallest output, slowest |
+| Default | `ultrafast` | quickest preset; more options may be added later |
 
 Measured on a 512×512 sample (Emscripten, single-threaded): `ultrafast`
 ~60–80 ms vs `medium` ~145–175 ms, at similar PSNR.

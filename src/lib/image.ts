@@ -3,11 +3,20 @@ import { getCodec } from './codecs/registry'
 import type { ImageSource, OutputFormat } from './codecs/types'
 import { orientRgba, readExifOrientation } from './orientation'
 
+export const BOUNDED_DECODE_ERROR =
+  'This image could not be decoded safely at a bounded resolution in this browser. Try a browser with scaled image decoding or resize the image before importing it.'
+
 export interface DecodeTarget {
   /** Exact size to decode at (resize-aware). */
   size?: { width: number; height: number }
   /** Long-edge ceiling used when an exact size is not known. */
   maxEdge?: number
+  /** Permit a full decode only when the source is already within safety limits. */
+  allowFullResolutionFallback?: boolean
+}
+
+function hasBoundedTarget(target: DecodeTarget): boolean {
+  return Boolean(target.size || (target.maxEdge && target.maxEdge > 0))
 }
 
 async function createScaledBitmap(
@@ -25,7 +34,9 @@ async function createScaledBitmap(
         resizeQuality: 'high',
       })
     } catch {
-      // Fall through to a full decode.
+      if (!target.allowFullResolutionFallback) {
+        throw new Error(BOUNDED_DECODE_ERROR)
+      }
     }
   } else if (target.maxEdge && target.maxEdge > 0) {
     try {
@@ -34,7 +45,9 @@ async function createScaledBitmap(
         resizeQuality: 'high',
       })
     } catch {
-      // Fall through to a full decode.
+      if (!target.allowFullResolutionFallback) {
+        throw new Error(BOUNDED_DECODE_ERROR)
+      }
     }
   }
   return createImageBitmap(blob)
@@ -67,6 +80,9 @@ export async function decodeImageData(
   try {
     return await decodeWithBitmap(buffer, target)
   } catch (error) {
+    if (hasBoundedTarget(target) && !target.allowFullResolutionFallback) {
+      throw new Error(BOUNDED_DECODE_ERROR)
+    }
     if (format) {
       try {
         const codec = await getCodec(format)

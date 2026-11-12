@@ -61,6 +61,16 @@ try {
   // Single-file auto-compress → row download must produce a non-empty file.
   await inject(1)
   await waitTotal(1)
+  const previewSize = await page.waitForFunction(() => {
+    const image = document.querySelector('.job img')
+    if (!(image instanceof HTMLImageElement) || !image.complete) return null
+    return { width: image.naturalWidth, height: image.naturalHeight }
+  })
+  assert.deepEqual(
+    previewSize.jsonValue ? await previewSize.jsonValue() : null,
+    { width: 128, height: 96 },
+    'stored preview should use the 96px short edge',
+  )
   const rowDownload = page.waitForEvent('download')
   await page
     .locator('.job__actions button', { hasText: 'Download' })
@@ -108,6 +118,9 @@ try {
     const count =
       document.querySelector('.summary-card__count')?.textContent ?? ''
     return /\/\s*3/.test(count)
+  })
+  await page.waitForSelector('[title="Preview unavailable"]', {
+    timeout: 60_000,
   })
   await page
     .locator('button', { hasText: /^Compress/ })

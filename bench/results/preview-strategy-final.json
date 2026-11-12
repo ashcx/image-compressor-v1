@@ -1,0 +1,247 @@
+{
+  "generatedAt": "2026-09-21T04:27:55.126Z",
+  "input": "/test_pictures/IMG_1792.jpeg",
+  "inputUrl": "http://localhost:53256/image-compressor-v1/test_pictures/IMG_1792.jpeg",
+  "repeats": 3,
+  "inputPath": "http://localhost:53256/image-compressor-v1/test_pictures/IMG_1792.jpeg",
+  "formats": [
+    "jpeg",
+    "png",
+    "webp",
+    "avif",
+    "heic"
+  ],
+  "results": [
+    {
+      "format": "jpeg",
+      "width": 4160,
+      "height": 6240,
+      "bytes": 7290040,
+      "preparationMs": 0.09999999776482582,
+      "results": [
+        {
+          "strategy": "current-jpeg",
+          "path": "native",
+          "coldMs": 213.90000000223517,
+          "medianMs": 172.59999999776483,
+          "p95Ms": 174.69999999925494,
+          "outputBytes": 3930,
+          "estimatedPeakRasterBytes": 841728,
+          "decodedWidth": 256,
+          "decodedHeight": 384
+        },
+        {
+          "strategy": "small-bitmap-canvas",
+          "path": "native",
+          "coldMs": 189.90000000223517,
+          "medianMs": 228.19999999925494,
+          "p95Ms": 230.69999999925494,
+          "outputBytes": 0,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        },
+        {
+          "strategy": "small-jpeg",
+          "path": "native",
+          "coldMs": 202.89999999850988,
+          "medianMs": 174.39999999850988,
+          "p95Ms": 181.70000000298023,
+          "outputBytes": 4012,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        }
+      ],
+      "maxFrameGapMs": 16.800000000000182,
+      "framesOver50Ms": 0,
+      "frames": 146,
+      "pageHeapPeakBytes": 10000000
+    },
+    {
+      "format": "png",
+      "width": 4160,
+      "height": 6240,
+      "bytes": 54098615,
+      "preparationMs": 1208.3999999985099,
+      "results": [
+        {
+          "strategy": "current-jpeg",
+          "path": "native",
+          "coldMs": 593.8000000007451,
+          "medianMs": 603.3000000007451,
+          "p95Ms": 615.6999999992549,
+          "outputBytes": 3930,
+          "estimatedPeakRasterBytes": 841728,
+          "decodedWidth": 256,
+          "decodedHeight": 384
+        },
+        {
+          "strategy": "small-bitmap-canvas",
+          "path": "native",
+          "coldMs": 609.3000000007451,
+          "medianMs": 589.1999999992549,
+          "p95Ms": 677.1999999992549,
+          "outputBytes": 0,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        },
+        {
+          "strategy": "small-jpeg",
+          "path": "native",
+          "coldMs": 564.3000000007451,
+          "medianMs": 595.1000000014901,
+          "p95Ms": 705.1999999992549,
+          "outputBytes": 4012,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        }
+      ],
+      "maxFrameGapMs": 16.80000000000109,
+      "framesOver50Ms": 0,
+      "frames": 437,
+      "pageHeapPeakBytes": 10000000
+    },
+    {
+      "format": "webp",
+      "width": 4160,
+      "height": 6240,
+      "bytes": 2618452,
+      "preparationMs": 2345.10000000149,
+      "results": [
+        {
+          "strategy": "current-jpeg",
+          "path": "native",
+          "coldMs": 270.8999999985099,
+          "medianMs": 368.1000000014901,
+          "p95Ms": 404,
+          "outputBytes": 3928,
+          "estimatedPeakRasterBytes": 841728,
+          "decodedWidth": 256,
+          "decodedHeight": 384
+        },
+        {
+          "strategy": "small-bitmap-canvas",
+          "path": "native",
+          "coldMs": 314.5,
+          "medianMs": 303.5999999977648,
+          "p95Ms": 322.4000000022352,
+          "outputBytes": 0,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        },
+        {
+          "strategy": "small-jpeg",
+          "path": "native",
+          "coldMs": 301.29999999701977,
+          "medianMs": 314,
+          "p95Ms": 320.70000000298023,
+          "outputBytes": 4015,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        }
+      ],
+      "maxFrameGapMs": 16.80000000000109,
+      "framesOver50Ms": 0,
+      "frames": 234,
+      "pageHeapPeakBytes": 10000000
+    },
+    {
+      "format": "avif",
+      "width": 4160,
+      "height": 6240,
+      "bytes": 1491757,
+      "preparationMs": 10922.20000000298,
+      "results": [
+        {
+          "strategy": "current-jpeg",
+          "path": "native",
+          "coldMs": 333,
+          "medianMs": 277.3999999985099,
+          "p95Ms": 304.4000000022352,
+          "outputBytes": 3928,
+          "estimatedPeakRasterBytes": 841728,
+          "decodedWidth": 256,
+          "decodedHeight": 384
+        },
+        {
+          "strategy": "small-bitmap-canvas",
+          "path": "native",
+          "coldMs": 335.1000000014901,
+          "medianMs": 306.30000000074506,
+          "p95Ms": 413.69999999925494,
+          "outputBytes": 0,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        },
+        {
+          "strategy": "small-jpeg",
+          "path": "native",
+          "coldMs": 300,
+          "medianMs": 269.6000000014901,
+          "p95Ms": 282.5999999977648,
+          "outputBytes": 4006,
+          "estimatedPeakRasterBytes": 110592,
+          "decodedWidth": 96,
+          "decodedHeight": 144
+        }
+      ],
+      "maxFrameGapMs": 16.80000000000291,
+      "framesOver50Ms": 0,
+      "frames": 219,
+      "pageHeapPeakBytes": 10000000
+    },
+    {
+      "format": "heic",
+      "width": 4160,
+      "height": 6240,
+      "bytes": 8230473,
+      "preparationMs": 9428.5,
+      "results": [
+        {
+          "strategy": "current-jpeg",
+          "path": "codec-fallback",
+          "coldMs": 3822.5,
+          "medianMs": 3209.800000000745,
+          "p95Ms": 3461.5,
+          "outputBytes": 3857,
+          "estimatedPeakRasterBytes": 104064000,
+          "decodedWidth": 4160,
+          "decodedHeight": 6240
+        },
+        {
+          "strategy": "small-bitmap-canvas",
+          "path": "codec-fallback",
+          "coldMs": 3244.599999997765,
+          "medianMs": 3313.10000000149,
+          "p95Ms": 3725.400000002235,
+          "outputBytes": 0,
+          "estimatedPeakRasterBytes": 103888896,
+          "decodedWidth": 4160,
+          "decodedHeight": 6240
+        },
+        {
+          "strategy": "small-jpeg",
+          "path": "codec-fallback",
+          "coldMs": 4281.5,
+          "medianMs": 3328,
+          "p95Ms": 3507.300000000745,
+          "outputBytes": 4016,
+          "estimatedPeakRasterBytes": 103888896,
+          "decodedWidth": 4160,
+          "decodedHeight": 6240
+        }
+      ],
+      "maxFrameGapMs": 16.80000000000291,
+      "framesOver50Ms": 0,
+      "frames": 2482,
+      "pageHeapPeakBytes": 10000000
+    }
+  ],
+  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36"
+}

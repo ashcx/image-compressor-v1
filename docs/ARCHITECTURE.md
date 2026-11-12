@@ -48,8 +48,12 @@ internals.
 
 Selected files are read through a bounded file-buffer store. The app detects the input format,
 reads dimensions, and creates thumbnails and size estimates without sending the file away.
-Estimates use bounded sample decodes and format-specific calibration rather than running a
-full encode before the user starts the batch.
+Native preview decodes request the 96px target directly before storing a fixed JPEG. HEIC
+previews use a lightweight embedded JPEG thumbnail when one is present; otherwise the UI shows
+that a preview is unavailable rather than decoding the full primary image. Preview requests
+run on the metadata worker, are cancelled when compression starts, and resume only after all
+compression work has settled. Estimates use bounded sample decodes and format-specific
+calibration rather than running a full encode before the user starts the batch.
 
 ### 2. Scheduling
 
@@ -83,10 +87,12 @@ cost model.
 
 ### Native-first, lazy codec loading
 
-Codec modules are loaded only when a format needs them. JPEG and WebP use native browser
-encoding when the browser can provide it. The default PNG mode also uses the native browser
-encoder; slower lossless optimisation and lossy palette modes use their format-specific
-libraries. AVIF uses its WebAssembly codec.
+Codec modules are loaded only when a format needs them. JPEG uses native browser encoding when
+the browser can provide it. WebP defaults to libwebp method 1 through WebAssembly for a
+portable path; its optional smaller-size speed setting uses the native browser encoder when
+available and falls back to libwebp otherwise. The default PNG mode also uses the native
+browser encoder; slower lossless optimisation and lossy palette modes use their
+format-specific libraries. AVIF uses its WebAssembly codec.
 
 Native support is probed because browsers can report support for a MIME type while returning
 another format in practice. WebAssembly fallbacks preserve functionality where a native
@@ -121,7 +127,9 @@ replaces the estimate with the actual encoded byte count.
 ### Memory and data movement
 
 Thumbnails and estimate decodes use bounded dimensions. Full-resolution work happens only when
-the output is requested, with the configured maximum long edge applied at that point.
+the output is requested and the source is within the universal 100 MP, browser, and device
+limits. When bounded decoding is required but unsupported, the image fails safely instead of
+falling back to a potentially dangerous full-resolution allocation.
 
 Inputs can be transferred to workers for one-shot compression, while copies are retained only
 when a later pass needs the same bytes. Intermediate data is released in the worker, and the

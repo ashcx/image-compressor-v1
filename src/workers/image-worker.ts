@@ -7,6 +7,7 @@ import { preserveExif } from '../lib/exif'
 import { decodeImageData } from '../lib/image'
 import type {
   EstimateResponse,
+  ProcessLimits,
   ResultResponse,
   WarmRequest,
   WorkerRequest,
@@ -14,11 +15,11 @@ import type {
 } from '../lib/protocol'
 import {
   clampSizeToLimits,
+  MAX_WORKING_PIXELS,
   resizeImage,
   resolveDecodeTargetSize,
   resolveResize,
 } from '../lib/resize'
-import { createThumbnail } from '../lib/thumbnail'
 
 interface WorkerScope {
   onmessage: ((event: MessageEvent<WorkerRequest>) => void) | null
@@ -35,6 +36,32 @@ const ESTIMATE_DECODE_EDGE = 2048
 // A tiny encode is enough to resolve the codec: native encoders only need their
 // support probe, while WASM codecs fetch and instantiate on first encode.
 const WARM_EDGE = 2
+
+function boundedLimits(limits: ProcessLimits | undefined): ProcessLimits {
+  const requested = limits?.maxPixels
+  const maxPixels =
+    typeof requested === 'number' && Number.isFinite(requested) && requested > 0
+      ? Math.min(requested, MAX_WORKING_PIXELS)
+      : MAX_WORKING_PIXELS
+  return { ...limits, maxPixels }
+}
+
+function boundedMaxEdge(limits: ProcessLimits): number {
+  let edge = Math.sqrt(MAX_WORKING_PIXELS)
+  if (
+    typeof limits.maxPixels === 'number' &&
+    Number.isFinite(limits.maxPixels)
+  ) {
+    edge = Math.min(edge, Math.sqrt(limits.maxPixels))
+  }
+  if (typeof limits.maxArea === 'number' && Number.isFinite(limits.maxArea)) {
+    edge = Math.min(edge, Math.sqrt(limits.maxArea))
+  }
+  if (typeof limits.maxSide === 'number' && Number.isFinite(limits.maxSide)) {
+    edge = Math.min(edge, limits.maxSide)
+  }
+  return Math.max(1, Math.floor(edge))
+}
 
 async function warmCodec(request: WarmRequest): Promise<void> {
   const canvas = createCanvas(WARM_EDGE, WARM_EDGE)
@@ -75,9 +102,18 @@ scope.onmessage = async (event) => {
 
   try {
     const sourceFormat = detectFormat(request.fileBuffer)
+    // Keep the universal cap in the worker as a defense-in-depth guard for
+    // callers that do not use the app-level job planner.
+    const limits = boundedLimits(request.limits)
     // True dimensions come from the header, so a downscaled output can decode
     // straight to its target size instead of decoding full resolution first.
     const dimensions = parseDimensions(request.fileBuffer)
+    const sourceNeedsBoundedDecode = dimensions
+      ? clampSizeToLimits(
+          { width: dimensions.width, height: dimensions.height },
+          limits,
+        ) !== null
+      : true
     const decodeSize = dimensions
       ? resolveDecodeTargetSize(
           dimensions.width,
@@ -87,15 +123,28 @@ scope.onmessage = async (event) => {
             capLongEdge: request.estimateOnly
               ? ESTIMATE_DECODE_EDGE
               : undefined,
-            limits: request.limits,
+            limits,
           },
         )
       : null
     const decodeTarget = decodeSize
-      ? { size: decodeSize }
+      ? {
+          size: decodeSize,
+          allowFullResolutionFallback: !sourceNeedsBoundedDecode,
+        }
       : request.estimateOnly
-        ? { maxEdge: ESTIMATE_DECODE_EDGE }
-        : {}
+        ? {
+            maxEdge: ESTIMATE_DECODE_EDGE,
+            allowFullResolutionFallback: !sourceNeedsBoundedDecode,
+          }
+        : dimensions
+          ? {}
+          : {
+              // A missing header cannot prove that a full decode is safe.
+              // Use a square-root pixel ceiling as the conservative fallback.
+              maxEdge: boundedMaxEdge(limits),
+              allowFullResolutionFallback: false,
+            }
     const capped = dimensions
       ? clampSizeToLimits(
           resolveResize(
@@ -106,9 +155,9 @@ scope.onmessage = async (event) => {
             width: dimensions.width,
             height: dimensions.height,
           },
-          request.limits,
+          limits,
         ) !== null
-      : false
+      : !request.estimateOnly
     const decoded = await decodeImageData(
       request.fileBuffer,
       sourceFormat,
@@ -125,30 +174,26 @@ scope.onmessage = async (event) => {
             dimensions.width,
             dimensions.height,
             request.resize,
-            { limits: request.limits },
+            { limits },
           )
         : null
       const fullWidth = fullTarget?.width ?? dimensions?.width ?? source.width
       const fullHeight =
         fullTarget?.height ?? dimensions?.height ?? source.height
-      const [samples, thumbnailBlob] = await Promise.all([
-        buildEstimateSamples(source, request.targetFormat, {
-          quality: request.quality,
-          effort: request.effort,
-          speed: request.speed,
-          mode: request.mode,
-          fullWidth,
-          fullHeight,
-        }),
-        createThumbnail(source),
-      ])
+      const samples = await buildEstimateSamples(source, request.targetFormat, {
+        quality: request.quality,
+        effort: request.effort,
+        speed: request.speed,
+        mode: request.mode,
+        fullWidth,
+        fullHeight,
+      })
       const response: EstimateResponse = {
         type: 'estimate',
         jobId: request.jobId,
         width: fullWidth,
         height: fullHeight,
         samples,
-        thumbnailBlob,
         capped,
       }
       scope.postMessage(response)
@@ -162,7 +207,6 @@ scope.onmessage = async (event) => {
       mode: request.mode,
     })
 
-    const thumbnailBlob = await createThumbnail(source)
     const outputBlob = request.keepMetadata
       ? await preserveExif(request.fileBuffer, encoded.blob, encoded.format, {
           width: encoded.width,
@@ -174,7 +218,6 @@ scope.onmessage = async (event) => {
       type: 'result',
       jobId: request.jobId,
       outputBlob,
-      thumbnailBlob,
       outputSize: outputBlob.size,
       width: encoded.width,
       height: encoded.height,

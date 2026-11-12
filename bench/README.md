@@ -17,6 +17,9 @@ npm run benchmark:scale    # 500 and 1,000-file cohorts (jpeg/png/mixed)
 npm run test:browser       # bounded row window + output download checks
 node bench/repeat-check.mjs --iterations 6 --count 300         # leak diagnostic
 node bench/repeat-check.mjs --iterations 6 --count 300 --clear # with clear between
+node bench/preset-quality.mjs /path/to/photo.jpg               # PSNR + SSIM per preset
+node bench/webp-compare.mjs /path/to/photo.jpg                 # native vs WASM WebP
+npm run benchmark:preview -- --repeats 3                        # preview strategy matrix
 ```
 
 Each scenario runs in a **fresh browser process**. Reusing one process across
@@ -45,6 +48,16 @@ node bench/run.mjs --seed 2 --headed       # watch the run
 Each run writes `bench/results/<label>.json` (machine-readable) and
 `bench/results/<label>.md` (summary table). Commit a labelled baseline when you
 change the app so future runs have a comparison point.
+
+## Preset quality
+
+`node bench/preset-quality.mjs <image>` encodes one image with the shipped
+JPEG, WebP, AVIF, and HEIC quality presets and reports PSNR plus windowed
+SSIM against the decoded source. It runs against the Vite dev server and uses
+the app's own codec registry, so JPEG/WebP use the browser's native encoders
+and AVIF/HEIC use the same WASM codecs the app ships. The measured table behind
+the per-format preset values is in
+[../docs/PERFORMANCE_AND_MEMORY.md](../docs/PERFORMANCE_AND_MEMORY.md).
 
 ## Scenarios
 
@@ -79,6 +92,37 @@ the QA corpus definition in [../docs/TEST-MATRIX.md](../docs/TEST-MATRIX.md):
 The generator produces a bounded pool of unique images per cohort and reuses them
 to reach the requested count, which keeps generation fast while still measuring
 per-file processing cost.
+
+## Native vs WASM WebP
+
+`node bench/webp-compare.mjs <image>` decodes one input and sends identical pixels to
+separate workers. It measures native `OffscreenCanvas.convertToBlob` and libwebp WASM
+methods 0–6 at the requested quality. The WASM `medianMs` includes the canvas-to-
+`ImageData` readback used by the app, while `medianEncodeMs` reports only the libwebp
+portion. The first call is reported separately as `coldMs`, because it includes WASM
+module initialization.
+
+Use `--quality 75` and `--repeats 5` by default, or change them for a matched test. Compare
+both median time and output bytes: a faster WASM method may use a different compression
+trade-off and is not automatically equivalent to the browser's native output.
+
+## Preview strategy comparison
+
+`npm run benchmark:preview` uses the 25.9MP `test_pictures/IMG_1792.jpeg` fixture
+and creates matching JPEG, PNG, WebP, AVIF, and HEIC source variants through the
+app's codec registry. It compares:
+
+- `current-jpeg` — the current bounded native decode followed by a fixed 96px JPEG.
+- `small-bitmap-canvas` — native or fallback decode requested directly at the 96px
+  display size, without JPEG encoding.
+- `small-jpeg` — the same small decode followed by JPEG encoding.
+
+The report includes cold and warm worker timings, output bytes, tracked RGBA raster
+memory, a synthetic offscreen-scroll frame-gap probe, and Chromium page-heap samples
+when available. The HEIC row is a codec-fallback test; the current WASM decoder does
+not support reduced-size decode, so it reports the full decoded source surface even
+when the requested display output is only 96px. This is a controlled microbenchmark,
+not a claim about every browser or device.
 
 ## Metrics
 
@@ -133,5 +177,5 @@ retained binary memory rather than a JS-heap leak.
 - `performance.memory` and `longtask` are Chromium-specific; other engines report nulls,
   and `performance.memory` returns a near-constant figure in headless Chromium.
 - Mobile worker budgets are policy, not measured on physical devices.
-- The app retains every finished output Blob until Sprint 4 (PERF-10, OPFS output store);
-  very large batches pay for that retained memory.
+- When OPFS is unavailable, completed outputs fall back to bounded in-memory blobs; very
+  large batches are then limited by the device output budget rather than the queue.
