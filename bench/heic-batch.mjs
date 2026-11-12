@@ -173,6 +173,10 @@ try {
   await server.close()
 }
 const pick = (key) => Math.round(median(results.map((result) => result[key])))
+const range = (key) => {
+  const values = results.map((result) => Math.round(result[key]))
+  return [Math.min(...values), Math.max(...values)]
+}
 console.log(
   JSON.stringify({
     label,
@@ -182,8 +186,10 @@ console.log(
     baselineMb: pick('baseline'),
     estimateMs: pick('estimateMs'),
     compressMs: pick('compressMs'),
+    compressMsRange: range('compressMs'),
     peakEstimateMb: pick('peakEstimate'),
     peakCompressMb: pick('peakCompress'),
+    peakCompressMbRange: range('peakCompress'),
     peakAllMb: pick('peakAll'),
     settledMb: pick('settled'),
     errors: results.flatMap((result) => result.errors),
