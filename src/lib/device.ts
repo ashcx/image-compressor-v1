@@ -131,6 +131,21 @@ export function getDeviceProfile(): DeviceProfile {
   return profileFromSignals(signals, override)
 }
 
+/**
+ * True on Apple WebKit (Safari, and every iOS/iPadOS browser), which decodes
+ * HEIC natively. Elsewhere HEIC goes through the WASM decoder, which is far
+ * heavier and is charged accordingly.
+ */
+export function decodesHeicNatively(
+  signals: DeviceSignals = getDeviceSignals(),
+): boolean {
+  const ua = signals.userAgent ?? ''
+  if (isIphone(ua) || isIpad(ua, signals.maxTouchPoints ?? 0)) return true
+  return (
+    ua.includes('Safari') && !/Chrome|Chromium|Edg|OPR|Firefox|Android/.test(ua)
+  )
+}
+
 /** Platform worker budget before any user preference or URL override. */
 export function getAutoWorkerCount(): number {
   return resolveWorkerCount(getDeviceSignals())

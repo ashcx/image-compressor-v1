@@ -13,7 +13,8 @@ import {
 } from './lib/codecs/formats'
 import { describeRenderer } from './lib/codecs/registry'
 import type { OutputFormat, ResizeOptions } from './lib/codecs/types'
-import { getDeviceProfile } from './lib/device'
+import { isHeicFile } from './lib/detect'
+import { decodesHeicNatively, getDeviceProfile } from './lib/device'
 import {
   averageRatioSamples,
   deriveEstimate,
@@ -409,7 +410,8 @@ function applyWorkerBudget() {
   const format = targetFormat.value
   const heavy = isHeavyFormat(format, settings.value.mode)
   const workers = heavy ? profile.heavyWorkerCount : profile.workerCount
-  configureWorkers(workers)
+  // WASM-decoded HEIC sources run under the heavy limit whatever the target.
+  configureWorkers(workers, profile.heavyWorkerCount)
   // Read-ahead concurrency is separate from codec concurrency and tracks the
   // device budget, so constrained phones do not read several files at once.
   // Compatibility mode pins it to one for a genuinely single-threaded pipeline.
@@ -434,8 +436,10 @@ function jobPlan(
   height: number,
   resize: ResizeOptions | undefined,
   estimateOnly: boolean,
-): { cost: number; limits: SizeLimits } {
+  wasmDecodePixels: number,
+): { cost: number; limits: SizeLimits; heavy: boolean } {
   const profile = getDeviceProfile()
+  const heavy = wasmDecodePixels > 0
   const limits: SizeLimits = {
     ...profile.canvasLimits,
     maxPixels: Math.min(
@@ -443,14 +447,27 @@ function jobPlan(
       maxJobPixels(profile.canvasMemoryBudget, format, mode),
     ),
   }
-  if (!width || !height) return { cost: 0, limits }
+  if (!width || !height) return { cost: 0, limits, heavy }
 
   const target = resolveDecodeTargetSize(width, height, resize, {
     capLongEdge: estimateOnly ? ESTIMATE_DECODE_EDGE : undefined,
     limits,
   })
   const pixels = target ? target.width * target.height : width * height
-  return { cost: jobCostBytes(pixels, format, mode), limits }
+  return {
+    cost: jobCostBytes(pixels, format, mode, wasmDecodePixels),
+    limits,
+    heavy,
+  }
+}
+
+/** True for a HEIC this browser cannot decode natively, so WASM decodes it. */
+function needsWasmHeic(job: BatchJob): boolean {
+  return isHeicFile(job.file) && !decodesHeicNatively()
+}
+
+function wasmDecodePixels(job: BatchJob): number {
+  return needsWasmHeic(job) ? job.sourceWidth * job.sourceHeight : 0
 }
 
 let rendererToken = 0
@@ -611,6 +628,7 @@ async function estimateJob(id: string) {
     job.height,
     resize,
     true,
+    wasmDecodePixels(job),
   )
 
   updateJob(id, { status: 'estimating', error: '', sampleKey: key })
@@ -625,6 +643,7 @@ async function estimateJob(id: string) {
       resize,
       limits: plan.limits,
       cost: plan.cost,
+      heavy: plan.heavy,
       estimateOnly: true,
       priority: 'low',
       signal: controller.signal,
@@ -688,6 +707,7 @@ async function compressJob(id: string) {
     job.height,
     resize,
     false,
+    wasmDecodePixels(job),
   )
 
   const controller = new AbortController()
@@ -706,6 +726,7 @@ async function compressJob(id: string) {
       keepMetadata: metadataApplies.value,
       limits: plan.limits,
       cost: plan.cost,
+      heavy: plan.heavy,
       consumeInput: true,
       priority: 'high',
       signal: controller.signal,
@@ -759,9 +780,16 @@ function updateSampling(): Set<string> {
     const status = getJob(id)?.status
     return status !== 'error' && status !== 'cancelled'
   })
+  // Each WASM-decoded HEIC sample is a full-resolution decode whatever the
+  // target, so a batch that is mostly HEIC samples like a heavy codec.
+  const wasmHeic = ids.filter((id) => {
+    const job = getJob(id)
+    return job !== undefined && needsWasmHeic(job)
+  }).length
   const limit = sampleSize(
     ids.length,
-    isHeavyFormat(targetFormat.value, settings.value.mode),
+    isHeavyFormat(targetFormat.value, settings.value.mode) ||
+      wasmHeic * 2 >= ids.length,
   )
   const existing = new Set(
     [...sampledIds.value].filter((id) => ids.includes(id)),

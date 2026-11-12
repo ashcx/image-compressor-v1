@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectFormat } from './detect'
+import { detectFormat, isHeicFile } from './detect'
 
 function bytes(...values: number[]): ArrayBuffer {
   return new Uint8Array(values).buffer
@@ -70,5 +70,14 @@ describe('detectFormat', () => {
     expect(detectFormat(bytes(0x47, 0x49, 0x46, 0x38))).toBeNull()
     expect(detectFormat(bytes(0x00))).toBeNull()
     expect(detectFormat(new ArrayBuffer(0))).toBeNull()
+  })
+})
+
+describe('isHeicFile', () => {
+  it('matches HEIC by MIME type or extension', () => {
+    expect(isHeicFile({ name: 'a.bin', type: 'image/heic' })).toBe(true)
+    expect(isHeicFile({ name: 'IMG_1.HEIC', type: '' })).toBe(true)
+    expect(isHeicFile({ name: 'a.heif', type: '' })).toBe(true)
+    expect(isHeicFile({ name: 'a.jpg', type: 'image/jpeg' })).toBe(false)
   })
 })

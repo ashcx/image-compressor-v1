@@ -309,6 +309,38 @@ describe('WorkerPool', () => {
   })
 })
 
+describe('WorkerPool heavy limit', () => {
+  it('runs at most heavyLimit heavy tasks while light tasks use the rest', () => {
+    const releases: Array<() => void> = []
+    const pool = new WorkerPool({
+      size: 4,
+      heavyLimit: 2,
+      createWorker: () =>
+        new FakeWorker((worker, message) => {
+          releases.push(() => worker.respond(resultFor(message.jobId)))
+        }),
+    })
+    const heavy = (jobId: string): PoolTask => ({ ...task(jobId), heavy: true })
+    const promises = [
+      pool.run(heavy('h1')),
+      pool.run(heavy('h2')),
+      pool.run(heavy('h3')),
+      pool.run(task('l1')),
+    ]
+
+    // h3 waits for a heavy slot, but the light task is not held behind it.
+    expect(pool.busyCount).toBe(3)
+    expect(pool.queuedCount).toBe(1)
+
+    releases.shift()?.()
+    expect(pool.busyCount).toBe(3)
+    expect(pool.queuedCount).toBe(0)
+
+    pool.terminate()
+    void Promise.allSettled(promises)
+  })
+})
+
 describe('WorkerPool memory budget', () => {
   function costTask(jobId: string, cost: number): PoolTask {
     return { ...task(jobId), cost }

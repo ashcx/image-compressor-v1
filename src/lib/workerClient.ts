@@ -5,6 +5,7 @@ import { type PoolPriority, type PoolSuccess, WorkerPool } from './workerPool'
 
 let pool: WorkerPool | null = null
 let desiredSize = getDeviceProfile().workerCount
+let desiredHeavy = getDeviceProfile().heavyWorkerCount
 let memoryBudget = 0
 let counter = 0
 let warmController: AbortController | null = null
@@ -36,8 +37,13 @@ function resolveMemoryBudget(): number {
  * Sets the worker budget (e.g. half for heavy codecs). Recreates the pool
  * lazily the next time a worker is needed if the current one is idle.
  */
-export function configureWorkers(size: number): void {
+export function configureWorkers(size: number, heavySize = size): void {
   const next = Math.max(1, Math.floor(size))
+  const nextHeavy = Math.max(1, Math.floor(heavySize))
+  if (nextHeavy !== desiredHeavy) {
+    desiredHeavy = nextHeavy
+    pool?.setHeavyLimit(desiredHeavy)
+  }
   if (next === desiredSize) return
   desiredSize = next
   if (pool && pool.busyCount === 0 && pool.queuedCount === 0) {
@@ -79,6 +85,7 @@ function getPool(): WorkerPool {
     pool = new WorkerPool({
       size: desiredSize,
       memoryBudget,
+      heavyLimit: desiredHeavy,
       onWorkerFailure: backOffWorkers,
       createWorker: () =>
         new Worker(new URL('../workers/image-worker.ts', import.meta.url), {
@@ -188,6 +195,8 @@ export interface ProcessJobOptions {
   limits?: ProcessLimits
   /** Estimated decoded-memory bytes, used by the scheduler gate. */
   cost?: number
+  /** WASM-decoded source: runs under the heavy-worker limit. */
+  heavy?: boolean
   /**
    * Transfer the input buffer instead of cloning it. Use only when the buffer
    * will not be read again (not for estimate passes that compression reuses).
@@ -207,6 +216,7 @@ export function processImage(options: ProcessJobOptions): {
     {
       jobId,
       cost: options.cost ?? 0,
+      heavy: options.heavy,
       signal: options.signal,
       prepare: async () => {
         // Source bytes are read eagerly at selection time (fileBufferStore). The

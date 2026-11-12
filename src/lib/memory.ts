@@ -22,13 +22,29 @@ export function formatMemoryWeight(format: OutputFormat, mode = 0): number {
   return 2.5
 }
 
-/** Estimated peak bytes held while one job at this size is in flight. */
+/**
+ * Peak memory of the libheif WebAssembly decoder as a multiple of the source's
+ * RGBA bytes. Measured at 12 MP: the decoded plane, the copy returned to
+ * JavaScript, and a WASM heap that is not released after the decode.
+ */
+export const WASM_HEIC_DECODE_WEIGHT = 8
+
+/**
+ * Estimated peak bytes held while one job at this size is in flight.
+ * `wasmDecodePixels` is the full source size for a HEIC the browser cannot
+ * decode natively: that decode ignores the resize target, so it is charged at
+ * source size and competes with the encode for the larger of the two.
+ */
 export function jobCostBytes(
   pixels: number,
   format: OutputFormat,
   mode = 0,
+  wasmDecodePixels = 0,
 ): number {
-  return pixels * 4 * formatMemoryWeight(format, mode)
+  return Math.max(
+    pixels * 4 * formatMemoryWeight(format, mode),
+    wasmDecodePixels * 4 * WASM_HEIC_DECODE_WEIGHT,
+  )
 }
 
 /**

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   configureWorkerPreferences,
+  decodesHeicNatively,
   describePlatform,
   getAutoWorkerCount,
   getDeviceProfile,
@@ -329,5 +330,19 @@ describe('canvas memory budget', () => {
 
     const noSignal = profileFromSignals({ hardwareConcurrency: 8 })
     expect(noSignal.canvasMemoryBudget).toBe(2048 * MIB)
+  })
+})
+
+describe('decodesHeicNatively', () => {
+  const CHROME_MAC_UA =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36'
+
+  it('is true on Apple WebKit and false on Chrome, Firefox, and Android', () => {
+    expect(decodesHeicNatively({ userAgent: MAC_UA })).toBe(true)
+    expect(decodesHeicNatively({ userAgent: IPHONE_UA })).toBe(true)
+    expect(decodesHeicNatively({ userAgent: IPAD_UA })).toBe(true)
+    expect(decodesHeicNatively({ userAgent: CHROME_MAC_UA })).toBe(false)
+    expect(decodesHeicNatively({ userAgent: FIREFOX_UA })).toBe(false)
+    expect(decodesHeicNatively({ userAgent: ANDROID_UA })).toBe(false)
   })
 })
