@@ -16,7 +16,7 @@ export interface HeicEncodeOptions {
  * (as "Default"); the indices are stable because select values are persisted per
  * format, so any future presets must be appended.
  */
-export const HEIC_PRESETS = ['ultrafast'] as const
+const HEIC_PRESETS = ['ultrafast'] as const
 
 const DEFAULT_SPEED = 0
 

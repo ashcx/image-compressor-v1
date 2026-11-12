@@ -1,14 +1,11 @@
 export type OutputFormat = 'jpeg' | 'png' | 'webp' | 'avif' | 'heic'
 
 export interface ResizeOptions {
-  width?: number
-  height?: number
   maxLongEdge?: number
 }
 
 export interface EncodeOptions {
   quality?: number
-  effort?: number
   speed?: number
   /** PNG encoder: 0 = native (fast, lossless), 1 = oxipng L0 (lossless), 2 = libimagequant (lossy). */
   mode?: number

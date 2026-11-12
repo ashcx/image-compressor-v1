@@ -6,7 +6,7 @@ import {
   isHeavyFormat,
 } from './formats'
 
-const ALL_KEYS = ['quality', 'effort', 'speed', 'mode'] as const
+const ALL_KEYS = ['quality', 'speed', 'mode'] as const
 
 function byKey(controls: FormatControl[], key: string) {
   return controls.find((control) => control.key === key)

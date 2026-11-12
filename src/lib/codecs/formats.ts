@@ -1,6 +1,6 @@
 import type { OutputFormat } from './types'
 
-export type ControlKey = 'quality' | 'effort' | 'speed' | 'mode'
+export type ControlKey = 'quality' | 'speed' | 'mode'
 
 interface ControlBase {
   key: ControlKey
@@ -253,7 +253,7 @@ export const FORMAT_SPECS: Record<OutputFormat, FormatSpec> = {
   },
 }
 
-export const SUPPORTED_FORMAT_LABELS = FORMAT_ORDER.map((format) =>
+const SUPPORTED_FORMAT_LABELS = FORMAT_ORDER.map((format) =>
   FORMAT_SPECS[format].mimeType.replace(/^image\//, '').toUpperCase(),
 )
 

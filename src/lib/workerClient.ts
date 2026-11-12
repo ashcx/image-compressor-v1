@@ -28,7 +28,7 @@ export function configureMemoryBudget(bytes: number): void {
   for (const listener of listeners) listener()
 }
 
-export function resolveMemoryBudget(): number {
+function resolveMemoryBudget(): number {
   return memoryBudget
 }
 
@@ -116,7 +116,6 @@ export function subscribeToPool(listener: () => void): () => void {
 export interface WarmOptions {
   targetFormat: OutputFormat
   quality?: number
-  effort?: number
   speed?: number
   mode?: number
 }
@@ -139,7 +138,6 @@ export function warmImage(options: WarmOptions): void {
       jobId,
       targetFormat: options.targetFormat,
       quality: options.quality,
-      effort: options.effort,
       speed: options.speed,
       mode: options.mode,
     }
@@ -181,7 +179,6 @@ export interface ProcessJobOptions {
   readFile: (consume: boolean) => Promise<ArrayBuffer>
   targetFormat: OutputFormat
   quality?: number
-  effort?: number
   speed?: number
   mode?: number
   resize?: ResizeOptions
@@ -224,7 +221,6 @@ export function processImage(options: ProcessJobOptions): {
           fileBuffer,
           targetFormat: options.targetFormat,
           quality: options.quality,
-          effort: options.effort,
           speed: options.speed,
           mode: options.mode,
           resize: options.resize,

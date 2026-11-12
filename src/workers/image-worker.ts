@@ -73,7 +73,6 @@ async function warmCodec(request: WarmRequest): Promise<void> {
     request.targetFormat,
     {
       quality: request.quality,
-      effort: request.effort,
       speed: request.speed,
       mode: request.mode,
     },
@@ -182,7 +181,6 @@ scope.onmessage = async (event) => {
         fullTarget?.height ?? dimensions?.height ?? source.height
       const samples = await buildEstimateSamples(source, request.targetFormat, {
         quality: request.quality,
-        effort: request.effort,
         speed: request.speed,
         mode: request.mode,
         fullWidth,
@@ -202,7 +200,6 @@ scope.onmessage = async (event) => {
 
     const encoded = await encodeImageSource(source, request.targetFormat, {
       quality: request.quality,
-      effort: request.effort,
       speed: request.speed,
       mode: request.mode,
     })

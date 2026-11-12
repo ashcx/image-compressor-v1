@@ -4,7 +4,7 @@ import type { ImageSource } from './codecs/types'
 export const THUMBNAIL_SHORT_EDGE = 96
 export const THUMBNAIL_QUALITY = 0.6
 export const THUMBNAIL_MIME_TYPE = 'image/jpeg'
-// Matches --panel in app.css so transparent sources composite cleanly.
+// Fixed dark backdrop for transparent sources. It does not follow the light theme.
 const THUMBNAIL_BACKGROUND = '#161a21'
 
 function thumbnailSize(source: ImageSource) {

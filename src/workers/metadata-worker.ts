@@ -178,10 +178,9 @@ async function generateThumbnail(file: File): Promise<ThumbnailResult> {
     // Native decode below can still identify formats the header parser misses.
   }
 
-  // The bundled HEIC decoder has no resize-at-decode API. Do not spend the
-  // full primary-image decode just to paint a tiny row; leave a clear UI
-  // placeholder instead. An embedded-thumbnail extractor can replace this
-  // early exit later without changing the metadata protocol.
+  // The bundled HEIC decoder has no resize-at-decode API, so never spend a
+  // full primary-image decode on a tiny row. Use the embedded JPEG preview
+  // when the file has one, and otherwise leave a UI placeholder.
   const isHeic =
     sourceFormat === 'heic' ||
     file.type.toLowerCase() === 'image/heic' ||

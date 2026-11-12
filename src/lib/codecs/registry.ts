@@ -201,11 +201,7 @@ const loaders: Record<OutputFormat, CodecLoader> = {
 }
 
 export async function getCodec(format: OutputFormat): Promise<Codec> {
-  const loader = loaders[format]
-  if (!loader) {
-    throw new Error(`No codec available for format: ${format}`)
-  }
-  return loader()
+  return loaders[format]()
 }
 
 /**
