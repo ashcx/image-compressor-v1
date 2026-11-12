@@ -2,6 +2,7 @@ import { context2d, createCanvas, scaleImage } from '../lib/canvas'
 import type { OutputFormat } from '../lib/codecs/types'
 import { detectFormat } from '../lib/detect'
 import { type Dimensions, parseDimensions } from '../lib/dimensions'
+import { readHeifItems } from '../lib/heif'
 import { BOUNDED_DECODE_ERROR, decodeImageData } from '../lib/image'
 import { createThumbnail, THUMBNAIL_SHORT_EDGE } from '../lib/thumbnail'
 
@@ -49,7 +50,6 @@ const HEADER_BYTES = 256 * 1024
 // compression.
 const PREVIEW_DECODE_EDGE = THUMBNAIL_SHORT_EDGE
 const MAX_EMBEDDED_THUMBNAIL_BYTES = 2 * 1024 * 1024
-const MAX_EMBEDDED_THUMBNAIL_CANDIDATES = 8
 
 interface ThumbnailResult {
   blob: Blob | null
@@ -120,51 +120,37 @@ async function thumbnailFromBitmap(bitmap: ImageBitmap): Promise<Blob> {
   }
 }
 
-function findMarker(
-  bytes: Uint8Array,
-  start: number,
-  first: number,
-  second: number,
-): number {
-  for (let index = start; index + 1 < bytes.length; index += 1) {
-    if (bytes[index] === first && bytes[index + 1] === second) return index
-  }
-  return -1
-}
-
 /**
- * Some HEIF files carry a JPEG-encoded auxiliary thumbnail. It is safe to
- * inspect those bytes without decoding the primary HEVC image. HEVC-coded
- * thumbnails are intentionally left unavailable because the current WASM
- * binding exposes no item-level decode API.
+ * Some HEIF files store a JPEG-coded thumbnail as its own item. The item table
+ * says where it is, so only that item is read. Apple HEICs store HEVC
+ * thumbnails instead and report none: the bundled WASM binding exposes no
+ * item-level decode, so those rows keep the placeholder rather than paying a
+ * full decode.
  */
 async function embeddedJpegThumbnail(file: File): Promise<Blob | null> {
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer())
-    let searchFrom = 0
-    let candidates = 0
-    while (candidates < MAX_EMBEDDED_THUMBNAIL_CANDIDATES) {
-      const start = findMarker(bytes, searchFrom, 0xff, 0xd8)
-      if (start < 0) return null
-      const end = findMarker(bytes, start + 2, 0xff, 0xd9)
-      if (end < 0) return null
-      searchFrom = end + 2
-      candidates += 1
-      if (end + 2 - start > MAX_EMBEDDED_THUMBNAIL_BYTES) continue
-
-      const candidate = new Blob([bytes.slice(start, end + 2)], {
-        type: 'image/jpeg',
-      })
-      try {
-        return await thumbnailFromBitmap(await decodePreview(candidate))
-      } catch {
-        // An incidental marker pair is not a valid embedded JPEG; continue.
-      }
+    const items = await readHeifItems(file)
+    const jpeg = items.find(
+      (item) =>
+        item.type === 'jpeg' ||
+        (item.type === 'mime' && item.contentType === 'image/jpeg'),
+    )
+    const length =
+      jpeg?.extents.reduce((sum, { length }) => sum + length, 0) ?? 0
+    if (!jpeg || length === 0 || length > MAX_EMBEDDED_THUMBNAIL_BYTES) {
+      return null
     }
+    const blob = new Blob(
+      jpeg.extents.map(({ offset, length }) =>
+        file.slice(offset, offset + length),
+      ),
+      { type: 'image/jpeg' },
+    )
+    return await thumbnailFromBitmap(await decodePreview(blob))
   } catch {
-    // A malformed container simply has no usable embedded preview.
+    // A malformed container or undecodable item simply has no usable preview.
+    return null
   }
-  return null
 }
 
 async function generateThumbnail(file: File): Promise<ThumbnailResult> {
