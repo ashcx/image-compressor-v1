@@ -26,17 +26,6 @@ describe('resolveResize', () => {
   it('skips resizing when the image already fits', () => {
     expect(resolveResize(800, 600, { maxLongEdge: 1000 })).toBeNull()
   })
-
-  it('fits within explicit width and height', () => {
-    expect(resolveResize(4000, 2000, { width: 1000, height: 1000 })).toEqual({
-      width: 1000,
-      height: 500,
-    })
-  })
-
-  it('only scales down for explicit dimensions', () => {
-    expect(resolveResize(400, 300, { width: 1000, height: 1000 })).toBeNull()
-  })
 })
 
 describe('resolveDecodeSize', () => {

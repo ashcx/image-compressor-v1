@@ -13,7 +13,6 @@ export interface ProcessRequest {
   fileBuffer: ArrayBuffer
   targetFormat: OutputFormat
   quality?: number
-  effort?: number
   speed?: number
   mode?: number
   resize?: ResizeOptions
@@ -34,7 +33,6 @@ export interface WarmRequest {
   jobId: string
   targetFormat: OutputFormat
   quality?: number
-  effort?: number
   speed?: number
   mode?: number
 }

@@ -113,7 +113,6 @@ interface DeliveryProgress {
 
 interface Settings {
   quality: number
-  effort: number
   speed: number
   mode: number
 }
@@ -144,7 +143,7 @@ const directoryPicker =
 const supportsDirectoryPicker = typeof directoryPicker === 'function'
 
 function defaultSettings(format: OutputFormat): Settings {
-  const base: Settings = { quality: 75, effort: 2, speed: 6, mode: 0 }
+  const base: Settings = { quality: 75, speed: 6, mode: 0 }
   for (const control of FORMAT_SPECS[format].controls) {
     base[control.key] = control.default
   }
@@ -621,7 +620,6 @@ async function estimateJob(id: string) {
       readFile: (consume) => acquireFileBuffer(id, consume),
       targetFormat: format,
       quality: current.quality,
-      effort: current.effort,
       speed: current.speed,
       mode: current.mode,
       resize,
@@ -634,11 +632,8 @@ async function estimateJob(id: string) {
     const result = await response
     if (jobTokens.get(id) !== token || result.type !== 'estimate') return
 
-    const previousThumb = getJob(id)?.thumbnailUrl
-    const thumbnailUrl = previousThumb ?? ''
     updateJob(id, {
       status: 'estimated',
-      thumbnailUrl,
       samples: result.samples,
       outputSize: interpolate(result.samples, current.quality),
       sizeIsExact: false,
@@ -705,7 +700,6 @@ async function compressJob(id: string) {
       readFile: (consume) => acquireFileBuffer(id, consume),
       targetFormat: format,
       quality: current.quality,
-      effort: current.effort,
       speed: current.speed,
       mode: current.mode,
       resize,
@@ -725,8 +719,6 @@ async function compressJob(id: string) {
       return
     }
 
-    const previousThumb = getJob(id)?.thumbnailUrl
-    const thumbnailUrl = previousThumb ?? ''
     const store = await getOutputStore()
     await store.put(id, result.outputBlob)
     syncOutputPressure(store)
@@ -736,7 +728,6 @@ async function compressJob(id: string) {
     }
     updateJob(id, {
       status: 'done',
-      thumbnailUrl,
       outputStored: true,
       outputExtension: result.extension,
       outputSize: result.outputSize,
@@ -1097,13 +1088,16 @@ function clearAll() {
   )
 }
 
+const DOWNLOAD_URL_REVOKE_MS = 30_000
+
 function triggerDownload(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = name
   anchor.click()
-  URL.revokeObjectURL(url)
+  // Revoking in the same tick can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_REVOKE_MS)
 }
 
 // The full-resolution output is read back from storage on demand, so rows never

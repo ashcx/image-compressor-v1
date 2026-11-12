@@ -226,7 +226,7 @@ function extractFromIsobmff(data: Uint8Array): Uint8Array | null {
 }
 
 /** Returns the raw TIFF block of the source's EXIF, or `null` when it has none. */
-export function extractExif(buffer: ArrayBuffer): Uint8Array | null {
+function extractExif(buffer: ArrayBuffer): Uint8Array | null {
   const data = new Uint8Array(buffer)
   try {
     if (data[0] === 0xff && data[1] === 0xd8) return extractFromJpeg(data)
@@ -318,7 +318,7 @@ function ifdDataEnd(
  * it shows the old image. The thumbnail bytes are cut off the end of the block
  * only when nothing else in the block lives at or after them.
  */
-export function sanitizeExif(
+function sanitizeExif(
   tiff: Uint8Array,
   width: number,
   height: number,

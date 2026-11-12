@@ -71,7 +71,7 @@ const darkQuery =
     ? window.matchMedia('(prefers-color-scheme: dark)')
     : null
 
-export function resolveTheme(preference: ThemePreference): 'light' | 'dark' {
+function resolveTheme(preference: ThemePreference): 'light' | 'dark' {
   if (preference === 'auto') return darkQuery?.matches ? 'dark' : 'light'
   return preference
 }

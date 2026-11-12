@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FORMAT_SPECS } from './codecs/formats'
 import {
   averageRatioSamples,
   deriveEstimate,
@@ -6,6 +7,7 @@ import {
   estimateSampleEdges,
   interpolate,
   sampleBeta,
+  sampleQualities,
   sampleSize,
 } from './estimate'
 
@@ -223,5 +225,36 @@ describe('deriveEstimate', () => {
 
   it('returns zero when there is no ratio curve', () => {
     expect(deriveEstimate(4000, [], 75)).toBe(0)
+  })
+})
+
+describe('sampleQualities', () => {
+  it('samples every quality preset of the light formats in ascending order', () => {
+    for (const format of ['jpeg', 'webp'] as const) {
+      const quality = FORMAT_SPECS[format].controls.find(
+        (control) => control.key === 'quality',
+      )
+      if (quality?.kind !== 'select') throw new Error('expected presets')
+      const presets = quality.options.map((option) => option.value)
+      expect(sampleQualities(format)).toEqual(
+        [...presets].sort((a, b) => a - b),
+      )
+    }
+  })
+
+  it('estimates every WebP preset, including ones without a calibration row', () => {
+    for (const quality of sampleQualities('webp')) {
+      const bytes = estimateFullBytes(
+        'webp',
+        { quality },
+        50_000,
+        896 * 672,
+        20_000,
+        384 * 288,
+        4000 * 3000,
+      )
+      expect(Number.isFinite(bytes)).toBe(true)
+      expect(bytes).toBeGreaterThan(50_000)
+    }
   })
 })

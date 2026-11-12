@@ -2,7 +2,7 @@ import { detectFormat } from './detect'
 
 /** Bytes read to sniff the format. Covers every magic-byte offset we parse. */
 export const HEADER_BYTES = 64 * 1024
-export const VALIDATION_CONCURRENCY = 8
+const VALIDATION_CONCURRENCY = 8
 
 const SUPPORTED = 'JPEG, PNG, WebP, AVIF, or HEIC'
 

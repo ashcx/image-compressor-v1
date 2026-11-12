@@ -94,10 +94,6 @@ export class WorkerPool {
     return this.activeCost
   }
 
-  get memoryBudgetValue(): number {
-    return this.memoryBudget
-  }
-
   /** Adjusts the decoded-memory budget (0 disables gating). */
   setMemoryBudget(bytes: number): void {
     this.memoryBudget = Math.max(0, Math.floor(bytes))

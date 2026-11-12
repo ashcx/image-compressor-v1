@@ -126,8 +126,7 @@ select:focus-visible {
 }
 
 .app__header-actions,
-.summary-card__actions,
-.panel__actions {
+.summary-card__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -187,8 +186,7 @@ select:focus-visible {
   color: var(--muted-strong);
 }
 
-.button--secondary:hover:not(:disabled),
-.button--selected {
+.button--secondary:hover:not(:disabled) {
   border-color: var(--border-strong);
   background: var(--surface-muted);
   color: var(--text);
@@ -473,16 +471,6 @@ select:focus-visible {
 .summary-card__primary,
 .summary-card__estimate {
   display: contents;
-}
-
-.eyebrow {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.7rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-transform: uppercase;
 }
 
 .summary-card__count {

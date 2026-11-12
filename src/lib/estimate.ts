@@ -3,9 +3,6 @@ import { FORMAT_SPECS } from './codecs/formats'
 import type { ImageSource, OutputFormat } from './codecs/types'
 import { encodeImageSource } from './convert'
 
-// JPEG/WebP quality is a small fixed set, so we sample exactly those values:
-// no quality interpolation is needed and every preset estimate is direct.
-const SAMPLE_QUALITIES = [50, 75, 85, 94]
 const SMALL_LONG_EDGE = 384
 const LARGE_LONG_EDGE = 896
 const HIGH_RES_SMALL_LONG_EDGE = 512
@@ -71,15 +68,32 @@ function clampExponent(value: number): number {
   return Math.min(MAX_EXPONENT, Math.max(MIN_EXPONENT, value))
 }
 
+/**
+ * JPEG and WebP quality is a small fixed set of presets, so estimates sample
+ * exactly those values and every preset estimate is direct. Read from the
+ * format spec so a preset change cannot leave the samples behind.
+ */
+export function sampleQualities(format: OutputFormat): number[] {
+  const control = FORMAT_SPECS[format].controls.find(
+    (candidate) => candidate.key === 'quality',
+  )
+  if (control?.kind !== 'select') return []
+  return control.options.map((option) => option.value).sort((a, b) => a - b)
+}
+
+// Calibration rows were fitted at fixed quality values, so a preset without its
+// own row borrows the nearest one.
 function lightRow(
   format: 'jpeg' | 'webp',
   quality: number,
 ): readonly [number, number, number] {
   const table = LIGHT_CALIBRATION[format]
   if (table[quality]) return table[quality]
-  let best = SAMPLE_QUALITIES[0]
-  for (const q of SAMPLE_QUALITIES) {
-    if (Math.abs(q - quality) < Math.abs(best - quality)) best = q
+  let best = 0
+  for (const key of Object.keys(table).map(Number)) {
+    if (best === 0 || Math.abs(key - quality) < Math.abs(best - quality)) {
+      best = key
+    }
   }
   return table[best]
 }
@@ -168,7 +182,6 @@ export interface EstimateSample {
 }
 
 interface EstimateOptions extends EstimateTarget {
-  effort?: number
   /** True pixel size of the image being estimated. Estimates may run on a
    * scaled decode, so the decoded `source` size must not be used here. */
   fullWidth?: number
@@ -198,7 +211,6 @@ export async function buildEstimateSamples(
     (
       await encodeImageSource(data, format, {
         quality,
-        effort: options.effort,
         speed: options.speed,
         mode: options.mode,
       })
@@ -243,7 +255,7 @@ export async function buildEstimateSamples(
   }
 
   const samples: EstimateSample[] = []
-  for (const quality of SAMPLE_QUALITIES) {
+  for (const quality of sampleQualities(format)) {
     samples.push({ quality, bytes: await estimate(quality) })
   }
 
