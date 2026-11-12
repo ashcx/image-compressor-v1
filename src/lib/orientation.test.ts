@@ -177,4 +177,62 @@ describe('orientRgba', () => {
     expect(result.height).toBe(2)
     expect([...result.data]).toEqual([40, 50, 60, 255, 10, 20, 30, 255])
   })
+
+  // Orientation 1-8 per the EXIF spec, written as the per-pixel destination of
+  // source (x, y) so the optimized loop is checked against the definition.
+  function destination(
+    orientation: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): [number, number] {
+    switch (orientation) {
+      case 2:
+        return [width - 1 - x, y]
+      case 3:
+        return [width - 1 - x, height - 1 - y]
+      case 4:
+        return [x, height - 1 - y]
+      case 5:
+        return [y, x]
+      case 6:
+        return [height - 1 - y, x]
+      case 7:
+        return [height - 1 - y, width - 1 - x]
+      default:
+        return [y, width - 1 - x]
+    }
+  }
+
+  it('places every pixel where the EXIF definition says, for 2-8', () => {
+    const width = 5
+    const height = 3
+    const data = new Uint8ClampedArray(width * height * 4)
+    for (let index = 0; index < data.length; index += 1) data[index] = index + 1
+    const image: RgbaImage = { width, height, data }
+
+    for (const orientation of [2, 3, 4, 5, 6, 7, 8] as const) {
+      const result = orientRgba(image, orientation)
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const [dx, dy] = destination(orientation, x, y, width, height)
+          const from = (y * width + x) * 4
+          const to = (dy * result.width + dx) * 4
+          expect(
+            [...result.data.subarray(to, to + 4)],
+            `orientation ${orientation} pixel ${x},${y}`,
+          ).toEqual([...data.subarray(from, from + 4)])
+        }
+      }
+    }
+  })
+
+  it('handles pixel data that does not start on a 4-byte boundary', () => {
+    const backing = new Uint8ClampedArray(1 + 8)
+    backing.set([10, 20, 30, 255, 40, 50, 60, 255], 1)
+    const view = backing.subarray(1)
+    const result = orientRgba({ width: 2, height: 1, data: view }, 2)
+    expect([...result.data]).toEqual([40, 50, 60, 255, 10, 20, 30, 255])
+  })
 })
