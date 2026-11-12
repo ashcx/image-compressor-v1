@@ -47,8 +47,11 @@ function load(): Promise<ElheifModule> {
 }
 
 /**
- * The elheif decode binding appends the RGBA plane twice, so the returned
- * buffer is twice `width * height * 4`. Trim it back to one image with a view:
+ * The vendored elheif decode binding appends the RGBA plane twice, so the
+ * returned buffer is twice `width * height * 4`
+ * (`wasm/heic/elheif-decode-single-copy.patch` fixes that once the WASM is
+ * rebuilt; a single-plane buffer passes through unchanged). Trim it back to one
+ * image with a view:
  * the binding already copies the WASM heap into a JS-owned `Uint8Array` (it
  * calls `.slice()` on the typed memory view), so slicing again here would
  * allocate and copy a whole extra RGBA plane for no reason.
