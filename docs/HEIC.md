@@ -105,8 +105,7 @@ classify as follows:
    encoder is native and light, even though libheif/libde265 is the heaviest
    decoder in the app.
    - WASM (Chrome/Firefox): libde265 reference planes plus a **doubled RGBA**
-     output (the vendored binding appends the plane twice; see
-     `wasm/heic/elheif-decode-single-copy.patch`) and the `ImageData` copy.
+     output (the vendored binding appends the plane twice) and the `ImageData` copy.
      Measured at 12 MP, one decode adds about 385 MB to a worker, and the WASM
      heap never shrinks.
    - Native (Safari/iPadOS): `createImageBitmap` is tried first, so iPadOS
@@ -136,8 +135,9 @@ classify as follows:
 - The WASM libde265 decoder runs single-threaded (no `SharedArrayBuffer` /
   cross-origin isolation in this app), so there is no in-worker parallelism to
   exploit.
-- Removing the extra RGBA copies is a small speed win and a larger memory win
-  (the rebuilt binding is pending; see `wasm/heic/`).
+- Removing the extra RGBA copies is a small speed win and a larger memory win.
+  The doubled plane comes from a stray second `std::copy` in upstream elheif's
+  decode, so fixing it needs a rebuild of the vendored WASM.
 - Scaled decode is the real lever, but libde265's scaled output is limited and
   not exposed by the vendored binding, so the estimate cap cannot reduce HEIC
   decode work as reliably as JPEG's reduced IDCT.
