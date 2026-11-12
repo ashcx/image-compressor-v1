@@ -33,7 +33,10 @@ function findBrowserPid(profileDir) {
     encoding: 'utf8',
   }).split('\n')
   for (const row of rows) {
-    if (row.includes(`--user-data-dir=${profileDir}`) && !row.includes('--type=')) {
+    if (
+      row.includes(`--user-data-dir=${profileDir}`) &&
+      !row.includes('--type=')
+    ) {
       return Number(row.trim().split(/\s+/)[0])
     }
   }
@@ -125,7 +128,10 @@ async function once() {
 
     phase = 'compress'
     const t1 = performance.now()
-    await page.locator('button', { hasText: /^Compress/ }).first().click()
+    await page
+      .locator('button', { hasText: /^Compress/ })
+      .first()
+      .click()
     const total = files.length
     await page.waitForFunction(
       (n) => {
