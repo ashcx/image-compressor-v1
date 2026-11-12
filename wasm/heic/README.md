@@ -13,12 +13,6 @@ speed control. To expose presets in the app we build a patched WASM codec.
   `quality` (0-100) and `preset` argument and forwards them to
   `heif_encoder_set_lossy_quality` / `heif_encoder_set_parameter_string`.
 
-- **elheif decode** (`elheif-decode-single-copy.patch`): upstream's decode
-  appends the RGBA plane to its output vector twice (a stray second `std::copy`)
-  and grows that vector by doubling. The patch removes the duplicate and
-  reserves the final size once. `fitDecodedBitmap` in `src/lib/codecs/heic.ts`
-  accepts both the old doubled and the new single-plane output.
-
 The generated package lives in `vendor/elheif` and is wired in through
 `"elheif": "file:vendor/elheif"`.
 

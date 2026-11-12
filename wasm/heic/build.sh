@@ -5,7 +5,6 @@
 # Upstream elheif only exposes a fixed encoder quality. This build adds:
 #   - libheif: a `preset` encoder parameter applied through kvz_config_parse()
 #   - elheif: `jsEncodeImage(buf, w, h, quality, preset)`
-#   - elheif: `jsDecodeImage` returns the RGBA plane once instead of twice
 #
 # Pinned versions (matching the known-good elheif build):
 #   kvazaar v2.3.1  libde265 v1.0.15  libheif v1.18.2
@@ -32,7 +31,6 @@ if [ ! -d elheif/.git ]; then
 fi
 git -C elheif checkout -f .
 git -C elheif apply "$WASM_DIR/elheif-quality-preset.patch"
-git -C elheif apply "$WASM_DIR/elheif-decode-single-copy.patch"
 
 cmake_file=elheif/core/CMakeLists.txt
 perl -0pi -e "s#(GIT_REPOSITORY https://github.com/ultravideo/kvazaar.git)#\$1\n  GIT_TAG           $KVAZAAR_TAG#" "$cmake_file"
