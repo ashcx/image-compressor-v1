@@ -17,6 +17,8 @@ export interface ProcessRequest {
   speed?: number
   mode?: number
   resize?: ResizeOptions
+  /** Copy the source EXIF (JPEG, PNG, WebP output only). */
+  keepMetadata?: boolean
   estimateOnly?: boolean
   /** Platform canvas ceilings plus the single-job pixel budget. */
   limits?: ProcessLimits

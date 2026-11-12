@@ -23,6 +23,7 @@ import {
   interpolate,
   sampleSize,
 } from './lib/estimate'
+import { supportsExif } from './lib/exif'
 import {
   acquireFileBuffer,
   configureFileBufferCap,
@@ -164,6 +165,7 @@ function controlHint(control: FormatControl, value: number): string {
 const targetFormat = signal<OutputFormat>('jpeg')
 const settings = signal<Settings>(defaultSettings('jpeg'))
 const maxLongEdge = signal(0)
+const keepMetadata = signal(true)
 const isDragging = signal(false)
 const poolStats = signal(getPoolStats())
 const renderer = signal('')
@@ -218,8 +220,13 @@ const sampleKey = computed(() => {
   return parts.join('|')
 })
 
+const metadataApplies = computed(
+  () => keepMetadata.value && supportsExif(targetFormat.value),
+)
+
 const outputKey = computed(
-  () => `${sampleKey.value}|quality=${settings.value.quality}`,
+  () =>
+    `${sampleKey.value}|quality=${settings.value.quality}|meta=${metadataApplies.value ? 1 : 0}`,
 )
 
 const isCurrent = (job: BatchJob) =>
@@ -646,6 +653,7 @@ async function compressJob(id: string) {
       speed: current.speed,
       mode: current.mode,
       resize,
+      keepMetadata: metadataApplies.value,
       limits: plan.limits,
       cost: plan.cost,
       consumeInput: true,
@@ -911,6 +919,13 @@ function changeResize(value: number) {
   maxLongEdge.value = next
   jobStore.refreshReady()
   scheduleSampleReestimate()
+}
+
+function changeKeepMetadata(value: boolean) {
+  if (busy.value || value === keepMetadata.value) return
+  keepMetadata.value = value
+  jobStore.refreshReady()
+  if (!batchMode.value) recompressSingle()
 }
 
 function compressAll() {
@@ -1470,6 +1485,24 @@ function Panel() {
         {primaryControls.map((control) => (
           <ControlField control={control} key={control.key} />
         ))}
+        <label class="toggle">
+          <input
+            type="checkbox"
+            checked={keepMetadata.value}
+            disabled={busy.value}
+            onChange={(event) =>
+              changeKeepMetadata(event.currentTarget.checked)
+            }
+          />
+          <span class="toggle__text">
+            <strong>Keep metadata</strong>
+            <span class="field__hint">
+              {supportsExif(targetFormat.value)
+                ? 'Keeps the date taken, camera, and location (EXIF).'
+                : 'Not available for AVIF or HEIC output. Metadata is removed.'}
+            </span>
+          </span>
+        </label>
       </div>
 
       <button

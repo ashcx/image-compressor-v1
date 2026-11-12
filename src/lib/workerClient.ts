@@ -185,6 +185,7 @@ export interface ProcessJobOptions {
   speed?: number
   mode?: number
   resize?: ResizeOptions
+  keepMetadata?: boolean
   estimateOnly?: boolean
   /** Platform canvas ceilings plus the single-job pixel budget. */
   limits?: ProcessLimits
@@ -227,6 +228,7 @@ export function processImage(options: ProcessJobOptions): {
           speed: options.speed,
           mode: options.mode,
           resize: options.resize,
+          keepMetadata: options.keepMetadata,
           estimateOnly: options.estimateOnly,
           limits: options.limits,
         }

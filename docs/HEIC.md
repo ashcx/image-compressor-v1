@@ -23,9 +23,12 @@ libheif WASM build was required for encoding.
   in `src/lib/orientation.ts` so Chrome and Firefox match Safari's native decode. Parsed
   dimensions are swapped for transposing orientations (5-8) so the queue, resize, and estimates
   match the oriented output.
-- **Metadata is not preserved.** Only the primary still image is decoded and re-encoded from raw
-  pixels, so EXIF, GPS, XMP, ICC colour profiles, depth maps, burst frames, and auxiliary images
-  are dropped. This applies to every output format, not just HEIC.
+- **Metadata is copied only for EXIF, only into JPEG, PNG, and WebP output.** The image is decoded
+  and re-encoded from raw pixels, so nothing survives by default. With the Keep metadata checkbox
+  on, `src/lib/exif.ts` extracts the EXIF block from the source (JPEG, PNG, WebP, or the HEIC/AVIF
+  Exif item), resets Orientation to 1, updates the pixel dimensions, unlinks the stale thumbnail,
+  and injects it into the encoded file. XMP, ICC colour profiles, depth maps, burst frames, and
+  auxiliary images are always dropped, and AVIF and HEIC output never carry EXIF.
 - **Multi-image files** contribute their first top-level image; the remaining images are ignored.
 
 ## Evidence
