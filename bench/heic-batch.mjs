@@ -22,6 +22,7 @@ const dir = resolve(option('dir', 'bench/fixtures'))
 const label = option('label', 'run')
 const runs = Number(option('runs', 3))
 const target = option('target', 'jpeg')
+const idleMs = Number(option('idle', 6000))
 const files = readdirSync(dir)
   .filter((name) => /\.hei[cf]$/i.test(name))
   .sort()
@@ -41,6 +42,42 @@ function findBrowserPid(profileDir) {
     }
   }
   throw new Error('Browser process not found')
+}
+
+function describeTree(rootPid) {
+  const rows = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], {
+    encoding: 'utf8',
+  })
+    .trim()
+    .split('\n')
+    .map((line) => {
+      const [pid, ppid, rss, ...command] = line.trim().split(/\s+/)
+      return {
+        pid: Number(pid),
+        ppid: Number(ppid),
+        rss: Number(rss),
+        command: command.join(' '),
+      }
+    })
+  const keep = new Set([rootPid])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const row of rows) {
+      if (!keep.has(row.pid) && keep.has(row.ppid)) {
+        keep.add(row.pid)
+        grew = true
+      }
+    }
+  }
+  return rows
+    .filter((row) => keep.has(row.pid))
+    .map((row) => ({
+      mb: Math.round(row.rss / 1024),
+      type: /--type=([a-z-]+)/.exec(row.command)?.[1] ?? 'browser',
+    }))
+    .sort((a, b) => b.mb - a.mb)
+    .slice(0, 5)
 }
 
 function treeRssMb(rootPid) {
@@ -147,8 +184,15 @@ async function once() {
     const compressMs = performance.now() - t1
 
     phase = 'idle'
-    await page.waitForTimeout(6000)
+    await page.waitForTimeout(idleMs)
     const settled = treeRssMb(pid)
+    if (args.includes('--procs'))
+      console.error(
+        JSON.stringify({
+          tree: describeTree(pid),
+          workers: page.workers().map((w) => w.url().split('/').pop()),
+        }),
+      )
     return {
       baseline,
       estimateMs,
