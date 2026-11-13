@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatMemoryWeight, jobCostBytes, maxJobPixels } from './memory'
+import {
+  formatMemoryWeight,
+  jobCostBytes,
+  maxJobPixels,
+  WASM_HEIC_DECODE_WEIGHT,
+} from './memory'
 
 const MIB = 1024 * 1024
 const GIB = 1024 * MIB
@@ -25,6 +30,17 @@ describe('jobCostBytes', () => {
   it('scales with pixels and the codec weight', () => {
     expect(jobCostBytes(25_000_000, 'jpeg')).toBe(25_000_000 * 4 * 2.5)
     expect(jobCostBytes(1_000_000, 'avif')).toBe(1_000_000 * 4 * 5)
+  })
+
+  it('charges a WASM-decoded HEIC at source size, not target size', () => {
+    // A 12 MP HEIC resized to 1 MP still decodes all 12 MP in WASM.
+    expect(jobCostBytes(1_000_000, 'jpeg', 0, 12_000_000)).toBe(
+      12_000_000 * 4 * WASM_HEIC_DECODE_WEIGHT,
+    )
+    // The larger of decode and encode wins.
+    expect(jobCostBytes(50_000_000, 'jpeg', 0, 1_000_000)).toBe(
+      50_000_000 * 4 * 2.5,
+    )
   })
 
   it('fits four 25 MP JPEGs in a 1 GiB iPad budget but not five', () => {

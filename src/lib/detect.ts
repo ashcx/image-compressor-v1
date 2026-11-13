@@ -75,3 +75,13 @@ export function detectFormat(buffer: ArrayBuffer): OutputFormat | null {
 
   return null
 }
+
+/** True when the file claims to be HEIC/HEIF by MIME type or extension. */
+export function isHeicFile(file: { name: string; type: string }): boolean {
+  const type = file.type.toLowerCase()
+  return (
+    type === 'image/heic' ||
+    type === 'image/heif' ||
+    /\.hei[cf]$/i.test(file.name)
+  )
+}

@@ -116,8 +116,38 @@ export function readExifOrientation(
 }
 
 /**
+ * Where source pixel (x, y) lands in the oriented image, as the affine map
+ * `dx = ax*x + bx*y + cx`, `dy = ay*x + by*y + cy`. Orientations 2-8 follow the
+ * EXIF definitions: mirror, rotate, and the four axis-swapping combinations.
+ */
+function orientationMap(
+  orientation: Exclude<ExifOrientation, 1>,
+  width: number,
+  height: number,
+): [ax: number, bx: number, cx: number, ay: number, by: number, cy: number] {
+  switch (orientation) {
+    case 2:
+      return [-1, 0, width - 1, 0, 1, 0]
+    case 3:
+      return [-1, 0, width - 1, 0, -1, height - 1]
+    case 4:
+      return [1, 0, 0, 0, -1, height - 1]
+    case 5:
+      return [0, 1, 0, 1, 0, 0]
+    case 6:
+      return [0, -1, height - 1, 1, 0, 0]
+    case 7:
+      return [0, -1, height - 1, -1, 0, width - 1]
+    case 8:
+      return [0, 1, 0, -1, 0, width - 1]
+  }
+}
+
+/**
  * Bakes the orientation into the pixels. Returns the source unchanged for
- * orientation 1.
+ * orientation 1. Each pixel moves as one 32-bit word, and the destination
+ * index advances by a constant step per column and per row, so the inner loop
+ * has no per-pixel branching.
  */
 export function orientRgba(
   image: RgbaImage,
@@ -125,50 +155,27 @@ export function orientRgba(
 ): RgbaImage {
   if (orientation === 1) return image
 
-  const { width, height, data } = image
+  const { width, height } = image
   const swap = orientationSwapsAxes(orientation)
   const outWidth = swap ? height : width
   const outHeight = swap ? width : height
   const out = new Uint8ClampedArray(outWidth * outHeight * 4)
 
+  // A 32-bit view needs a 4-byte aligned start; copy in the rare unaligned case.
+  const data = image.data.byteOffset % 4 === 0 ? image.data : image.data.slice()
+  const source = new Uint32Array(data.buffer, data.byteOffset, width * height)
+  const target = new Uint32Array(out.buffer)
+
+  const [ax, bx, cx, ay, by, cy] = orientationMap(orientation, width, height)
+  const stepX = ay * outWidth + ax
+  const stepY = by * outWidth + bx
   for (let y = 0; y < height; y += 1) {
+    let destination = cy * outWidth + cx + y * stepY
+    let index = y * width
     for (let x = 0; x < width; x += 1) {
-      let dx = x
-      let dy = y
-      switch (orientation) {
-        case 2:
-          dx = width - 1 - x
-          break
-        case 3:
-          dx = width - 1 - x
-          dy = height - 1 - y
-          break
-        case 4:
-          dy = height - 1 - y
-          break
-        case 5:
-          dx = y
-          dy = x
-          break
-        case 6:
-          dx = height - 1 - y
-          dy = x
-          break
-        case 7:
-          dx = height - 1 - y
-          dy = width - 1 - x
-          break
-        case 8:
-          dx = y
-          dy = width - 1 - x
-          break
-      }
-      const source = (y * width + x) * 4
-      const target = (dy * outWidth + dx) * 4
-      out[target] = data[source]
-      out[target + 1] = data[source + 1]
-      out[target + 2] = data[source + 2]
-      out[target + 3] = data[source + 3]
+      target[destination] = source[index]
+      destination += stepX
+      index += 1
     }
   }
 

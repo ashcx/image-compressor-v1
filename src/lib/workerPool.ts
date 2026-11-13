@@ -27,6 +27,12 @@ export interface PoolTask {
   signal?: AbortSignal
   /** Estimated decoded-memory bytes, used to gate concurrent large jobs. */
   cost?: number
+  /**
+   * For jobs that leave a large WASM heap behind. They count against
+   * `heavyLimit`, and their worker is replaced afterwards because a WASM heap
+   * never shrinks: only ending the worker returns that memory to the system.
+   */
+  heavy?: boolean
 }
 
 interface QueuedTask extends PoolTask {
@@ -44,6 +50,8 @@ interface WorkerPoolOptions {
    * (desktop). One job is always admitted even if it alone exceeds the budget.
    */
   memoryBudget?: number
+  /** Most `heavy` tasks that may run at once. Defaults to no limit. */
+  heavyLimit?: number
   /** Called when a worker crashes so callers can back off concurrency. */
   onWorkerFailure?: () => void
 }
@@ -61,6 +69,7 @@ export class WorkerPool {
   private readonly onChange: (() => void) | undefined
   private readonly onWorkerFailure: (() => void) | undefined
   private memoryBudget: number
+  private heavyLimit: number
   private workers: PoolWorker[] = []
   private idle: PoolWorker[] = []
   private high: QueuedTask[] = []
@@ -75,6 +84,10 @@ export class WorkerPool {
     this.onChange = options.onChange
     this.onWorkerFailure = options.onWorkerFailure
     this.memoryBudget = Math.max(0, options.memoryBudget ?? 0)
+    this.heavyLimit = Math.max(
+      1,
+      options.heavyLimit ?? Number.POSITIVE_INFINITY,
+    )
   }
 
   get workerCount(): number {
@@ -97,6 +110,13 @@ export class WorkerPool {
   /** Adjusts the decoded-memory budget (0 disables gating). */
   setMemoryBudget(bytes: number): void {
     this.memoryBudget = Math.max(0, Math.floor(bytes))
+    this.dispatch()
+    this.notify()
+  }
+
+  /** Adjusts how many `heavy` tasks may run at once (minimum 1). */
+  setHeavyLimit(limit: number): void {
+    this.heavyLimit = Math.max(1, limit)
     this.dispatch()
     this.notify()
   }
@@ -169,17 +189,21 @@ export class WorkerPool {
   }
 
   private canStart(task: QueuedTask): boolean {
+    if (task.heavy && this.heavyBusy >= this.heavyLimit) return false
     if (this.memoryBudget <= 0) return true
     // Always let at least one job run, even if it alone exceeds the budget.
     if (this.busy.size === 0) return true
     return this.activeCost + (task.cost ?? 0) <= this.memoryBudget
   }
 
+  private get heavyBusy(): number {
+    let count = 0
+    for (const task of this.busy.values()) if (task.heavy) count += 1
+    return count
+  }
+
   private takeDispatchable(): QueuedTask | undefined {
-    if (this.memoryBudget <= 0) {
-      return this.high.shift() ?? this.low.shift()
-    }
-    // Highest-priority task whose memory cost fits the remaining budget.
+    // Highest-priority task that fits the heavy limit and memory budget.
     for (const tier of [this.high, this.low]) {
       const index = tier.findIndex((candidate) => this.canStart(candidate))
       if (index !== -1) return tier.splice(index, 1)[0]
@@ -251,8 +275,14 @@ export class WorkerPool {
       task.resolve(response)
     }
 
-    this.idle.push(worker)
+    if (task.heavy) this.retire(worker)
+    else this.idle.push(worker)
     this.dispatch()
+  }
+
+  private retire(worker: PoolWorker): void {
+    worker.terminate()
+    this.workers = this.workers.filter((candidate) => candidate !== worker)
   }
 
   private handleError(worker: PoolWorker, event: ErrorEvent): void {
